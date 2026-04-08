@@ -1,822 +1,506 @@
 
-		<!-- https://mvnrepository.com/artifact/org.apache.cxf/cxf-rt-frontend-jaxws -->
-		<dependency>
-			<groupId>org.apache.cxf</groupId>
-			<artifactId>cxf-tools-common</artifactId>
-			<version>${cxf.version}</version>
-			<exclusions>
-				<exclusion>
-					<groupId>commons-collections</groupId>
-					<artifactId>commons-collections</artifactId>
-				</exclusion>
-				<exclusion>
-					<groupId>org.apache.cxf</groupId>
-					<artifactId>cxf-core</artifactId>
-				</exclusion>
-			</exclusions>
-		</dependency>
-		<!-- cxf-core fix version -->
-		<dependency>
-			<groupId>org.apache.cxf</groupId>
-			<artifactId>cxf-core</artifactId>
-			<version>4.1.3</version>
-		</dependency>
 
-		<dependency>
-			<groupId>commons-collections</groupId>
-			<artifactId>commons-collections</artifactId>
-			<version>3.2.2</version>
-		</dependency>
-		<dependency>
-			<groupId>org.apache.oltu.oauth2</groupId>
-			<artifactId>org.apache.oltu.oauth2.client</artifactId>
-			<version>1.0.2</version>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-data-jpa</artifactId>
-			<exclusions>
-				<exclusion>
-					<groupId>org.springframework.boot</groupId>
-					<artifactId>spring-boot-starter-logging</artifactId>
-				</exclusion>
-			</exclusions>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-data-rest</artifactId>
-			<exclusions>
-				<exclusion>
-					<groupId>org.springframework.hateoas</groupId>
-					<artifactId>spring-hateoas</artifactId>
-				</exclusion>
-				<exclusion>
-					<groupId>com.fasterxml.jackson.core</groupId>
-					<artifactId>jackson-databind</artifactId>
-				</exclusion>
-			</exclusions>
-		</dependency>
+import org.apache.avro.specific.SpecificData;
+import org.apache.avro.util.Utf8;
+import org.apache.avro.message.BinaryMessageEncoder;
+import org.apache.avro.message.BinaryMessageDecoder;
+import org.apache.avro.message.SchemaStore;
 
-		<dependency>
-			<groupId>com.fasterxml.jackson.core</groupId>
-			<artifactId>jackson-databind</artifactId>
-			<exclusions>
-				<exclusion>
-					<groupId>org.springframework</groupId>
-					<artifactId>spring-web</artifactId>
-				</exclusion>
-			</exclusions>
-		</dependency>
-		<!-- spring-hateoas fix -->
-
-		<dependency>
-			<groupId>org.springframework.hateoas</groupId>
-			<artifactId>spring-hateoas</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>com.fasterxml.jackson.core</groupId>
-			<artifactId>jackson-core</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>com.fasterxml.jackson.core</groupId>
-			<artifactId>jackson-annotations</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.apache.avro</groupId>
-			<artifactId>avro</artifactId>
-			<version>1.11.5</version>
-			<exclusions>
-				<exclusion>
-					<groupId>org.apache.commons</groupId>
-					<artifactId>commons-compress</artifactId>
-				</exclusion>
-				<exclusion>
-					<groupId>com.fasterxml.jackson.core</groupId>
-					<artifactId>jackson-databind</artifactId>
-				</exclusion>
-			</exclusions>
-		</dependency>
-		<dependency>
-			<groupId>org.mybatis</groupId>
-			<artifactId>mybatis</artifactId>
-			<version>3.5.6</version>
-		</dependency>
+@org.apache.avro.specific.AvroGenerated
+public class MemberInfo extends org.apache.avro.specific.SpecificRecordBase implements org.apache.avro.specific.SpecificRecord {
+  private static final long serialVersionUID = -4492015077240138922L;
 
 
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-data-mongodb</artifactId>
-			<exclusions>
-				<exclusion>
-					<groupId>org.mongodb</groupId>
-					<artifactId>mongodb-driver-core</artifactId>
-				</exclusion>
-				<exclusion>
-					<groupId>org.springframework.boot</groupId>
-					<artifactId>spring-boot-starter-logging</artifactId>
-				</exclusion>
-				<exclusion>
-					<groupId>org.springframework.data</groupId>
-					<artifactId>spring-data-mongodb</artifactId>
-				</exclusion>
-				<exclusion>
-					<groupId>org.yaml</groupId>
-					<artifactId>snakeyaml</artifactId>
-				</exclusion>
-			</exclusions>
-		</dependency>
-		<!--Spring data mongodb fix version -->
-		<dependency>
-			<groupId>org.springframework.data</groupId>
-			<artifactId>spring-data-mongodb</artifactId>
-		</dependency>
+  public static final org.apache.avro.Schema SCHEMA$ = new org.apache.avro.Schema.Parser().parse("{\"type\":\"record\",\"name\":\"MemberInfo\",\"namespace\":\"com.optum.ce.referrals.avro\",\"fields\":[{\"name\":\"requestingMember\",\"type\":{\"type\":\"record\",\"name\":\"RequestingMember\",\"fields\":[{\"name\":\"memberIdCardNbr\",\"type\":[\"null\",\"string\"],\"default\":null},{\"name\":\"firstName\",\"type\":[\"null\",\"string\"],\"default\":null},{\"name\":\"lastName\",\"type\":[\"null\",\"string\"],\"default\":null},{\"name\":\"dob\",\"type\":[\"null\",\"string\"],\"default\":null},{\"name\":\"groupNumber\",\"type\":[\"null\",\"string\"],\"default\":null},{\"name\":\"dependentSeqNbr\",\"type\":[\"null\",\"string\"],\"default\":null}]}},{\"name\":\"requestedMember\",\"type\":{\"type\":\"record\",\"name\":\"RequestedMember\",\"fields\":[{\"name\":\"memberIdCardNbr\",\"type\":[\"null\",\"string\"],\"default\":null},{\"name\":\"firstName\",\"type\":[\"null\",\"string\"],\"default\":null},{\"name\":\"lastName\",\"type\":[\"null\",\"string\"],\"default\":null},{\"name\":\"groupNumber\",\"type\":[\"null\",\"string\"],\"default\":null},{\"name\":\"dob\",\"type\":[\"null\",\"string\"],\"default\":null}]}}]}");
+  public static org.apache.avro.Schema getClassSchema() { return SCHEMA$; }
 
-		<dependency>
-			<groupId>org.mongodb</groupId>
-			<artifactId>mongodb-driver-core</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-web</artifactId>
-			<exclusions>
-				<exclusion>
-					<groupId>org.springframework.boot</groupId>
-					<artifactId>spring-boot-starter-logging</artifactId>
-				</exclusion>
-				<exclusion>
-					<groupId>com.fasterxml.jackson.core</groupId>
-					<artifactId>jackson-core</artifactId>
-				</exclusion>
-				<exclusion>
-					<groupId>com.fasterxml.jackson.core</groupId>
-					<artifactId>jackson-databind</artifactId>
-				</exclusion>
-				<exclusion>
-					<groupId>log4j</groupId>
-					<artifactId>*</artifactId>
-				</exclusion>
-				<exclusion>
-					<groupId>org.slf4j</groupId>
-					<artifactId>*</artifactId>
-				</exclusion>
-				<exclusion>
-					<groupId>org.apache.logging.log4j</groupId>
-					<artifactId>*</artifactId>
-				</exclusion>
-				<exclusion>
-					<groupId>org.apache.tomcat.embed</groupId>
-					<artifactId>tomcat-embed-core</artifactId>
-				</exclusion>
-			</exclusions>
-		</dependency>
-		<dependency>
-			<groupId>org.slf4j</groupId>
-			<artifactId>slf4j-api</artifactId>
-			<version>1.7.25</version>
-		</dependency>
+  private static final SpecificData MODEL$ = new SpecificData();
 
+  private static final BinaryMessageEncoder<MemberInfo> ENCODER =
+      new BinaryMessageEncoder<>(MODEL$, SCHEMA$);
 
-		<!-- Log4j2 fix, pull latest version. -->
-		<dependency>
-			<groupId>org.apache.logging.log4j</groupId>
-			<artifactId>log4j-core</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.apache.logging.log4j</groupId>
-			<artifactId>log4j-api</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.apache.logging.log4j</groupId>
-			<artifactId>log4j-slf4j-impl</artifactId>
-		</dependency>  
-		 <dependency> 
-     		 <groupId>org.springframework.boot</groupId>  
-      		<artifactId>spring-boot-starter-test</artifactId>  
-     		 <scope>test</scope>
-			 <exclusions>
-				 <exclusion>
-					 <groupId>net.minidev</groupId>
-					 <artifactId>json-smart</artifactId>
-				 </exclusion>
-			 </exclusions>
-    	</dependency>
+  private static final BinaryMessageDecoder<MemberInfo> DECODER =
+      new BinaryMessageDecoder<>(MODEL$, SCHEMA$);
 
-      <dependency>
-        <groupId>net.minidev</groupId>
-	    <artifactId>json-smart</artifactId>
-	  
-      </dependency>
+  /**
+   * Return the BinaryMessageEncoder instance used by this class.
+   * @return the message encoder used by this class
+   */
+  public static BinaryMessageEncoder<MemberInfo> getEncoder() {
+    return ENCODER;
+  }
 
-    	<dependency>
-	       <groupId>com.splunk.logging</groupId>
-	       <artifactId>splunk-library-javalogging</artifactId>
-	       <version>1.11.2</version>
-	    </dependency>
-				 
-	    <dependency>
-	        <groupId>org.springframework</groupId>
-	        <artifactId>spring-context</artifactId>
-       </dependency>
-       <dependency>
-         <groupId>org.springframework</groupId>
-         <artifactId>spring-expression</artifactId>
-        </dependency>
-	     <dependency>
-			<groupId>org.springframework.cloud</groupId>
-			<artifactId>spring-cloud-starter-config</artifactId>
-			<version>5.0.0</version>
-			<exclusions>
-				<exclusion>
-					<groupId>com.fasterxml.jackson.core</groupId>
-					<artifactId>jackson-core</artifactId>
-				</exclusion>
-				<exclusion>
-					<groupId>com.fasterxml.jackson.core</groupId>
-					<artifactId>jackson-databind</artifactId>
-				</exclusion>
-				<exclusion>
-					<groupId>org.springframework.security</groupId>
-					<artifactId>spring-security-crypto</artifactId>
-				</exclusion>
-			</exclusions>
-		</dependency>
+  /**
+   * Return the BinaryMessageDecoder instance used by this class.
+   * @return the message decoder used by this class
+   */
+  public static BinaryMessageDecoder<MemberInfo> getDecoder() {
+    return DECODER;
+  }
 
-		<dependency>
-			<groupId>org.springframework.cloud</groupId>
-			<artifactId>spring-cloud-starter-vault-config</artifactId>
-			<version>5.0.0</version>
-			<exclusions>
-				<exclusion>
-					<groupId>org.springframework.security</groupId>
-					<artifactId>spring-security-crypto</artifactId>
-				</exclusion>
-			</exclusions>
-		</dependency>
+  /**
+   * Create a new BinaryMessageDecoder instance for this class that uses the specified {@link SchemaStore}.
+   * @param resolver a {@link SchemaStore} used to find schemas by fingerprint
+   * @return a BinaryMessageDecoder instance for this class backed by the given SchemaStore
+   */
+  public static BinaryMessageDecoder<MemberInfo> createDecoder(SchemaStore resolver) {
+    return new BinaryMessageDecoder<>(MODEL$, SCHEMA$, resolver);
+  }
 
-		<dependency>
-			<groupId>org.springframework.cloud</groupId>
-			<artifactId>spring-cloud-commons</artifactId>
-			<version>5.0.0</version>
-			<exclusions>
-				<exclusion>
-					<groupId>org.springframework.security</groupId>
-					<artifactId>spring-security-crypto</artifactId>
-				</exclusion>
-			</exclusions>
-		</dependency>
+  /**
+   * Serializes this MemberInfo to a ByteBuffer.
+   * @return a buffer holding the serialized data for this instance
+   * @throws java.io.IOException if this instance could not be serialized
+   */
+  public java.nio.ByteBuffer toByteBuffer() throws java.io.IOException {
+    return ENCODER.encode(this);
+  }
 
-		<dependency>
-			<groupId>org.apache.cxf</groupId>
-			<artifactId>cxf-rt-frontend-jaxrs</artifactId>
-			<version>${cxf.version}</version>
-		</dependency>
+  /**
+   * Deserializes a MemberInfo from a ByteBuffer.
+   * @param b a byte buffer holding serialized data for an instance of this class
+   * @return a MemberInfo instance decoded from the given buffer
+   * @throws java.io.IOException if the given bytes could not be deserialized into an instance of this class
+   */
+  public static MemberInfo fromByteBuffer(
+      java.nio.ByteBuffer b) throws java.io.IOException {
+    return DECODER.decode(b);
+  }
 
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-configuration-processor</artifactId>
-			<optional>true</optional>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.integration</groupId>
-			<artifactId>spring-integration-sftp</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.apache.cxf</groupId>
-			<artifactId>cxf-rt-ws-policy</artifactId>
-			<version>${cxf.version}</version>
-		</dependency>
-		<dependency>
-			<groupId>com.googlecode.json-simple</groupId>
-			<artifactId>json-simple</artifactId>
-			<version>1.1.1</version>
-		</dependency>
-		<dependency>
-			<groupId>org.glassfish.jersey.core</groupId>
-			<artifactId>jersey-common</artifactId>
-			<scope>test</scope>
-		</dependency>
+  private com.optum.ce.referrals.avro.RequestingMember requestingMember;
+  private com.optum.ce.referrals.avro.RequestedMember requestedMember;
 
-		<dependency>
-			<groupId>org.ehcache</groupId>
-			<artifactId>ehcache</artifactId>
-			
-			<classifier>jakarta</classifier>
-		</dependency>
+  /**
+   * Default constructor.  Note that this does not initialize fields
+   * to their default values from the schema.  If that is desired then
+   * one should use <code>newBuilder()</code>.
+   */
+  public MemberInfo() {}
 
-<!--		<dependency>-->
-<!--			<groupId>net.sf.ehcache.internal</groupId>-->
-<!--			<artifactId>ehcache-core</artifactId>-->
-<!--			<version>2.10.9.2</version>-->
-<!--			<exclusions>-->
-<!--			  <exclusion>-->
-<!--			     <groupId>org.terracotta.internal</groupId>-->
-<!--                 <artifactId>statistics</artifactId>-->
-<!--			  </exclusion>-->
-<!--			</exclusions>-->
-<!--		</dependency>-->
+  /**
+   * All-args constructor.
+   * @param requestingMember The new value for requestingMember
+   * @param requestedMember The new value for requestedMember
+   */
+  public MemberInfo(com.optum.ce.referrals.avro.RequestingMember requestingMember, com.optum.ce.referrals.avro.RequestedMember requestedMember) {
+    this.requestingMember = requestingMember;
+    this.requestedMember = requestedMember;
+  }
 
-<dependency>
-    <groupId>org.apache.tika</groupId>
-    <artifactId>tika-core</artifactId>
-    <version>3.2.2</version>
-</dependency>
+  @Override
+  public org.apache.avro.specific.SpecificData getSpecificData() { return MODEL$; }
 
-<dependency>
-    <groupId>org.apache.poi</groupId>
-    <artifactId>poi</artifactId>
-    <version>5.4.1</version>
-</dependency>
+  @Override
+  public org.apache.avro.Schema getSchema() { return SCHEMA$; }
 
-<dependency>
-    <groupId>org.apache.poi</groupId>
-    <artifactId>poi-ooxml</artifactId>
-    <version>5.4.1</version>
-</dependency>
+  // Used by DatumWriter.  Applications should not call.
+  @Override
+  public java.lang.Object get(int field$) {
+    switch (field$) {
+    case 0: return requestingMember;
+    case 1: return requestedMember;
+    default: throw new IndexOutOfBoundsException("Invalid index: " + field$);
+    }
+  }
 
-<dependency>
-    <groupId>org.apache.commons</groupId>
-    <artifactId>commons-collections4</artifactId>
-    <version>4.5.0</version>
-</dependency>
+  // Used by DatumReader.  Applications should not call.
+  @Override
+  @SuppressWarnings(value="unchecked")
+  public void put(int field$, java.lang.Object value$) {
+    switch (field$) {
+    case 0: requestingMember = (com.optum.ce.referrals.avro.RequestingMember)value$; break;
+    case 1: requestedMember = (com.optum.ce.referrals.avro.RequestedMember)value$; break;
+    default: throw new IndexOutOfBoundsException("Invalid index: " + field$);
+    }
+  }
 
-<dependency>
-    <groupId>commons-io</groupId>
-    <artifactId>commons-io</artifactId>
-    <version>2.20.0</version>
-  </dependency>
-
-<dependency>
-    <groupId>com.github.openjson</groupId>
-    <artifactId>openjson</artifactId>
-    <version>1.0.13</version>
-</dependency>
+  /**
+   * Gets the value of the 'requestingMember' field.
+   * @return The value of the 'requestingMember' field.
+   */
+  public com.optum.ce.referrals.avro.RequestingMember getRequestingMember() {
+    return requestingMember;
+  }
 
 
-	 <dependency>
-        <groupId>org.bouncycastle</groupId>
-        <artifactId>bcprov-jdk18on</artifactId>
-        <version>1.78.1</version>
-      </dependency>
-		
+  /**
+   * Sets the value of the 'requestingMember' field.
+   * @param value the value to set.
+   */
+  public void setRequestingMember(com.optum.ce.referrals.avro.RequestingMember value) {
+    this.requestingMember = value;
+  }
 
-		<dependency>
-				<groupId>org.apache.tomcat.embed</groupId>
-				 <artifactId>tomcat-embed-core</artifactId>
-	    </dependency>
-
-
-        <!-- jsoup fix -->
-        <dependency>
-          <groupId>org.jsoup</groupId>
-          <artifactId>jsoup</artifactId>
-          <version>1.15.3</version>
-        </dependency>
-        
-         <!-- pdfbox fix --> 
-         <dependency>
-           <groupId>org.apache.pdfbox</groupId>
-		   <artifactId>pdfbox</artifactId>
-		   <version>3.0.1</version>
-         </dependency>
-         
-         <!-- guava fix -->
-         
-         <dependency>
-           <groupId>com.google.guava</groupId>
-		   <artifactId>guava</artifactId>
-		   <version>33.3.1-jre</version>
-         </dependency>
-		
-		<dependency>
-		    <groupId>org.mockito</groupId>
-		    <artifactId>mockito-inline</artifactId>
-		    <version>3.4.0</version>
-		    <scope>test</scope>
-		</dependency>
-
-      <dependency>
-        <groupId>com.google.re2j</groupId>
-        <artifactId>re2j</artifactId>
-        <version>1.8</version>
-     </dependency>
-
-		<dependency>
-			<groupId>com.github.erosb</groupId>
-			<artifactId>everit-json-schema</artifactId>
-			<version>1.14.6</version>
-			<exclusions>
-				<exclusion>
-					<groupId>commons-beanutils</groupId>
-					<artifactId>commons-beanutils</artifactId>
-				</exclusion>
-			</exclusions>
-		</dependency>
-		<dependency>
-			<groupId>org.json</groupId>
-			<artifactId>json</artifactId>
-			<version>20231013</version>
-		</dependency>
-		<dependency>
-			<groupId>jakarta.ws.rs</groupId>
-			<artifactId>jakarta.ws.rs-api</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>com.jcraft</groupId>
-			<artifactId>jsch</artifactId>
-			<version>0.1.55</version>
-		</dependency>
-
-		<dependency>
-			<groupId>com.mysql</groupId>
-			<artifactId>mysql-connector-j</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>com.google.code.gson</groupId>
-			<artifactId>gson</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.data</groupId>
-			<artifactId>spring-data-commons-core</artifactId>
-			<version>1.2.0.RELEASE</version>
-		</dependency>
-		<!-- Test -->
-		<dependency>
-			<groupId>junit</groupId>
-			<artifactId>junit</artifactId>
-		</dependency>
-		<!-- Concurrent JUnit -->
-		<dependency>
-			<scope>test</scope>
-			<groupId>com.vmlens</groupId>
-			<artifactId>concurrent-junit</artifactId>
-			<version>1.0.0</version>
-		</dependency>
-		<dependency>
-			<groupId>com.newrelic.agent.java</groupId>
-			<artifactId>newrelic-api</artifactId>
-			<version>4.1.0</version>
-		</dependency>
-		<dependency>
-			<groupId>org.beanio</groupId>
-			<artifactId>beanio</artifactId>
-			<version>2.1.0</version>
-		</dependency>
-		<dependency>
-			<groupId>org.owasp.encoder</groupId>
-			<artifactId>encoder</artifactId>
-			<version>1.2.3</version>
-		</dependency>
-		<dependency>
-			<groupId>org.apache.commons</groupId>
-			<artifactId>commons-csv</artifactId>
-			<version>1.8</version>
-		</dependency>
-		<dependency>
-			<groupId>org.datanucleus</groupId>
-			<artifactId>datanucleus-json</artifactId>
-			<version>2.1.0-release</version>
-		</dependency>
-		<dependency>
-			<groupId>com.fasterxml.jackson.dataformat</groupId>
-			<artifactId>jackson-dataformat-xml</artifactId>
-			<exclusions>
-				<exclusion>
-					<groupId>com.fasterxml.jackson.core</groupId>
-					<artifactId>jackson-core</artifactId>
-				</exclusion>
-				<exclusion>
-					<groupId>com.fasterxml.jackson.core</groupId>
-					<artifactId>jackson-databind</artifactId>
-				</exclusion>
-			</exclusions>
-		</dependency>
-		<dependency>
-			<groupId>redis.clients</groupId>
-			<artifactId>jedis</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>commons-lang</groupId>
-			<artifactId>commons-lang</artifactId>
-			<version>2.6</version>
-		</dependency>
-		<dependency>
-			<groupId>org.apache.commons</groupId>
-			<artifactId>commons-lang3</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.apache.commons</groupId>
-			<artifactId>commons-text</artifactId>
-			<version>1.10.0</version>
-		</dependency>
-		<dependency>
-			<groupId>jakarta.persistence</groupId>
-			<artifactId>jakarta.persistence-api</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>jakarta.mail</groupId>
-			<artifactId>jakarta.mail-api</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>com.sun.activation</groupId>
-			<artifactId>jakarta.activation</artifactId>
-			<version>2.0.1</version>
-			<scope>runtime</scope>
-		</dependency>
-		<dependency>
-			<groupId>com.baidu</groupId>
-			<artifactId>leansoft-bigqueue</artifactId>
-			<version>0.7.3</version>
-			<exclusions>
-				<exclusion>
-					<groupId>com.google.guava</groupId>
-					<artifactId>guava</artifactId>
-				</exclusion>
-			</exclusions>
-		</dependency>
-		<dependency>
-			<groupId>com.github.jknack</groupId>
-			<artifactId>handlebars-jackson2</artifactId>
-			<version>${jnack.version}</version>
-			<exclusions>
-				<exclusion>
-					<groupId>org.mozilla</groupId>
-					<artifactId>rhino</artifactId>
-				</exclusion>
-				<exclusion>
-					<groupId>com.fasterxml.jackson.core</groupId>
-					<artifactId>jackson-databind</artifactId>
-				</exclusion>
-			</exclusions>
-		</dependency>
-		<dependency>
-			<groupId>com.github.jknack</groupId>
-			<artifactId>handlebars-guava-cache</artifactId>
-			<version>${jnack.version}</version>
-			<exclusions>
-				<exclusion>
-					<groupId>com.google.guava</groupId>
-					<artifactId>guava</artifactId>
-				</exclusion>
-			</exclusions>
-		</dependency>
-		<dependency>
-			<groupId>commons-codec</groupId>
-			<artifactId>commons-codec</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.eclipse.collections</groupId>
-			<artifactId>eclipse-collections-api</artifactId>
-			<version>${eclipse.collections.version}</version>
-		</dependency>
-		<dependency>
-			<groupId>org.eclipse.collections</groupId>
-			<artifactId>eclipse-collections</artifactId>
-			<version>${eclipse.collections.version}</version>
-		</dependency>
-		<dependency>
-			<groupId>org.mvel</groupId>
-			<artifactId>mvel2</artifactId>
-			<version>2.3.1.Final</version>
-		</dependency>
-		<dependency>
-			<groupId>com.jayway.jsonpath</groupId>
-			<artifactId>json-path</artifactId>
-			<exclusions>
-				<exclusion>
-					<groupId>net.minidev</groupId>
-					<artifactId>json-smart</artifactId>
-				</exclusion>
-			</exclusions>
-		</dependency>
-		<dependency>
-			<groupId>org.antlr</groupId>
-			<artifactId>ST4</artifactId>
-			<version>4.3.4</version>
-		</dependency>
-
-		<!-- Amazon S3 -->
-		<dependency>
-			<groupId>com.amazonaws</groupId>
-			<artifactId>aws-java-sdk</artifactId>
-			<version>${amazon-sdk.version}</version>
-			<exclusions>
-				<exclusion>
-					<groupId>io.netty</groupId>
-					<artifactId>netty-handler</artifactId>
-				</exclusion>
-				<exclusion>
-					<groupId>com.fasterxml.jackson.core</groupId>
-					<artifactId>jackson-core</artifactId>
-				</exclusion>
-				<exclusion>
-					<groupId>io.netty</groupId>
-					<artifactId>netty-codec</artifactId>
-				</exclusion>
-				<exclusion>
-					<groupId>com.fasterxml.jackson.core</groupId>
-					<artifactId>jackson-databind</artifactId>
-				</exclusion>
-				<exclusion>
-					<groupId>software.amazon.ion</groupId>
-					<artifactId>ion-java</artifactId>
-				</exclusion>
-			</exclusions>
-		</dependency>
+  /**
+   * Gets the value of the 'requestedMember' field.
+   * @return The value of the 'requestedMember' field.
+   */
+  public com.optum.ce.referrals.avro.RequestedMember getRequestedMember() {
+    return requestedMember;
+  }
 
 
-	
+  /**
+   * Sets the value of the 'requestedMember' field.
+   * @param value the value to set.
+   */
+  public void setRequestedMember(com.optum.ce.referrals.avro.RequestedMember value) {
+    this.requestedMember = value;
+  }
 
-		<!-- spring boot autoconfigure fix -->
+  /**
+   * Creates a new MemberInfo RecordBuilder.
+   * @return A new MemberInfo RecordBuilder
+   */
+  public static com.optum.ce.referrals.avro.MemberInfo.Builder newBuilder() {
+    return new com.optum.ce.referrals.avro.MemberInfo.Builder();
+  }
 
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-autoconfigure</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.apache.commons</groupId>
-			<artifactId>commons-compress</artifactId>
-			<version>1.26.0</version>
-		</dependency>
+  /**
+   * Creates a new MemberInfo RecordBuilder by copying an existing Builder.
+   * @param other The existing builder to copy.
+   * @return A new MemberInfo RecordBuilder
+   */
+  public static com.optum.ce.referrals.avro.MemberInfo.Builder newBuilder(com.optum.ce.referrals.avro.MemberInfo.Builder other) {
+    if (other == null) {
+      return new com.optum.ce.referrals.avro.MemberInfo.Builder();
+    } else {
+      return new com.optum.ce.referrals.avro.MemberInfo.Builder(other);
+    }
+  }
 
-		<dependency>
-			<groupId>org.springframework.kafka</groupId>
-			<artifactId>spring-kafka</artifactId>
-			<exclusions>
-				<exclusion>
-					<groupId>org.apache.kafka</groupId>
-                    <artifactId>kafka-clients</artifactId>
-				</exclusion>
-			</exclusions>
-		</dependency>
-		
-		<dependency>
-         <groupId>org.apache.kafka</groupId>
-         <artifactId>kafka-clients</artifactId>
-         
-       </dependency>
+  /**
+   * Creates a new MemberInfo RecordBuilder by copying an existing MemberInfo instance.
+   * @param other The existing instance to copy.
+   * @return A new MemberInfo RecordBuilder
+   */
+  public static com.optum.ce.referrals.avro.MemberInfo.Builder newBuilder(com.optum.ce.referrals.avro.MemberInfo other) {
+    if (other == null) {
+      return new com.optum.ce.referrals.avro.MemberInfo.Builder();
+    } else {
+      return new com.optum.ce.referrals.avro.MemberInfo.Builder(other);
+    }
+  }
 
-		<dependency>
-			<groupId>org.springframework</groupId>
-			<artifactId>spring-webmvc</artifactId>
-			
-		</dependency>
+  /**
+   * RecordBuilder for MemberInfo instances.
+   */
+  @org.apache.avro.specific.AvroGenerated
+  public static class Builder extends org.apache.avro.specific.SpecificRecordBuilderBase<MemberInfo>
+    implements org.apache.avro.data.RecordBuilder<MemberInfo> {
 
-		<dependency>
-			<groupId>org.springframework</groupId>
-			<artifactId>spring-core</artifactId>
-			
-		</dependency>
+    private com.optum.ce.referrals.avro.RequestingMember requestingMember;
+    private com.optum.ce.referrals.avro.RequestingMember.Builder requestingMemberBuilder;
+    private com.optum.ce.referrals.avro.RequestedMember requestedMember;
+    private com.optum.ce.referrals.avro.RequestedMember.Builder requestedMemberBuilder;
 
-		<dependency>
-			<groupId>org.springframework</groupId>
-			<artifactId>spring-web</artifactId>
-			
-		</dependency>
-		<dependency>
-			<groupId>org.apache.httpcomponents.client5</groupId>
-			<artifactId>httpclient5</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.flowable</groupId>
-			<artifactId>flowable-spring-boot-starter</artifactId>
-			<version>${flowable.version}</version>
-			<exclusions>
-				<exclusion>
-					<groupId>org.springframework</groupId>
-					<artifactId>spring-beans</artifactId>
-				</exclusion>
-			</exclusions>
-		</dependency>
-		<dependency>
-			<groupId>org.flowable</groupId>
-			<artifactId>flowable-spring-boot-starter-process-rest</artifactId>
-			<version>${flowable.version}</version>
-			<exclusions>
-				<exclusion>
-					<groupId>org.springframework</groupId>
-					<artifactId>spring-beans</artifactId>
-				</exclusion>
-			</exclusions>
-		</dependency>
+    /** Creates a new Builder */
+    private Builder() {
+      super(SCHEMA$, MODEL$);
+    }
 
-		<dependency>
-			<groupId>org.flowable</groupId>
-			<artifactId>flowable-bpmn-layout</artifactId>
-			<version>${flowable.version}</version>
-		</dependency>
+    /**
+     * Creates a Builder by copying an existing Builder.
+     * @param other The existing Builder to copy.
+     */
+    private Builder(com.optum.ce.referrals.avro.MemberInfo.Builder other) {
+      super(other);
+      if (isValidValue(fields()[0], other.requestingMember)) {
+        this.requestingMember = data().deepCopy(fields()[0].schema(), other.requestingMember);
+        fieldSetFlags()[0] = other.fieldSetFlags()[0];
+      }
+      if (other.hasRequestingMemberBuilder()) {
+        this.requestingMemberBuilder = com.optum.ce.referrals.avro.RequestingMember.newBuilder(other.getRequestingMemberBuilder());
+      }
+      if (isValidValue(fields()[1], other.requestedMember)) {
+        this.requestedMember = data().deepCopy(fields()[1].schema(), other.requestedMember);
+        fieldSetFlags()[1] = other.fieldSetFlags()[1];
+      }
+      if (other.hasRequestedMemberBuilder()) {
+        this.requestedMemberBuilder = com.optum.ce.referrals.avro.RequestedMember.newBuilder(other.getRequestedMemberBuilder());
+      }
+    }
 
-		<dependency>
-			<groupId>org.yaml</groupId>
-			<artifactId>snakeyaml</artifactId>
-			
-		</dependency>
+    /**
+     * Creates a Builder by copying an existing MemberInfo instance
+     * @param other The existing instance to copy.
+     */
+    private Builder(com.optum.ce.referrals.avro.MemberInfo other) {
+      super(SCHEMA$, MODEL$);
+      if (isValidValue(fields()[0], other.requestingMember)) {
+        this.requestingMember = data().deepCopy(fields()[0].schema(), other.requestingMember);
+        fieldSetFlags()[0] = true;
+      }
+      this.requestingMemberBuilder = null;
+      if (isValidValue(fields()[1], other.requestedMember)) {
+        this.requestedMember = data().deepCopy(fields()[1].schema(), other.requestedMember);
+        fieldSetFlags()[1] = true;
+      }
+      this.requestedMemberBuilder = null;
+    }
 
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-actuator</artifactId>
-			
-		</dependency>
-		
-	   <dependency>
-          <groupId>org.apache.avro</groupId>
-          <artifactId>avro</artifactId>
-          <version>1.11.5</version>
-      </dependency>
+    /**
+      * Gets the value of the 'requestingMember' field.
+      * @return The value.
+      */
+    public com.optum.ce.referrals.avro.RequestingMember getRequestingMember() {
+      return requestingMember;
+    }
 
-		<dependency>
-			<groupId>io.confluent</groupId>
-			<artifactId>kafka-avro-serializer</artifactId>
-			<version>8.0.0</version>
-		</dependency>
-		
-		<dependency>
-         <groupId>org.springframework.boot</groupId>
-         <artifactId>spring-boot-starter-webmvc-test</artifactId>
-         <scope>test</scope>
-       </dependency>
-       
-      <dependency>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-starter-kafka</artifactId>
-      </dependency>
-      
-      <dependency>
-       <groupId>org.springframework.boot</groupId>
-       <artifactId>spring-boot-starter-cache</artifactId>
-      </dependency>
+
+    /**
+      * Sets the value of the 'requestingMember' field.
+      * @param value The value of 'requestingMember'.
+      * @return This builder.
+      */
+    public com.optum.ce.referrals.avro.MemberInfo.Builder setRequestingMember(com.optum.ce.referrals.avro.RequestingMember value) {
+      validate(fields()[0], value);
+      this.requestingMemberBuilder = null;
+      this.requestingMember = value;
+      fieldSetFlags()[0] = true;
+      return this;
+    }
+
+    /**
+      * Checks whether the 'requestingMember' field has been set.
+      * @return True if the 'requestingMember' field has been set, false otherwise.
+      */
+    public boolean hasRequestingMember() {
+      return fieldSetFlags()[0];
+    }
+
+    /**
+     * Gets the Builder instance for the 'requestingMember' field and creates one if it doesn't exist yet.
+     * @return This builder.
+     */
+    public com.optum.ce.referrals.avro.RequestingMember.Builder getRequestingMemberBuilder() {
+      if (requestingMemberBuilder == null) {
+        if (hasRequestingMember()) {
+          setRequestingMemberBuilder(com.optum.ce.referrals.avro.RequestingMember.newBuilder(requestingMember));
+        } else {
+          setRequestingMemberBuilder(com.optum.ce.referrals.avro.RequestingMember.newBuilder());
+        }
+      }
+      return requestingMemberBuilder;
+    }
+
+    /**
+     * Sets the Builder instance for the 'requestingMember' field
+     * @param value The builder instance that must be set.
+     * @return This builder.
+     */
+
+    public com.optum.ce.referrals.avro.MemberInfo.Builder setRequestingMemberBuilder(com.optum.ce.referrals.avro.RequestingMember.Builder value) {
+      clearRequestingMember();
+      requestingMemberBuilder = value;
+      return this;
+    }
+
+    /**
+     * Checks whether the 'requestingMember' field has an active Builder instance
+     * @return True if the 'requestingMember' field has an active Builder instance
+     */
+    public boolean hasRequestingMemberBuilder() {
+      return requestingMemberBuilder != null;
+    }
+
+    /**
+      * Clears the value of the 'requestingMember' field.
+      * @return This builder.
+      */
+    public com.optum.ce.referrals.avro.MemberInfo.Builder clearRequestingMember() {
+      requestingMember = null;
+      requestingMemberBuilder = null;
+      fieldSetFlags()[0] = false;
+      return this;
+    }
+
+    /**
+      * Gets the value of the 'requestedMember' field.
+      * @return The value.
+      */
+    public com.optum.ce.referrals.avro.RequestedMember getRequestedMember() {
+      return requestedMember;
+    }
+
+
+    /**
+      * Sets the value of the 'requestedMember' field.
+      * @param value The value of 'requestedMember'.
+      * @return This builder.
+      */
+    public com.optum.ce.referrals.avro.MemberInfo.Builder setRequestedMember(com.optum.ce.referrals.avro.RequestedMember value) {
+      validate(fields()[1], value);
+      this.requestedMemberBuilder = null;
+      this.requestedMember = value;
+      fieldSetFlags()[1] = true;
+      return this;
+    }
+
+    /**
+      * Checks whether the 'requestedMember' field has been set.
+      * @return True if the 'requestedMember' field has been set, false otherwise.
+      */
+    public boolean hasRequestedMember() {
+      return fieldSetFlags()[1];
+    }
+
+    /**
+     * Gets the Builder instance for the 'requestedMember' field and creates one if it doesn't exist yet.
+     * @return This builder.
+     */
+    public com.optum.ce.referrals.avro.RequestedMember.Builder getRequestedMemberBuilder() {
+      if (requestedMemberBuilder == null) {
+        if (hasRequestedMember()) {
+          setRequestedMemberBuilder(com.optum.ce.referrals.avro.RequestedMember.newBuilder(requestedMember));
+        } else {
+          setRequestedMemberBuilder(com.optum.ce.referrals.avro.RequestedMember.newBuilder());
+        }
+      }
+      return requestedMemberBuilder;
+    }
+
+    /**
+     * Sets the Builder instance for the 'requestedMember' field
+     * @param value The builder instance that must be set.
+     * @return This builder.
+     */
+
+    public com.optum.ce.referrals.avro.MemberInfo.Builder setRequestedMemberBuilder(com.optum.ce.referrals.avro.RequestedMember.Builder value) {
+      clearRequestedMember();
+      requestedMemberBuilder = value;
+      return this;
+    }
+
+    /**
+     * Checks whether the 'requestedMember' field has an active Builder instance
+     * @return True if the 'requestedMember' field has an active Builder instance
+     */
+    public boolean hasRequestedMemberBuilder() {
+      return requestedMemberBuilder != null;
+    }
+
+    /**
+      * Clears the value of the 'requestedMember' field.
+      * @return This builder.
+      */
+    public com.optum.ce.referrals.avro.MemberInfo.Builder clearRequestedMember() {
+      requestedMember = null;
+      requestedMemberBuilder = null;
+      fieldSetFlags()[1] = false;
+      return this;
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public MemberInfo build() {
+      try {
+        MemberInfo record = new MemberInfo();
+        if (requestingMemberBuilder != null) {
+          try {
+            record.requestingMember = this.requestingMemberBuilder.build();
+          } catch (org.apache.avro.AvroMissingFieldException e) {
+            e.addParentField(record.getSchema().getField("requestingMember"));
+            throw e;
+          }
+        } else {
+          record.requestingMember = fieldSetFlags()[0] ? this.requestingMember : (com.optum.ce.referrals.avro.RequestingMember) defaultValue(fields()[0]);
+        }
+        if (requestedMemberBuilder != null) {
+          try {
+            record.requestedMember = this.requestedMemberBuilder.build();
+          } catch (org.apache.avro.AvroMissingFieldException e) {
+            e.addParentField(record.getSchema().getField("requestedMember"));
+            throw e;
+          }
+        } else {
+          record.requestedMember = fieldSetFlags()[1] ? this.requestedMember : (com.optum.ce.referrals.avro.RequestedMember) defaultValue(fields()[1]);
+        }
+        return record;
+      } catch (org.apache.avro.AvroMissingFieldException e) {
+        throw e;
+      } catch (java.lang.Exception e) {
+        throw new org.apache.avro.AvroRuntimeException(e);
+      }
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  private static final org.apache.avro.io.DatumWriter<MemberInfo>
+    WRITER$ = (org.apache.avro.io.DatumWriter<MemberInfo>)MODEL$.createDatumWriter(SCHEMA$);
+
+  @Override public void writeExternal(java.io.ObjectOutput out)
+    throws java.io.IOException {
+    WRITER$.write(this, SpecificData.getEncoder(out));
+  }
+
+  @SuppressWarnings("unchecked")
+  private static final org.apache.avro.io.DatumReader<MemberInfo>
+    READER$ = (org.apache.avro.io.DatumReader<MemberInfo>)MODEL$.createDatumReader(SCHEMA$);
+
+  @Override public void readExternal(java.io.ObjectInput in)
+    throws java.io.IOException {
+    READER$.read(this, SpecificData.getDecoder(in));
+  }
+
+  @Override protected boolean hasCustomCoders() { return true; }
+
+  @Override public void customEncode(org.apache.avro.io.Encoder out)
+    throws java.io.IOException
+  {
+    this.requestingMember.customEncode(out);
+
+    this.requestedMember.customEncode(out);
+
+  }
+
+  @Override public void customDecode(org.apache.avro.io.ResolvingDecoder in)
+    throws java.io.IOException
+  {
+    org.apache.avro.Schema.Field[] fieldOrder = in.readFieldOrderIfDiff();
+    if (fieldOrder == null) {
+      if (this.requestingMember == null) {
+        this.requestingMember = new com.optum.ce.referrals.avro.RequestingMember();
+      }
+      this.requestingMember.customDecode(in);
+
+      if (this.requestedMember == null) {
+        this.requestedMember = new com.optum.ce.referrals.avro.RequestedMember();
+      }
+      this.requestedMember.customDecode(in);
+
+    } else {
+      for (int i = 0; i < 2; i++) {
+        switch (fieldOrder[i].pos()) {
+        case 0:
+          if (this.requestingMember == null) {
+            this.requestingMember = new com.optum.ce.referrals.avro.RequestingMember();
+          }
+          this.requestingMember.customDecode(in);
+          break;
+
+        case 1:
+          if (this.requestedMember == null) {
+            this.requestedMember = new com.optum.ce.referrals.avro.RequestedMember();
+          }
+          this.requestedMember.customDecode(in);
+          break;
+
+        default:
+          throw new java.io.IOException("Corrupt ResolvingDecoder.");
+        }
+      }
+    }
+  }
+}
 
 
 
-		<finalName>ppl-paperless-activiti</finalName>
-		<plugins>
-			<plugin>
-				<groupId>org.springframework.boot</groupId>
-				<artifactId>spring-boot-maven-plugin</artifactId>
-			</plugin>
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-surefire-plugin</artifactId>
-				<version>2.19.1</version>
-				<configuration>
-					<argLine>@{argLine}</argLine>
-					<skipTests>false</skipTests>
-					<includes>
-						<include>**/ActivitiTestSuite.class</include>
-						<include>**/ClientSchemaTestSuite.class</include>
-						<include>**/DomainPackageTestSuite.class</include>
-						<include>**/MongoTestSuite.class</include>
-					</includes>
-					<useSystemClassLoader>false</useSystemClassLoader>
-				</configuration>
-			</plugin>
-			<plugin>
-				<groupId>org.sonarsource.scanner.maven</groupId>
-				<artifactId>sonar-maven-plugin</artifactId>
-				<version>4.0.0.4121</version>
-			</plugin>
 
-			<plugin>
-				<groupId>org.jacoco</groupId>
-				<artifactId>jacoco-maven-plugin</artifactId>
-				<version>0.8.8</version>
-				<!--				<configuration>
-                                    <includes>
-                                        <include>**/*.class</include>
-                                    </includes>
-                                </configuration> -->
-				<executions>
-					<execution>
-						<id>prepare-agent</id>
-						<goals>
-							<goal>prepare-agent</goal>
-						</goals>
-					</execution>
-					<execution>
-						<id>report</id>
-						<goals>
-							<goal>report</goal>
-						</goals>
-					</execution>
-				</executions>
-			</plugin>
-			<plugin>
-            <groupId>org.apache.avro</groupId>
-            <artifactId>avro-maven-plugin</artifactId>
-            <version>1.12.0</version> 
-            <executions>
-                <execution>
-                    <phase>generate-sources</phase>
-                    <goals>
-                        <goal>schema</goal>
-                    </goals>
-                    <configuration>
-                        <sourceDirectory>${project.basedir}/src/main/resources/avro/</sourceDirectory>
-                        <outputDirectory>${project.basedir}/src/main/java/</outputDirectory>
-                    </configuration>
-                </execution>
-            </executions>
-        </plugin>
-		</plugins>
-	
 
-	
+
+
+
+
+
+
