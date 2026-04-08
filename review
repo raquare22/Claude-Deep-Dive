@@ -1,582 +1,85 @@
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.gson.JsonParser;
-import jakarta.servlet.http.HttpServletResponse;
-
-
 import org.apache.commons.lang3.exception.ExceptionUtils;
-
+import org.owasp.encoder.Encode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Component;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.HttpServerErrorException;
 
-import com.optum.fds.fds_paperless_service.model.ActivitiProcessConfig;
-import com.optum.fds.fds_paperless_service.model.GenericResponse;
-import com.optum.fds.fds_paperless_service.service.WorkflowServiceImpl;
-import com.optum.fds.fds_paperless_service.util.SanitizeUtil;
-import org.owasp.encoder.Encode;
-
-import java.util.Arrays;
-import java.util.Map;
-
+@Component
 @RestController
-@RequestMapping("/api/services/v1/workflow")
-public class ActivitiWorkflowController {
+@RequestMapping("/api/services/v1/")
+public class CSVProcessorController {
 
-	private static final Logger LOGGER = LoggerFactory.getLogger(ActivitiWorkflowController.class);
-	
-	@Autowired
-	private WorkflowServiceImpl workflowService;
+    private static final Logger LOGGER = LoggerFactory.getLogger(CSVProcessorController.class);
 
-	@Autowired
-	private ObjectMapper objectMapper;
-	
+    private static final String INTERNAL_SERVER_ERROR = "INTERNAL_SERVER_ERROR";
 
-	String strResponse="response={}";
-	private static final String ERROR_LOG = "Error: {} {}";
-	private static final String ERROR_DURING_PREPOST = "Error during runPrePostProcess";
+    @Autowired
+    private WorkflowServiceImpl workflowService;
 
-	/********************************** CSV Processor **************************************/
-	
-	// Goes to the engine -- done
-	@PostMapping(value = "/run/process/csvSftp", consumes = MediaType.APPLICATION_JSON_VALUE)
-	public GenericResponse runCsvSftpProcess(@RequestBody String payload) {
-		
-		ActivitiProcessConfig config = new ActivitiProcessConfig(payload);
+    @PostMapping(value = "/csvProcessor", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<GenericResponse> postCSVProcessor(@RequestBody String jsonStr) {
+        try {
+            return workflowService.postCSVProcessor(jsonStr);
+        } catch (HttpServerErrorException e) {
+            LOGGER.error("Error: {} {}", e.getClass().getSimpleName(), e.getMessage());
+            return new ResponseEntity<> (new GenericResponse(e.getStatusCode().value(), "Error during postCSVProcessor", e.getMessage()), e.getStatusCode());
+        } catch (Exception ex) {
+            LOGGER.error("Error posting CSV processor for error {}", ExceptionUtils.getStackTrace(ex));
+            return new ResponseEntity<>(new GenericResponse("500", "Error during postCSVProcessor: " + INTERNAL_SERVER_ERROR, ex.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
 
-		LOGGER.info("Entering runCsvSftpProcess : processConfig={}", config);
-		
-		var response = "";
-				
-		try {
-			response = workflowService.runCsvWorkflow(config);
-			LOGGER.info(strResponse, response);			
-		} catch (HttpServerErrorException e) {
-			LOGGER.error("Error: documentRecord={}; {} {}", config, e.getClass().getSimpleName(), e.getMessage());
-			return new GenericResponse(e.getStatusCode().value(), "Error during runCsvSftpProcess", e.getMessage());
-		} catch (Exception e) {
-			LOGGER.error("Error executing POST request; documentRecord={}, error = {}", config, ExceptionUtils.getStackTrace(e));
-			return new GenericResponse("400", "Error during runCsvSftpProcess", e.getMessage());
-		}
-		return new GenericResponse("200", "OK", response);
-	}
-	
-	@PostMapping(value = "/run/process/cleanUp", consumes = MediaType.APPLICATION_JSON_VALUE)
-	public ResponseEntity<GenericResponse> runCleanUpProcess(@RequestBody String payload) {
-		var response = "";
-		LOGGER.info("Entering cleanup process");
-		try {
-			response = workflowService.runActivitiCleanUpWorkflow(payload);
-		} catch (HttpServerErrorException e) {
-			LOGGER.error(ERROR_LOG, e.getClass().getSimpleName(), e.getMessage());
-			return new ResponseEntity<>(new GenericResponse(e.getStatusCode().value(), "Error during runCleanUpProcess", e.getMessage()), e.getStatusCode());
-		} catch (Exception e) {
-			LOGGER.error("Error to process workflow, HTTPStatus={}, apiPath=/run/process/cleanUp, error={}", HttpStatus.INTERNAL_SERVER_ERROR, ExceptionUtils.getStackTrace(e));
-			return new ResponseEntity<>(new GenericResponse("500", "Error during runCleanUpProcess", e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
-		}
-		return new ResponseEntity<>(new GenericResponse("200", "OK", response), HttpStatus.OK);
-	}
+    @PutMapping(value = "/csvProcessor", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<GenericResponse> updateCSVProcessor(@RequestBody String jsonStr) {
+        try {
+            return workflowService.putCSVProcessor(jsonStr);
+        } catch (HttpServerErrorException e) {
+            LOGGER.error("Error: {} {}", e.getClass().getSimpleName(), e.getMessage());
+            return new ResponseEntity<> (new GenericResponse(e.getStatusCode().value(), "Error during updateCSVProcessor", e.getMessage()), e.getStatusCode());
+        } catch (Exception ex) {
+            LOGGER.error("Error updating CSV processor error={}", ExceptionUtils.getStackTrace(ex));
+            return new ResponseEntity<>(new GenericResponse("500", "Error during updateCSVProcessor: " + INTERNAL_SERVER_ERROR, ex.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
 
-	@PostMapping(value = "/run/process/bounceEmail", consumes = MediaType.APPLICATION_JSON_VALUE)
-	public ResponseEntity<GenericResponse> runBounceEmailProcess(@RequestBody String payload) {
-		String response = "";
-		
-		try {
-			if(validateHookName(payload)){
-				response = workflowService.runActivitiBounceEmailWorkflow(payload);
-				LOGGER.info("responseFile response={}", response);}
-			else{
-				LOGGER.info("Invalid hook name");
-				return new ResponseEntity<>(new GenericResponse(400, "Invalid hook name", response), HttpStatus.BAD_REQUEST);
-			}
-			
-		} catch (HttpServerErrorException e) {
-			LOGGER.error(ERROR_LOG, e.getClass().getSimpleName(), e.getMessage());
+    @GetMapping(value = "/csvProcessor/{id}")
+    public ResponseEntity<GenericResponse> getCSVProcessorById(@PathVariable String id) {
+        LOGGER.info("Entering get processor for id={}", Encode.forJava(id));
+        try {
+            return workflowService.getCSVProcessorById(id);
+        } catch (HttpServerErrorException e) {
+            LOGGER.error("Error: id={}; {} {}", Encode.forJava(id), e.getClass().getSimpleName(), e.getMessage());
+            return new ResponseEntity<> (new GenericResponse(e.getStatusCode().value(), "Error during getCSVProcessorById", e.getMessage()), e.getStatusCode());
+        } catch (Exception ex) {
+            LOGGER.error("Error getting CSV processor for id {} and error {}", Encode.forJava(id), ExceptionUtils.getStackTrace(ex));
+            return new ResponseEntity<>(new GenericResponse("500", "Error during getCSVProcessorById: " + INTERNAL_SERVER_ERROR, ex.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
 
-			return new ResponseEntity<>(new GenericResponse(e.getStatusCode().value(), "Error during runBounceEmailProcess", e.getMessage()), e.getStatusCode());
-		} catch (Exception e) {
-            LOGGER.error("Error to process workflow, HTTPStatus={}, apiPath=/run/process/bounceEmail,  error={}", HttpStatus.INTERNAL_SERVER_ERROR, ExceptionUtils.getStackTrace(e));
-
-			
-			return new ResponseEntity<>(new GenericResponse("500", "Error during runBounceEmailProcess", e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
-		}
-		
-		return new ResponseEntity<>(new GenericResponse("200", "OK", response), HttpStatus.OK);
-	}
-	
-	@PostMapping(value = "/run/process/shutterfly", consumes = MediaType.APPLICATION_JSON_VALUE)
-	public ResponseEntity<GenericResponse> runShutterflyProcess(@RequestBody String payload) {
-		var response = "";
-		
-		try {
-			if(validateHookName(payload)){
-				response = workflowService.runActivitiShutterflyWorkflow(payload);
-			} else {
-				LOGGER.info("Invalid hook name");
-				return new ResponseEntity<>(new GenericResponse(400, "Invalid hook name", response), HttpStatus.BAD_REQUEST);
-			}
-
-		} catch (HttpServerErrorException e) {
-			LOGGER.error(ERROR_LOG, e.getClass().getSimpleName(), e.getMessage());
-			
-
-			return new ResponseEntity<>(new GenericResponse(e.getStatusCode().value(), "Error during runShutterflyProcess", e.getMessage()), e.getStatusCode());
-		} catch (Exception e) {
-			LOGGER.error("Error to process workflow, HTTPStatus={}, apiPath=/run/process/shutterfly,  error={}", HttpStatus.INTERNAL_SERVER_ERROR, ExceptionUtils.getStackTrace(e));
-
-			return new ResponseEntity<>(new GenericResponse("500", "Error during runShutterflyProcess", e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
-		}
-		
-		return new ResponseEntity<>(new GenericResponse("200", "OK", response), HttpStatus.OK);
-	}
-	
-	@PostMapping(value = "/run/process/storageErrorShutterfly", consumes = MediaType.APPLICATION_JSON_VALUE)
-	public ResponseEntity<GenericResponse> runStorageErrorShutterflyProcess(@RequestBody String payload) {
-		var response = "";		
-		try {
-			if(validateHookName(payload)){
-				response = workflowService.runActivitiStorageErrorShutterflyWorkflow(payload);
-			} else {
-				LOGGER.info("Invalid hook name");
-				return new ResponseEntity<>(new GenericResponse(400, "Invalid hook name", response), HttpStatus.BAD_REQUEST);
-			}
-
-			
-		} catch (HttpServerErrorException e) {
-			LOGGER.error(ERROR_LOG, e.getClass().getSimpleName(), e.getMessage());
-			
-
-			return new ResponseEntity<>(new GenericResponse(e.getStatusCode().value(), "Error during runStorageErrorShutterflyProcess", e.getMessage()), e.getStatusCode());
-		} catch (Exception e) {
-            LOGGER.error("Error to process workflow, HTTPStatus={}, apiPath=/run/process/storageErrorShutterfly,  error={}", HttpStatus.INTERNAL_SERVER_ERROR, ExceptionUtils.getStackTrace(e));
-
-			return new ResponseEntity<>(new GenericResponse("500", "Error during runStorageErrorShutterflyProcess", e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
-		}
-		return new ResponseEntity<>(new GenericResponse("200", "OK", response), HttpStatus.OK);
-	}
-	
-	@PostMapping(value = "/run/process/statusFile", consumes = MediaType.APPLICATION_JSON_VALUE)
-	public ResponseEntity<GenericResponse> runStatusFileProcess(@RequestBody String payload) {
-		var response = "";
-		try {
-			if(validateHookName(payload)){
-				response = workflowService.runActivitiStatusFileWorkflow(payload);
-			}
-			else{
-				LOGGER.info("Invalid hook name");
-				return new ResponseEntity<>(new GenericResponse(400, "Invalid hook name", response), HttpStatus.BAD_REQUEST);
-			}
-		} catch (HttpServerErrorException e) {
-			LOGGER.error(ERROR_LOG, e.getClass().getSimpleName(), e.getMessage());
-			return new ResponseEntity<>(new GenericResponse(e.getStatusCode().value(), "Error during runStatusFileProcess", e.getMessage()), e.getStatusCode());
-		} catch (Exception e) {
-			LOGGER.error("Error to process workflow, HTTPStatus={}, apiPath=/run/process/statusFile,  error={}", HttpStatus.INTERNAL_SERVER_ERROR, ExceptionUtils.getStackTrace(e));
-			return new ResponseEntity<>(new GenericResponse("500", "Error during runStatusFileProcess", e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
-		}
-		return new ResponseEntity<>(new GenericResponse("200", "OK", response), HttpStatus.OK);
-	}
-	
-
-	@PostMapping(value = "/run/process/responseFile", consumes = MediaType.APPLICATION_JSON_VALUE)
-	public ResponseEntity<GenericResponse> runResponseFileProcess(@RequestBody String payload) {
-		String response = "";
-		try {
-			if(validateHookName(payload)){
-				response = workflowService.runActivitiResponseFileWorkflow(payload);
-			}
-			else{
-				LOGGER.info("Invalid hook name");
-				return new ResponseEntity<>(new GenericResponse(400, "Invalid hook name", response), HttpStatus.BAD_REQUEST);
-		}
-		} catch (HttpServerErrorException e) {
-			LOGGER.error(ERROR_LOG, e.getClass().getSimpleName(), e.getMessage());
-			return new ResponseEntity<>(new GenericResponse(e.getStatusCode().value(), "Error during runResponseFileProcess", e.getMessage()), e.getStatusCode());
-		} catch (Exception e) {
-			LOGGER.error("Error to process workflow, HTTPStatus={}, apiPath=/run/process/responseFile,  error={}", HttpStatus.INTERNAL_SERVER_ERROR, ExceptionUtils.getStackTrace(e));
-			return new ResponseEntity<>(new GenericResponse("500", "Error during runResponseFileProcess", e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
-		}
-		return new ResponseEntity<>(new GenericResponse("200", "OK", response), HttpStatus.OK);
-	}
-	
-	
-	@PostMapping(value = "/run/process/responseFile/USPClaims", consumes = MediaType.APPLICATION_JSON_VALUE)
-	public ResponseEntity<GenericResponse> runUSPClaimsResponseFileProcess(@RequestBody String payload) {
-		String response = "";
-		try {
-			if(validateHookName(payload)){
-				response = workflowService.runActivitiUSPClaimsResponseFileWorkflow(payload);
-			}
-			else{
-				LOGGER.info("Invalid hook name");
-				return new ResponseEntity<>(new GenericResponse(400, "Invalid hook name", response), HttpStatus.BAD_REQUEST);
-			}
-		} catch (HttpServerErrorException e) {
-			LOGGER.error(ERROR_LOG, e.getClass().getSimpleName(), e.getMessage());
-			return new ResponseEntity<>(new GenericResponse(e.getStatusCode().value(), "Error during runResponseFileProcess", e.getMessage()), e.getStatusCode());
-		} catch (Exception e) {
-			LOGGER.error("Error to process workflow, HTTPStatus={}, apiPath=/run/process/responseFile/USPClaims,  error={}", HttpStatus.INTERNAL_SERVER_ERROR, ExceptionUtils.getStackTrace(e));
-			return new ResponseEntity<>(new GenericResponse("500", "Error during runResponseFileProcess", e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
-		}
-		return new ResponseEntity<>(new GenericResponse("200", "OK", response), HttpStatus.OK);
-	}
-
-	@PostMapping(value = "/run/process/prePost/{id}", consumes = MediaType.APPLICATION_JSON_VALUE)
-	public ResponseEntity<GenericResponse> runPrePostProcess(@PathVariable String id, @RequestBody String payload) {
-		ResponseEntity<GenericResponse> response = null;
-		try {
-			if(validateHookName(payload)){
-				response = workflowService.runPrePostWorkflow(payload, id);
-			} else {
-				LOGGER.info("Invalid hook name");
-				return new ResponseEntity<>(new GenericResponse(400, "Invalid hook name", response), HttpStatus.BAD_REQUEST);
-			}
-
-		} catch (HttpServerErrorException e) {
-			LOGGER.error("Error: id={}; {} {}", Encode.forJava(id), e.getClass().getSimpleName(), e.getMessage());
-
-			return new ResponseEntity<>(new GenericResponse(e.getStatusCode().value(), ERROR_DURING_PREPOST, e.getMessage()), e.getStatusCode());
-		} catch (Exception e) {
-			LOGGER.error("Error to process workflow, HTTPStatus={}, apiPath=/run/process/prePost/{},  error={}", HttpStatus.INTERNAL_SERVER_ERROR, Encode.forJava(id), ExceptionUtils.getStackTrace(e));
-
-			return new ResponseEntity<>(new GenericResponse("500", ERROR_DURING_PREPOST, e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
-		}
-		
-		return new ResponseEntity<>(new GenericResponse("200", "OK", HttpServletResponse.SC_OK), HttpStatus.OK);
-	}
-	
-	@PostMapping(value = "/run/process/prePost", consumes = MediaType.APPLICATION_JSON_VALUE)
-	public ResponseEntity<GenericResponse> runPrePostProcess(@RequestBody String payload) {
-		LOGGER.info("Entering PrePost request payload={}", Encode.forJava(payload));
-		String response = "";
-		
-		try {
-			if(validateHookName(payload)){
-				response = workflowService.runPrePostWorkflow(payload);
-				LOGGER.info("responseFile response={}", response);}
-			else{
-				LOGGER.info("Invalid hook name");
-				return new ResponseEntity<>(new GenericResponse(400, "Invalid hook name", response), HttpStatus.BAD_REQUEST);
-			}
-
-			LOGGER.info("PrePost response={}; request={}", response, Encode.forJava(payload));
-		} catch (HttpServerErrorException e) {
-			LOGGER.error("Error:{} {} ", e.getClass().getSimpleName(), e.getMessage());
-			return new ResponseEntity<>(new GenericResponse(e.getStatusCode().value(), ERROR_DURING_PREPOST, e.getMessage()), e.getStatusCode());
-		} catch (Exception e) {
-			LOGGER.error("Error to process workflow, HTTPStatus={}, apiPath=/run/process/prePost,  error={}", HttpStatus.INTERNAL_SERVER_ERROR, ExceptionUtils.getStackTrace(e));
-			
-			return new ResponseEntity<>(new GenericResponse("500", ERROR_DURING_PREPOST, e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
-		}
-		
-		return new ResponseEntity<>(new GenericResponse("200", "OK", HttpServletResponse.SC_OK), HttpStatus.OK);
-	}
-
-	@PostMapping(value = "/run/process/prePostRealTime", consumes = MediaType.APPLICATION_JSON_VALUE)
-	public ResponseEntity<GenericResponse> runPrePostRealTimeProcess(@RequestBody String payload) {
-		LOGGER.info("Entering PrePostRealTime request payload={}", Encode.forJava(payload));
-		String response = "";
-		
-		try {
-			
-			response = workflowService.runPrePostRealTimeWorkflow(payload);
-
-			LOGGER.info("PrePostRealTime response={}; request={}", response, Encode.forJava(payload));
-		} catch (HttpServerErrorException e) {
-			LOGGER.error("Error:{} {} ", e.getClass().getSimpleName(), e.getMessage());
-
-			return new ResponseEntity<>(new GenericResponse(e.getStatusCode().value(), "Error during runPrePostRealTimeProcess", e.getMessage()), e.getStatusCode());
-		} catch (Exception e) {
-			LOGGER.error("Error to process workflow, HTTPStatus={}, apiPath=/run/process/prePostRealTime,  error={}", HttpStatus.INTERNAL_SERVER_ERROR, ExceptionUtils.getStackTrace(e));
-			
-			return new ResponseEntity<>(new GenericResponse("500", "Error during runPrePostRealTimeProcess", e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
-		}
-		
-		return new ResponseEntity<>(new GenericResponse("200", "OK", HttpServletResponse.SC_OK), HttpStatus.OK);
-	}
-
-	@PostMapping(value = "/run/process/matchAndMerge", consumes = MediaType.APPLICATION_JSON_VALUE)
-	public ResponseEntity<GenericResponse> runMatchAndMergeProcess(@RequestBody String payload) {
-		String response = "";
-		try {
-			response = workflowService.runActivitiMatchAndMergeWorkflow(payload);
-		} catch (HttpServerErrorException e) {
-			LOGGER.error(ERROR_LOG, e.getClass().getSimpleName(), e.getMessage());
-			return new ResponseEntity<>(new GenericResponse(e.getStatusCode().value(), "Error during runMatchAndMergeProcess", e.getMessage()), e.getStatusCode());
-		} catch (Exception e) {
-			LOGGER.error("Error to process workflow, HTTPStatus={}, apiPath=/run/process/matchAndMerge,  error={}", HttpStatus.INTERNAL_SERVER_ERROR, ExceptionUtils.getStackTrace(e));
-			return new ResponseEntity<>(new GenericResponse("500", "Error during runMatchAndMergeProcess", e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
-		}
-		return new ResponseEntity<>(new GenericResponse("200", "OK", response), HttpStatus.OK);
-	}
-
-	@PostMapping(value = "/run/process/emailProcessorTransactionMetadata", consumes = MediaType.APPLICATION_JSON_VALUE)
-	public ResponseEntity<GenericResponse> runEmailProcessorTransactionMetadata(@RequestBody String payload) {
-		String response = "";
-		try {
-			response = workflowService.runEmailProcessorTransactionMetadata(payload);
-			LOGGER.info("emailProcessorTransactionMetadata response={}", response);
-		} catch (HttpServerErrorException e) {
-			LOGGER.error(ERROR_LOG, e.getClass().getSimpleName(), e.getMessage());
-			return new ResponseEntity<>(new GenericResponse(e.getStatusCode().value(), "Error during runEmailProcessorTransactionMetadata", e.getMessage()), e.getStatusCode());
-		} catch (Exception e) {
-			LOGGER.error("Error to process workflow, HTTPStatus={}, apiPath=/run/process/emailProcessorTransactionMetadata,  error={}", HttpStatus.INTERNAL_SERVER_ERROR, ExceptionUtils.getStackTrace(e));
-			return new ResponseEntity<>(new GenericResponse("500", "Error during runEmailProcessorTransactionMetadata", e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
-		}
-		return new ResponseEntity<>(new GenericResponse("200", "OK", response), HttpStatus.OK);
-	}
-
-	@PostMapping(value = "/run/process/providerEmailNotification", consumes = MediaType.APPLICATION_JSON_VALUE)
-	public ResponseEntity<GenericResponse> providerEmailNotification(@RequestBody String payload) {
-		String response = "";
-		try {
-			if(validateHookName(payload)){
-				response = workflowService.runActivitiProviderEmailNotificationWorkflow(payload);
-			} else {
-				LOGGER.info("Invalid hook name");
-				return new ResponseEntity<>(new GenericResponse(400, "Invalid hook name", response), HttpStatus.BAD_REQUEST);
-			}
-			LOGGER.info("providerEmailNotification response={}", response);
-		} catch (HttpServerErrorException e) {
-			LOGGER.error(ERROR_LOG, e.getClass().getSimpleName(), e.getMessage());
-			return new ResponseEntity<>(new GenericResponse(e.getStatusCode().value(), "Error during providerEmailNotification", e.getMessage()), e.getStatusCode());
-		} catch (Exception e) {
-			LOGGER.error("Error to process workflow, HTTPStatus={}, apiPath=/run/process/providerEmailNotification,  error={}", HttpStatus.INTERNAL_SERVER_ERROR, ExceptionUtils.getStackTrace(e));
-			return new ResponseEntity<>(new GenericResponse("500", "Error during providerEmailNotification", e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
-		}
-		return new ResponseEntity<>(new GenericResponse("200", "OK", response), HttpStatus.OK);
-	}
-
-	@PostMapping(value = "/run/process/postDocumentDocLibForELGS", consumes = MediaType.APPLICATION_JSON_VALUE)
-	public ResponseEntity<GenericResponse> postDocumentDocLibForELGSProcess(@RequestBody String payload) {
-		String response = "";
-		try {
-			if(validateHookName(payload)){
-				response = workflowService.runActivitiPostDocumentDocLibForELGSWorkflow(payload);
-			} else {
-				LOGGER.info("Invalid hook name");
-				return new ResponseEntity<>(new GenericResponse(400, "Invalid hook name", response), HttpStatus.BAD_REQUEST);
-			}
-			LOGGER.info("postDocumentDocLibForELGSProcess response={}", response);
-		} catch (HttpServerErrorException e) {
-			LOGGER.error(ERROR_LOG, e.getClass().getSimpleName(), e.getMessage());
-			
-			return new ResponseEntity<>(new GenericResponse(e.getStatusCode().value(), "Error during postDocumentDocLibForELGSProcess", e.getMessage()),e.getStatusCode());
-		} catch (Exception e) {
-			LOGGER.error("Error to process workflow, HTTPStatus={}, apiPath=/run/process/postDocumentDocLibForELGS,  error={}", HttpStatus.INTERNAL_SERVER_ERROR, ExceptionUtils.getStackTrace(e));
-			return new ResponseEntity<>(new GenericResponse("500", "Error during postDocumentDocLibForELGSProcess", e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
-		}
-		
-		return new ResponseEntity<>(new GenericResponse("200", "OK", response), HttpStatus.OK);
-	}
-	
-	@PostMapping(value = "/run/process/textFileForPRA", consumes = MediaType.APPLICATION_JSON_VALUE)
-	public ResponseEntity<GenericResponse> processTextFilePRA(@RequestBody String payload) {
-		String response = "";
-		try {
-			response = workflowService.runActivitiTextFileProcessWorkflow(payload);
-		} catch (HttpServerErrorException e) {
-			LOGGER.error(ERROR_LOG, e.getClass().getSimpleName(), e.getMessage());
-			return new ResponseEntity<>(new GenericResponse(e.getStatusCode().value(), "Error during processTextFilePRA", e.getMessage()),e.getStatusCode());
-		} catch (Exception e) {
-			LOGGER.error("Error to process workflow, HTTPStatus={}, apiPath=/run/process/textFileForPRA,  error={}", HttpStatus.INTERNAL_SERVER_ERROR, ExceptionUtils.getStackTrace(e));
-			return new ResponseEntity<>(new GenericResponse("500", "Error during processTextFilePRA", e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
-		}
-		return new ResponseEntity<>(new GenericResponse("200", "OK", response), HttpStatus.OK);
-	}
-
-	@PostMapping(value = "/run/process/processXlsxFile", consumes = MediaType.APPLICATION_JSON_VALUE)
-	public ResponseEntity<GenericResponse> processXlsxFile(@RequestBody String payload) {
-		String response = "";
-		try {
-			response = workflowService.runActivitiXlsxFileProcessWorkflow(payload);
-		} catch (HttpServerErrorException e) {
-			LOGGER.error(ERROR_LOG, SanitizeUtil.sanitizeString(e.getClass().getSimpleName()), e.getMessage());
-			return new ResponseEntity<>(new GenericResponse(e.getStatusCode().value(), "Error during processXlsxFile", e.getMessage()),e.getStatusCode());
-		} catch (Exception e) {
-			LOGGER.error("Error to process workflow, HTTPStatus={}, apiPath=/run/process/processXlsxFile,  error={}", HttpStatus.INTERNAL_SERVER_ERROR, ExceptionUtils.getStackTrace(e));
-			return new ResponseEntity<>(new GenericResponse("500", "Error during processXlsxFile", e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
-		}
-		return new ResponseEntity<>(new GenericResponse("200", "OK", response), HttpStatus.OK);
-	}
-	
-	@PostMapping(value = "/run/process/sftpconvertFileToDocument", consumes = MediaType.APPLICATION_JSON_VALUE)
-	public ResponseEntity<GenericResponse> sftpconvertFileToDocument(@RequestBody String payload) {
-		String response = "";
-		try {
-			response = workflowService.runActivitiSftpConvertFileToDocument(payload);
-		} catch (HttpServerErrorException e) {
-			LOGGER.error(ERROR_LOG, SanitizeUtil.sanitizeString(e.getClass().getSimpleName()), e.getMessage());
-			return new ResponseEntity<>(new GenericResponse(e.getStatusCode().value(), "Error during sftpconvertingFileToDocument", e.getMessage()),e.getStatusCode());
-		} catch (Exception e) {
-			LOGGER.error("Error to process workflow, HTTPStatus={}, apiPath=/run/process/sftpconvertFileToDocument,  error={}", HttpStatus.INTERNAL_SERVER_ERROR, ExceptionUtils.getStackTrace(e));
-			return new ResponseEntity<>(new GenericResponse("500", "Error during convertFileToDocument", e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
-		}
-		return new ResponseEntity<>(new GenericResponse("200", "OK", response), HttpStatus.OK);
-	}
-	
-	
-	@PostMapping(value = "/run/process/processRealTimeAPIFile", consumes = MediaType.APPLICATION_JSON_VALUE)
-	public ResponseEntity<GenericResponse> processRealTimeAPIFile(@RequestBody String payload) {
-		String response = "";
-		try {
-			response = workflowService.runActivitiRealTimeAPIFileProcessWorkflow(payload);
-		} catch (HttpServerErrorException e) {
-			LOGGER.error(ERROR_LOG, SanitizeUtil.sanitizeString(e.getClass().getSimpleName()), e.getMessage());
-			return new ResponseEntity<>(new GenericResponse(e.getStatusCode().value(), "Error during processRealTimeAPIFile", e.getMessage()),e.getStatusCode());
-		} catch (Exception e) {
-			LOGGER.error("Error to process workflow, HTTPStatus={}, apiPath=/run/process/processRealTimeAPIFile,  error={}", HttpStatus.INTERNAL_SERVER_ERROR, ExceptionUtils.getStackTrace(e));
-			return new ResponseEntity<>(new GenericResponse("500", "Error during processRealTimeAPIFile", e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
-		}
-		return new ResponseEntity<>(new GenericResponse("200", "OK", response), HttpStatus.OK);
-	}
-	
-	@PostMapping(value = "/run/process/retrieveCorporateMPINv2", consumes = MediaType.APPLICATION_JSON_VALUE)
-	public ResponseEntity<GenericResponse> retrieveCorporateMPINv2(@RequestBody String payload) {
-		String response = "";
-		try {
-			
-			response = workflowService.runActivitiRetrieveCorporateMPINv2Workflow(payload);
-
-		} catch (HttpServerErrorException e) {
-			LOGGER.error(ERROR_LOG, e.getClass().getSimpleName(), e.getMessage());
-			
-			return new ResponseEntity<>(new GenericResponse(e.getStatusCode().value(), "Error during retrieveCorporateMPINv2Process", e.getMessage()), e.getStatusCode());
-		} catch (Exception e) {
-			LOGGER.error("Error to process workflow, HTTPStatus={}, apiPath=/run/process/retrieveCorporateMPINv2,  error={}", HttpStatus.INTERNAL_SERVER_ERROR, ExceptionUtils.getStackTrace(e));
-			
-			return new ResponseEntity<>(new GenericResponse("500", "Error during retrieveCorporateMPINv2Process", e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
-		}
-		
-		return new ResponseEntity<>(new GenericResponse("200", "OK", response), HttpStatus.OK);
-	}
-
-	@PostMapping(value = "/run/process/sftp", consumes = MediaType.APPLICATION_JSON_VALUE)
-	public ResponseEntity<GenericResponse> runSftpProcess(@RequestBody String payload) {
-		String response = "";
-		try {
-			response = workflowService.runActivitiSftpWorkflow(payload);
-		} catch (HttpServerErrorException e) {
-			LOGGER.error(ERROR_LOG, e.getClass().getSimpleName(), e.getMessage());
-			return new ResponseEntity<>(new GenericResponse(e.getStatusCode().value(), "Error during runSftpProcess", e.getMessage()), e.getStatusCode());
-		} catch (Exception e) {
-			LOGGER.error("Error to process workflow, HTTPStatus={}, apiPath=/run/process/sftp,  error={}", HttpStatus.INTERNAL_SERVER_ERROR, ExceptionUtils.getStackTrace(e));
-			return new ResponseEntity<>(new GenericResponse("500", "Error during runSftpProcess", e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
-		}
-		return new ResponseEntity<>(new GenericResponse("200", "OK", response), HttpStatus.OK);
-	}
-	// Goes to the engine
-	@PostMapping(value = "/run/dequeue/{queue}", consumes = MediaType.APPLICATION_JSON_VALUE)
-	public GenericResponse runDequeue(@PathVariable String queue) {
-		LOGGER.info("Entering: runDequeue; queue={}", Encode.forJava(queue));
-		return new GenericResponse("200", "OK", "OK");
-	}
-	
-	@PostMapping(value = "/run/process/createMetadataFiles", consumes = MediaType.APPLICATION_JSON_VALUE)
-	public ResponseEntity<GenericResponse> runCreateMetadataFilesProcess(@RequestBody String payload) {
-		String response = "";
-		try {
-			if(validateHookName(payload)){
-				response = workflowService.runActivitiCreateMetadataFilesWorkflow(payload);
-			} else {
-				LOGGER.info("Invalid hook name");
-				return new ResponseEntity<>(new GenericResponse(400, "Invalid hook name", response), HttpStatus.BAD_REQUEST);
-			}
-		} catch (HttpServerErrorException e) {
-			LOGGER.error(ERROR_LOG, e.getClass().getSimpleName(), e.getMessage());
-			return new ResponseEntity<>(new GenericResponse(e.getStatusCode().value(), "Error during create metadata files process", e.getMessage()), e.getStatusCode());
-		} catch (Exception e) {
-			LOGGER.error("Error to process workflow, HTTPStatus={}, apiPath=/run/process/createMetadataFiles,  error={}", HttpStatus.INTERNAL_SERVER_ERROR, ExceptionUtils.getStackTrace(e));
-			return new ResponseEntity<>(new GenericResponse("500", "Error during create metadata files", e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
-		}
-		return new ResponseEntity<>(new GenericResponse("200", "OK", response), HttpStatus.OK);
-	}
-	
-	
-	@PostMapping(value = "/run/process/responseMessage", consumes = MediaType.APPLICATION_JSON_VALUE)
-	public ResponseEntity<GenericResponse> runResponseMessageProcess(@RequestBody String payload) {
-		String response = "";
-		try {
-			if(validateHookName(payload)){
-				response = workflowService.runActivitiResponseMessageWorkflow(payload);
-				}
-			else{
-				LOGGER.info("Invalid hook name");
-				return new ResponseEntity<>(new GenericResponse(400, "Invalid hook name", response), HttpStatus.BAD_REQUEST);
-			}
-		} catch (HttpServerErrorException e) {
-			LOGGER.error(ERROR_LOG, e.getClass().getSimpleName(), e.getMessage());
-			return new ResponseEntity<>(new GenericResponse(e.getStatusCode().value(), "Error during response message process", e.getMessage()), e.getStatusCode());
-		} catch (Exception e) {
-			LOGGER.error("Error to process workflow, HTTPStatus={}, apiPath=/run/process/responseMessage,  error={}", HttpStatus.INTERNAL_SERVER_ERROR, ExceptionUtils.getStackTrace(e));
-			return new ResponseEntity<>(new GenericResponse("500", "Error during response message ", e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
-		}
-		return new ResponseEntity<>(new GenericResponse("200", "OK", response), HttpStatus.OK);
-	}
-	
-	@PostMapping(value = "/run/process/retrieveAndSendEmailProcess", consumes = MediaType.APPLICATION_JSON_VALUE)
-	public ResponseEntity<GenericResponse> runRetrieveAndSendEmailProcess(@RequestBody String payload) {
-		String response = "";
-		try {
-			if(validateHookName(payload)){
-				response = workflowService.runActivitiRetrieveAndSendEmailWorkflow(payload);
-				}
-			else{
-				LOGGER.info("Invalid hook name");
-				return new ResponseEntity<>(new GenericResponse(400, "Invalid hook name", response), HttpStatus.BAD_REQUEST);
-			}
-		} catch (HttpServerErrorException e) {
-			LOGGER.error(ERROR_LOG, e.getClass().getSimpleName(), e.getMessage());
-			return new ResponseEntity<>(new GenericResponse(e.getStatusCode().value(), "Error during RetrieveAndSendEmailProcess", e.getMessage()), e.getStatusCode());
-		} catch (Exception e) {
-			LOGGER.error("Error to process workflow, HTTPStatus={}, apiPath=/run/process/retrieveAndSendEmailProcess,  error={}", HttpStatus.INTERNAL_SERVER_ERROR, ExceptionUtils.getStackTrace(e));
-			return new ResponseEntity<>(new GenericResponse("500", "Error during RetrieveAndSendEmailProcess ", e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
-		}
-		return new ResponseEntity<>(new GenericResponse("200", "OK", response), HttpStatus.OK);
-	}
-
-	@PostMapping(value = "/run/process/sendBatchDynamicEmailRequestToPEN", consumes = MediaType.APPLICATION_JSON_VALUE)
-	public ResponseEntity<GenericResponse> sendBatchDynamicEmailRequestToPEN(@RequestBody String payload) {
-		String response = "";
-		try {
-			if(validateHookName(payload)){
-				response = workflowService.runActivitiSendBatchDynamicEmailRequestToPENWorkflow(payload);
-			}
-			else{
-				LOGGER.info("Invalid hook name");
-				return new ResponseEntity<>(new GenericResponse(400, "Invalid hook name", response), HttpStatus.BAD_REQUEST);
-			}
-		} catch (HttpServerErrorException e) {
-			LOGGER.error(ERROR_LOG, e.getClass().getSimpleName(), e.getMessage());
-			return new ResponseEntity<>(new GenericResponse(e.getStatusCode().value(), "Error during sendBatchDynamicEmailRequestToPENProcess", e.getMessage()), e.getStatusCode());
-		} catch (Exception e) {
-			LOGGER.error("Error executing response message POST error = {}", ExceptionUtils.getStackTrace(e));
-			return new ResponseEntity<>(new GenericResponse("500", "Error during sendBatchDynamicEmailRequestToPENProcess ", e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
-		}
-		return new ResponseEntity<>(new GenericResponse("200", "OK", response), HttpStatus.OK);
-	}
-
-	private String sanitiseString(String jsonStr){
-		return JsonParser.parseString(jsonStr).toString();
-	}
-
-	private boolean validateHookName(String payload) throws JsonProcessingException {
-		Map<String, Object> requestMap = objectMapper.readValue(payload, new TypeReference<>() {});
-		Map hook = (Map) requestMap.get("hook");
-		return SanitizeUtil.validatePayloadString((String) hook.get("name"));
-	}
-
+    @DeleteMapping(value = "/csvProcessor/delete/{id}")
+    public ResponseEntity<GenericResponse> deleteCSVProcessor(@PathVariable String id) {
+        try {
+            return workflowService.deleteCSVProcessorById(id);
+        } catch (HttpServerErrorException e) {
+            LOGGER.error("Error: {} {}", e.getClass().getSimpleName(), e.getMessage());
+            return new ResponseEntity<> (new GenericResponse(e.getStatusCode().value(), "Error during deleteCSVProcessor", e.getMessage()), e.getStatusCode());
+        } catch (Exception ex) {
+            LOGGER.error("Error deleting CSV processor error {}", ExceptionUtils.getStackTrace(ex));
+            return new ResponseEntity<>(new GenericResponse("500", "Error during deleteCSVProcessor: " + INTERNAL_SERVER_ERROR, ex.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
 }
-
