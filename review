@@ -1,506 +1,582 @@
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.gson.JsonParser;
+import jakarta.servlet.http.HttpServletResponse;
+
+
+import org.apache.commons.lang3.exception.ExceptionUtils;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.client.HttpServerErrorException;
+
+import com.optum.fds.fds_paperless_service.model.ActivitiProcessConfig;
+import com.optum.fds.fds_paperless_service.model.GenericResponse;
+import com.optum.fds.fds_paperless_service.service.WorkflowServiceImpl;
+import com.optum.fds.fds_paperless_service.util.SanitizeUtil;
+import org.owasp.encoder.Encode;
+
+import java.util.Arrays;
+import java.util.Map;
+
+@RestController
+@RequestMapping("/api/services/v1/workflow")
+public class ActivitiWorkflowController {
+
+	private static final Logger LOGGER = LoggerFactory.getLogger(ActivitiWorkflowController.class);
+	
+	@Autowired
+	private WorkflowServiceImpl workflowService;
+
+	@Autowired
+	private ObjectMapper objectMapper;
+	
+
+	String strResponse="response={}";
+	private static final String ERROR_LOG = "Error: {} {}";
+	private static final String ERROR_DURING_PREPOST = "Error during runPrePostProcess";
+
+	/********************************** CSV Processor **************************************/
+	
+	// Goes to the engine -- done
+	@PostMapping(value = "/run/process/csvSftp", consumes = MediaType.APPLICATION_JSON_VALUE)
+	public GenericResponse runCsvSftpProcess(@RequestBody String payload) {
+		
+		ActivitiProcessConfig config = new ActivitiProcessConfig(payload);
+
+		LOGGER.info("Entering runCsvSftpProcess : processConfig={}", config);
+		
+		var response = "";
+				
+		try {
+			response = workflowService.runCsvWorkflow(config);
+			LOGGER.info(strResponse, response);			
+		} catch (HttpServerErrorException e) {
+			LOGGER.error("Error: documentRecord={}; {} {}", config, e.getClass().getSimpleName(), e.getMessage());
+			return new GenericResponse(e.getStatusCode().value(), "Error during runCsvSftpProcess", e.getMessage());
+		} catch (Exception e) {
+			LOGGER.error("Error executing POST request; documentRecord={}, error = {}", config, ExceptionUtils.getStackTrace(e));
+			return new GenericResponse("400", "Error during runCsvSftpProcess", e.getMessage());
+		}
+		return new GenericResponse("200", "OK", response);
+	}
+	
+	@PostMapping(value = "/run/process/cleanUp", consumes = MediaType.APPLICATION_JSON_VALUE)
+	public ResponseEntity<GenericResponse> runCleanUpProcess(@RequestBody String payload) {
+		var response = "";
+		LOGGER.info("Entering cleanup process");
+		try {
+			response = workflowService.runActivitiCleanUpWorkflow(payload);
+		} catch (HttpServerErrorException e) {
+			LOGGER.error(ERROR_LOG, e.getClass().getSimpleName(), e.getMessage());
+			return new ResponseEntity<>(new GenericResponse(e.getStatusCode().value(), "Error during runCleanUpProcess", e.getMessage()), e.getStatusCode());
+		} catch (Exception e) {
+			LOGGER.error("Error to process workflow, HTTPStatus={}, apiPath=/run/process/cleanUp, error={}", HttpStatus.INTERNAL_SERVER_ERROR, ExceptionUtils.getStackTrace(e));
+			return new ResponseEntity<>(new GenericResponse("500", "Error during runCleanUpProcess", e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
+		}
+		return new ResponseEntity<>(new GenericResponse("200", "OK", response), HttpStatus.OK);
+	}
+
+	@PostMapping(value = "/run/process/bounceEmail", consumes = MediaType.APPLICATION_JSON_VALUE)
+	public ResponseEntity<GenericResponse> runBounceEmailProcess(@RequestBody String payload) {
+		String response = "";
+		
+		try {
+			if(validateHookName(payload)){
+				response = workflowService.runActivitiBounceEmailWorkflow(payload);
+				LOGGER.info("responseFile response={}", response);}
+			else{
+				LOGGER.info("Invalid hook name");
+				return new ResponseEntity<>(new GenericResponse(400, "Invalid hook name", response), HttpStatus.BAD_REQUEST);
+			}
+			
+		} catch (HttpServerErrorException e) {
+			LOGGER.error(ERROR_LOG, e.getClass().getSimpleName(), e.getMessage());
+
+			return new ResponseEntity<>(new GenericResponse(e.getStatusCode().value(), "Error during runBounceEmailProcess", e.getMessage()), e.getStatusCode());
+		} catch (Exception e) {
+            LOGGER.error("Error to process workflow, HTTPStatus={}, apiPath=/run/process/bounceEmail,  error={}", HttpStatus.INTERNAL_SERVER_ERROR, ExceptionUtils.getStackTrace(e));
+
+			
+			return new ResponseEntity<>(new GenericResponse("500", "Error during runBounceEmailProcess", e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
+		}
+		
+		return new ResponseEntity<>(new GenericResponse("200", "OK", response), HttpStatus.OK);
+	}
+	
+	@PostMapping(value = "/run/process/shutterfly", consumes = MediaType.APPLICATION_JSON_VALUE)
+	public ResponseEntity<GenericResponse> runShutterflyProcess(@RequestBody String payload) {
+		var response = "";
+		
+		try {
+			if(validateHookName(payload)){
+				response = workflowService.runActivitiShutterflyWorkflow(payload);
+			} else {
+				LOGGER.info("Invalid hook name");
+				return new ResponseEntity<>(new GenericResponse(400, "Invalid hook name", response), HttpStatus.BAD_REQUEST);
+			}
+
+		} catch (HttpServerErrorException e) {
+			LOGGER.error(ERROR_LOG, e.getClass().getSimpleName(), e.getMessage());
+			
+
+			return new ResponseEntity<>(new GenericResponse(e.getStatusCode().value(), "Error during runShutterflyProcess", e.getMessage()), e.getStatusCode());
+		} catch (Exception e) {
+			LOGGER.error("Error to process workflow, HTTPStatus={}, apiPath=/run/process/shutterfly,  error={}", HttpStatus.INTERNAL_SERVER_ERROR, ExceptionUtils.getStackTrace(e));
+
+			return new ResponseEntity<>(new GenericResponse("500", "Error during runShutterflyProcess", e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
+		}
+		
+		return new ResponseEntity<>(new GenericResponse("200", "OK", response), HttpStatus.OK);
+	}
+	
+	@PostMapping(value = "/run/process/storageErrorShutterfly", consumes = MediaType.APPLICATION_JSON_VALUE)
+	public ResponseEntity<GenericResponse> runStorageErrorShutterflyProcess(@RequestBody String payload) {
+		var response = "";		
+		try {
+			if(validateHookName(payload)){
+				response = workflowService.runActivitiStorageErrorShutterflyWorkflow(payload);
+			} else {
+				LOGGER.info("Invalid hook name");
+				return new ResponseEntity<>(new GenericResponse(400, "Invalid hook name", response), HttpStatus.BAD_REQUEST);
+			}
+
+			
+		} catch (HttpServerErrorException e) {
+			LOGGER.error(ERROR_LOG, e.getClass().getSimpleName(), e.getMessage());
+			
+
+			return new ResponseEntity<>(new GenericResponse(e.getStatusCode().value(), "Error during runStorageErrorShutterflyProcess", e.getMessage()), e.getStatusCode());
+		} catch (Exception e) {
+            LOGGER.error("Error to process workflow, HTTPStatus={}, apiPath=/run/process/storageErrorShutterfly,  error={}", HttpStatus.INTERNAL_SERVER_ERROR, ExceptionUtils.getStackTrace(e));
+
+			return new ResponseEntity<>(new GenericResponse("500", "Error during runStorageErrorShutterflyProcess", e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
+		}
+		return new ResponseEntity<>(new GenericResponse("200", "OK", response), HttpStatus.OK);
+	}
+	
+	@PostMapping(value = "/run/process/statusFile", consumes = MediaType.APPLICATION_JSON_VALUE)
+	public ResponseEntity<GenericResponse> runStatusFileProcess(@RequestBody String payload) {
+		var response = "";
+		try {
+			if(validateHookName(payload)){
+				response = workflowService.runActivitiStatusFileWorkflow(payload);
+			}
+			else{
+				LOGGER.info("Invalid hook name");
+				return new ResponseEntity<>(new GenericResponse(400, "Invalid hook name", response), HttpStatus.BAD_REQUEST);
+			}
+		} catch (HttpServerErrorException e) {
+			LOGGER.error(ERROR_LOG, e.getClass().getSimpleName(), e.getMessage());
+			return new ResponseEntity<>(new GenericResponse(e.getStatusCode().value(), "Error during runStatusFileProcess", e.getMessage()), e.getStatusCode());
+		} catch (Exception e) {
+			LOGGER.error("Error to process workflow, HTTPStatus={}, apiPath=/run/process/statusFile,  error={}", HttpStatus.INTERNAL_SERVER_ERROR, ExceptionUtils.getStackTrace(e));
+			return new ResponseEntity<>(new GenericResponse("500", "Error during runStatusFileProcess", e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
+		}
+		return new ResponseEntity<>(new GenericResponse("200", "OK", response), HttpStatus.OK);
+	}
+	
+
+	@PostMapping(value = "/run/process/responseFile", consumes = MediaType.APPLICATION_JSON_VALUE)
+	public ResponseEntity<GenericResponse> runResponseFileProcess(@RequestBody String payload) {
+		String response = "";
+		try {
+			if(validateHookName(payload)){
+				response = workflowService.runActivitiResponseFileWorkflow(payload);
+			}
+			else{
+				LOGGER.info("Invalid hook name");
+				return new ResponseEntity<>(new GenericResponse(400, "Invalid hook name", response), HttpStatus.BAD_REQUEST);
+		}
+		} catch (HttpServerErrorException e) {
+			LOGGER.error(ERROR_LOG, e.getClass().getSimpleName(), e.getMessage());
+			return new ResponseEntity<>(new GenericResponse(e.getStatusCode().value(), "Error during runResponseFileProcess", e.getMessage()), e.getStatusCode());
+		} catch (Exception e) {
+			LOGGER.error("Error to process workflow, HTTPStatus={}, apiPath=/run/process/responseFile,  error={}", HttpStatus.INTERNAL_SERVER_ERROR, ExceptionUtils.getStackTrace(e));
+			return new ResponseEntity<>(new GenericResponse("500", "Error during runResponseFileProcess", e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
+		}
+		return new ResponseEntity<>(new GenericResponse("200", "OK", response), HttpStatus.OK);
+	}
+	
+	
+	@PostMapping(value = "/run/process/responseFile/USPClaims", consumes = MediaType.APPLICATION_JSON_VALUE)
+	public ResponseEntity<GenericResponse> runUSPClaimsResponseFileProcess(@RequestBody String payload) {
+		String response = "";
+		try {
+			if(validateHookName(payload)){
+				response = workflowService.runActivitiUSPClaimsResponseFileWorkflow(payload);
+			}
+			else{
+				LOGGER.info("Invalid hook name");
+				return new ResponseEntity<>(new GenericResponse(400, "Invalid hook name", response), HttpStatus.BAD_REQUEST);
+			}
+		} catch (HttpServerErrorException e) {
+			LOGGER.error(ERROR_LOG, e.getClass().getSimpleName(), e.getMessage());
+			return new ResponseEntity<>(new GenericResponse(e.getStatusCode().value(), "Error during runResponseFileProcess", e.getMessage()), e.getStatusCode());
+		} catch (Exception e) {
+			LOGGER.error("Error to process workflow, HTTPStatus={}, apiPath=/run/process/responseFile/USPClaims,  error={}", HttpStatus.INTERNAL_SERVER_ERROR, ExceptionUtils.getStackTrace(e));
+			return new ResponseEntity<>(new GenericResponse("500", "Error during runResponseFileProcess", e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
+		}
+		return new ResponseEntity<>(new GenericResponse("200", "OK", response), HttpStatus.OK);
+	}
+
+	@PostMapping(value = "/run/process/prePost/{id}", consumes = MediaType.APPLICATION_JSON_VALUE)
+	public ResponseEntity<GenericResponse> runPrePostProcess(@PathVariable String id, @RequestBody String payload) {
+		ResponseEntity<GenericResponse> response = null;
+		try {
+			if(validateHookName(payload)){
+				response = workflowService.runPrePostWorkflow(payload, id);
+			} else {
+				LOGGER.info("Invalid hook name");
+				return new ResponseEntity<>(new GenericResponse(400, "Invalid hook name", response), HttpStatus.BAD_REQUEST);
+			}
+
+		} catch (HttpServerErrorException e) {
+			LOGGER.error("Error: id={}; {} {}", Encode.forJava(id), e.getClass().getSimpleName(), e.getMessage());
+
+			return new ResponseEntity<>(new GenericResponse(e.getStatusCode().value(), ERROR_DURING_PREPOST, e.getMessage()), e.getStatusCode());
+		} catch (Exception e) {
+			LOGGER.error("Error to process workflow, HTTPStatus={}, apiPath=/run/process/prePost/{},  error={}", HttpStatus.INTERNAL_SERVER_ERROR, Encode.forJava(id), ExceptionUtils.getStackTrace(e));
+
+			return new ResponseEntity<>(new GenericResponse("500", ERROR_DURING_PREPOST, e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
+		}
+		
+		return new ResponseEntity<>(new GenericResponse("200", "OK", HttpServletResponse.SC_OK), HttpStatus.OK);
+	}
+	
+	@PostMapping(value = "/run/process/prePost", consumes = MediaType.APPLICATION_JSON_VALUE)
+	public ResponseEntity<GenericResponse> runPrePostProcess(@RequestBody String payload) {
+		LOGGER.info("Entering PrePost request payload={}", Encode.forJava(payload));
+		String response = "";
+		
+		try {
+			if(validateHookName(payload)){
+				response = workflowService.runPrePostWorkflow(payload);
+				LOGGER.info("responseFile response={}", response);}
+			else{
+				LOGGER.info("Invalid hook name");
+				return new ResponseEntity<>(new GenericResponse(400, "Invalid hook name", response), HttpStatus.BAD_REQUEST);
+			}
+
+			LOGGER.info("PrePost response={}; request={}", response, Encode.forJava(payload));
+		} catch (HttpServerErrorException e) {
+			LOGGER.error("Error:{} {} ", e.getClass().getSimpleName(), e.getMessage());
+			return new ResponseEntity<>(new GenericResponse(e.getStatusCode().value(), ERROR_DURING_PREPOST, e.getMessage()), e.getStatusCode());
+		} catch (Exception e) {
+			LOGGER.error("Error to process workflow, HTTPStatus={}, apiPath=/run/process/prePost,  error={}", HttpStatus.INTERNAL_SERVER_ERROR, ExceptionUtils.getStackTrace(e));
+			
+			return new ResponseEntity<>(new GenericResponse("500", ERROR_DURING_PREPOST, e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
+		}
+		
+		return new ResponseEntity<>(new GenericResponse("200", "OK", HttpServletResponse.SC_OK), HttpStatus.OK);
+	}
+
+	@PostMapping(value = "/run/process/prePostRealTime", consumes = MediaType.APPLICATION_JSON_VALUE)
+	public ResponseEntity<GenericResponse> runPrePostRealTimeProcess(@RequestBody String payload) {
+		LOGGER.info("Entering PrePostRealTime request payload={}", Encode.forJava(payload));
+		String response = "";
+		
+		try {
+			
+			response = workflowService.runPrePostRealTimeWorkflow(payload);
+
+			LOGGER.info("PrePostRealTime response={}; request={}", response, Encode.forJava(payload));
+		} catch (HttpServerErrorException e) {
+			LOGGER.error("Error:{} {} ", e.getClass().getSimpleName(), e.getMessage());
+
+			return new ResponseEntity<>(new GenericResponse(e.getStatusCode().value(), "Error during runPrePostRealTimeProcess", e.getMessage()), e.getStatusCode());
+		} catch (Exception e) {
+			LOGGER.error("Error to process workflow, HTTPStatus={}, apiPath=/run/process/prePostRealTime,  error={}", HttpStatus.INTERNAL_SERVER_ERROR, ExceptionUtils.getStackTrace(e));
+			
+			return new ResponseEntity<>(new GenericResponse("500", "Error during runPrePostRealTimeProcess", e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
+		}
+		
+		return new ResponseEntity<>(new GenericResponse("200", "OK", HttpServletResponse.SC_OK), HttpStatus.OK);
+	}
+
+	@PostMapping(value = "/run/process/matchAndMerge", consumes = MediaType.APPLICATION_JSON_VALUE)
+	public ResponseEntity<GenericResponse> runMatchAndMergeProcess(@RequestBody String payload) {
+		String response = "";
+		try {
+			response = workflowService.runActivitiMatchAndMergeWorkflow(payload);
+		} catch (HttpServerErrorException e) {
+			LOGGER.error(ERROR_LOG, e.getClass().getSimpleName(), e.getMessage());
+			return new ResponseEntity<>(new GenericResponse(e.getStatusCode().value(), "Error during runMatchAndMergeProcess", e.getMessage()), e.getStatusCode());
+		} catch (Exception e) {
+			LOGGER.error("Error to process workflow, HTTPStatus={}, apiPath=/run/process/matchAndMerge,  error={}", HttpStatus.INTERNAL_SERVER_ERROR, ExceptionUtils.getStackTrace(e));
+			return new ResponseEntity<>(new GenericResponse("500", "Error during runMatchAndMergeProcess", e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
+		}
+		return new ResponseEntity<>(new GenericResponse("200", "OK", response), HttpStatus.OK);
+	}
+
+	@PostMapping(value = "/run/process/emailProcessorTransactionMetadata", consumes = MediaType.APPLICATION_JSON_VALUE)
+	public ResponseEntity<GenericResponse> runEmailProcessorTransactionMetadata(@RequestBody String payload) {
+		String response = "";
+		try {
+			response = workflowService.runEmailProcessorTransactionMetadata(payload);
+			LOGGER.info("emailProcessorTransactionMetadata response={}", response);
+		} catch (HttpServerErrorException e) {
+			LOGGER.error(ERROR_LOG, e.getClass().getSimpleName(), e.getMessage());
+			return new ResponseEntity<>(new GenericResponse(e.getStatusCode().value(), "Error during runEmailProcessorTransactionMetadata", e.getMessage()), e.getStatusCode());
+		} catch (Exception e) {
+			LOGGER.error("Error to process workflow, HTTPStatus={}, apiPath=/run/process/emailProcessorTransactionMetadata,  error={}", HttpStatus.INTERNAL_SERVER_ERROR, ExceptionUtils.getStackTrace(e));
+			return new ResponseEntity<>(new GenericResponse("500", "Error during runEmailProcessorTransactionMetadata", e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
+		}
+		return new ResponseEntity<>(new GenericResponse("200", "OK", response), HttpStatus.OK);
+	}
+
+	@PostMapping(value = "/run/process/providerEmailNotification", consumes = MediaType.APPLICATION_JSON_VALUE)
+	public ResponseEntity<GenericResponse> providerEmailNotification(@RequestBody String payload) {
+		String response = "";
+		try {
+			if(validateHookName(payload)){
+				response = workflowService.runActivitiProviderEmailNotificationWorkflow(payload);
+			} else {
+				LOGGER.info("Invalid hook name");
+				return new ResponseEntity<>(new GenericResponse(400, "Invalid hook name", response), HttpStatus.BAD_REQUEST);
+			}
+			LOGGER.info("providerEmailNotification response={}", response);
+		} catch (HttpServerErrorException e) {
+			LOGGER.error(ERROR_LOG, e.getClass().getSimpleName(), e.getMessage());
+			return new ResponseEntity<>(new GenericResponse(e.getStatusCode().value(), "Error during providerEmailNotification", e.getMessage()), e.getStatusCode());
+		} catch (Exception e) {
+			LOGGER.error("Error to process workflow, HTTPStatus={}, apiPath=/run/process/providerEmailNotification,  error={}", HttpStatus.INTERNAL_SERVER_ERROR, ExceptionUtils.getStackTrace(e));
+			return new ResponseEntity<>(new GenericResponse("500", "Error during providerEmailNotification", e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
+		}
+		return new ResponseEntity<>(new GenericResponse("200", "OK", response), HttpStatus.OK);
+	}
+
+	@PostMapping(value = "/run/process/postDocumentDocLibForELGS", consumes = MediaType.APPLICATION_JSON_VALUE)
+	public ResponseEntity<GenericResponse> postDocumentDocLibForELGSProcess(@RequestBody String payload) {
+		String response = "";
+		try {
+			if(validateHookName(payload)){
+				response = workflowService.runActivitiPostDocumentDocLibForELGSWorkflow(payload);
+			} else {
+				LOGGER.info("Invalid hook name");
+				return new ResponseEntity<>(new GenericResponse(400, "Invalid hook name", response), HttpStatus.BAD_REQUEST);
+			}
+			LOGGER.info("postDocumentDocLibForELGSProcess response={}", response);
+		} catch (HttpServerErrorException e) {
+			LOGGER.error(ERROR_LOG, e.getClass().getSimpleName(), e.getMessage());
+			
+			return new ResponseEntity<>(new GenericResponse(e.getStatusCode().value(), "Error during postDocumentDocLibForELGSProcess", e.getMessage()),e.getStatusCode());
+		} catch (Exception e) {
+			LOGGER.error("Error to process workflow, HTTPStatus={}, apiPath=/run/process/postDocumentDocLibForELGS,  error={}", HttpStatus.INTERNAL_SERVER_ERROR, ExceptionUtils.getStackTrace(e));
+			return new ResponseEntity<>(new GenericResponse("500", "Error during postDocumentDocLibForELGSProcess", e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
+		}
+		
+		return new ResponseEntity<>(new GenericResponse("200", "OK", response), HttpStatus.OK);
+	}
+	
+	@PostMapping(value = "/run/process/textFileForPRA", consumes = MediaType.APPLICATION_JSON_VALUE)
+	public ResponseEntity<GenericResponse> processTextFilePRA(@RequestBody String payload) {
+		String response = "";
+		try {
+			response = workflowService.runActivitiTextFileProcessWorkflow(payload);
+		} catch (HttpServerErrorException e) {
+			LOGGER.error(ERROR_LOG, e.getClass().getSimpleName(), e.getMessage());
+			return new ResponseEntity<>(new GenericResponse(e.getStatusCode().value(), "Error during processTextFilePRA", e.getMessage()),e.getStatusCode());
+		} catch (Exception e) {
+			LOGGER.error("Error to process workflow, HTTPStatus={}, apiPath=/run/process/textFileForPRA,  error={}", HttpStatus.INTERNAL_SERVER_ERROR, ExceptionUtils.getStackTrace(e));
+			return new ResponseEntity<>(new GenericResponse("500", "Error during processTextFilePRA", e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
+		}
+		return new ResponseEntity<>(new GenericResponse("200", "OK", response), HttpStatus.OK);
+	}
+
+	@PostMapping(value = "/run/process/processXlsxFile", consumes = MediaType.APPLICATION_JSON_VALUE)
+	public ResponseEntity<GenericResponse> processXlsxFile(@RequestBody String payload) {
+		String response = "";
+		try {
+			response = workflowService.runActivitiXlsxFileProcessWorkflow(payload);
+		} catch (HttpServerErrorException e) {
+			LOGGER.error(ERROR_LOG, SanitizeUtil.sanitizeString(e.getClass().getSimpleName()), e.getMessage());
+			return new ResponseEntity<>(new GenericResponse(e.getStatusCode().value(), "Error during processXlsxFile", e.getMessage()),e.getStatusCode());
+		} catch (Exception e) {
+			LOGGER.error("Error to process workflow, HTTPStatus={}, apiPath=/run/process/processXlsxFile,  error={}", HttpStatus.INTERNAL_SERVER_ERROR, ExceptionUtils.getStackTrace(e));
+			return new ResponseEntity<>(new GenericResponse("500", "Error during processXlsxFile", e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
+		}
+		return new ResponseEntity<>(new GenericResponse("200", "OK", response), HttpStatus.OK);
+	}
+	
+	@PostMapping(value = "/run/process/sftpconvertFileToDocument", consumes = MediaType.APPLICATION_JSON_VALUE)
+	public ResponseEntity<GenericResponse> sftpconvertFileToDocument(@RequestBody String payload) {
+		String response = "";
+		try {
+			response = workflowService.runActivitiSftpConvertFileToDocument(payload);
+		} catch (HttpServerErrorException e) {
+			LOGGER.error(ERROR_LOG, SanitizeUtil.sanitizeString(e.getClass().getSimpleName()), e.getMessage());
+			return new ResponseEntity<>(new GenericResponse(e.getStatusCode().value(), "Error during sftpconvertingFileToDocument", e.getMessage()),e.getStatusCode());
+		} catch (Exception e) {
+			LOGGER.error("Error to process workflow, HTTPStatus={}, apiPath=/run/process/sftpconvertFileToDocument,  error={}", HttpStatus.INTERNAL_SERVER_ERROR, ExceptionUtils.getStackTrace(e));
+			return new ResponseEntity<>(new GenericResponse("500", "Error during convertFileToDocument", e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
+		}
+		return new ResponseEntity<>(new GenericResponse("200", "OK", response), HttpStatus.OK);
+	}
+	
+	
+	@PostMapping(value = "/run/process/processRealTimeAPIFile", consumes = MediaType.APPLICATION_JSON_VALUE)
+	public ResponseEntity<GenericResponse> processRealTimeAPIFile(@RequestBody String payload) {
+		String response = "";
+		try {
+			response = workflowService.runActivitiRealTimeAPIFileProcessWorkflow(payload);
+		} catch (HttpServerErrorException e) {
+			LOGGER.error(ERROR_LOG, SanitizeUtil.sanitizeString(e.getClass().getSimpleName()), e.getMessage());
+			return new ResponseEntity<>(new GenericResponse(e.getStatusCode().value(), "Error during processRealTimeAPIFile", e.getMessage()),e.getStatusCode());
+		} catch (Exception e) {
+			LOGGER.error("Error to process workflow, HTTPStatus={}, apiPath=/run/process/processRealTimeAPIFile,  error={}", HttpStatus.INTERNAL_SERVER_ERROR, ExceptionUtils.getStackTrace(e));
+			return new ResponseEntity<>(new GenericResponse("500", "Error during processRealTimeAPIFile", e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
+		}
+		return new ResponseEntity<>(new GenericResponse("200", "OK", response), HttpStatus.OK);
+	}
+	
+	@PostMapping(value = "/run/process/retrieveCorporateMPINv2", consumes = MediaType.APPLICATION_JSON_VALUE)
+	public ResponseEntity<GenericResponse> retrieveCorporateMPINv2(@RequestBody String payload) {
+		String response = "";
+		try {
+			
+			response = workflowService.runActivitiRetrieveCorporateMPINv2Workflow(payload);
+
+		} catch (HttpServerErrorException e) {
+			LOGGER.error(ERROR_LOG, e.getClass().getSimpleName(), e.getMessage());
+			
+			return new ResponseEntity<>(new GenericResponse(e.getStatusCode().value(), "Error during retrieveCorporateMPINv2Process", e.getMessage()), e.getStatusCode());
+		} catch (Exception e) {
+			LOGGER.error("Error to process workflow, HTTPStatus={}, apiPath=/run/process/retrieveCorporateMPINv2,  error={}", HttpStatus.INTERNAL_SERVER_ERROR, ExceptionUtils.getStackTrace(e));
+			
+			return new ResponseEntity<>(new GenericResponse("500", "Error during retrieveCorporateMPINv2Process", e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
+		}
+		
+		return new ResponseEntity<>(new GenericResponse("200", "OK", response), HttpStatus.OK);
+	}
+
+	@PostMapping(value = "/run/process/sftp", consumes = MediaType.APPLICATION_JSON_VALUE)
+	public ResponseEntity<GenericResponse> runSftpProcess(@RequestBody String payload) {
+		String response = "";
+		try {
+			response = workflowService.runActivitiSftpWorkflow(payload);
+		} catch (HttpServerErrorException e) {
+			LOGGER.error(ERROR_LOG, e.getClass().getSimpleName(), e.getMessage());
+			return new ResponseEntity<>(new GenericResponse(e.getStatusCode().value(), "Error during runSftpProcess", e.getMessage()), e.getStatusCode());
+		} catch (Exception e) {
+			LOGGER.error("Error to process workflow, HTTPStatus={}, apiPath=/run/process/sftp,  error={}", HttpStatus.INTERNAL_SERVER_ERROR, ExceptionUtils.getStackTrace(e));
+			return new ResponseEntity<>(new GenericResponse("500", "Error during runSftpProcess", e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
+		}
+		return new ResponseEntity<>(new GenericResponse("200", "OK", response), HttpStatus.OK);
+	}
+	// Goes to the engine
+	@PostMapping(value = "/run/dequeue/{queue}", consumes = MediaType.APPLICATION_JSON_VALUE)
+	public GenericResponse runDequeue(@PathVariable String queue) {
+		LOGGER.info("Entering: runDequeue; queue={}", Encode.forJava(queue));
+		return new GenericResponse("200", "OK", "OK");
+	}
+	
+	@PostMapping(value = "/run/process/createMetadataFiles", consumes = MediaType.APPLICATION_JSON_VALUE)
+	public ResponseEntity<GenericResponse> runCreateMetadataFilesProcess(@RequestBody String payload) {
+		String response = "";
+		try {
+			if(validateHookName(payload)){
+				response = workflowService.runActivitiCreateMetadataFilesWorkflow(payload);
+			} else {
+				LOGGER.info("Invalid hook name");
+				return new ResponseEntity<>(new GenericResponse(400, "Invalid hook name", response), HttpStatus.BAD_REQUEST);
+			}
+		} catch (HttpServerErrorException e) {
+			LOGGER.error(ERROR_LOG, e.getClass().getSimpleName(), e.getMessage());
+			return new ResponseEntity<>(new GenericResponse(e.getStatusCode().value(), "Error during create metadata files process", e.getMessage()), e.getStatusCode());
+		} catch (Exception e) {
+			LOGGER.error("Error to process workflow, HTTPStatus={}, apiPath=/run/process/createMetadataFiles,  error={}", HttpStatus.INTERNAL_SERVER_ERROR, ExceptionUtils.getStackTrace(e));
+			return new ResponseEntity<>(new GenericResponse("500", "Error during create metadata files", e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
+		}
+		return new ResponseEntity<>(new GenericResponse("200", "OK", response), HttpStatus.OK);
+	}
+	
+	
+	@PostMapping(value = "/run/process/responseMessage", consumes = MediaType.APPLICATION_JSON_VALUE)
+	public ResponseEntity<GenericResponse> runResponseMessageProcess(@RequestBody String payload) {
+		String response = "";
+		try {
+			if(validateHookName(payload)){
+				response = workflowService.runActivitiResponseMessageWorkflow(payload);
+				}
+			else{
+				LOGGER.info("Invalid hook name");
+				return new ResponseEntity<>(new GenericResponse(400, "Invalid hook name", response), HttpStatus.BAD_REQUEST);
+			}
+		} catch (HttpServerErrorException e) {
+			LOGGER.error(ERROR_LOG, e.getClass().getSimpleName(), e.getMessage());
+			return new ResponseEntity<>(new GenericResponse(e.getStatusCode().value(), "Error during response message process", e.getMessage()), e.getStatusCode());
+		} catch (Exception e) {
+			LOGGER.error("Error to process workflow, HTTPStatus={}, apiPath=/run/process/responseMessage,  error={}", HttpStatus.INTERNAL_SERVER_ERROR, ExceptionUtils.getStackTrace(e));
+			return new ResponseEntity<>(new GenericResponse("500", "Error during response message ", e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
+		}
+		return new ResponseEntity<>(new GenericResponse("200", "OK", response), HttpStatus.OK);
+	}
+	
+	@PostMapping(value = "/run/process/retrieveAndSendEmailProcess", consumes = MediaType.APPLICATION_JSON_VALUE)
+	public ResponseEntity<GenericResponse> runRetrieveAndSendEmailProcess(@RequestBody String payload) {
+		String response = "";
+		try {
+			if(validateHookName(payload)){
+				response = workflowService.runActivitiRetrieveAndSendEmailWorkflow(payload);
+				}
+			else{
+				LOGGER.info("Invalid hook name");
+				return new ResponseEntity<>(new GenericResponse(400, "Invalid hook name", response), HttpStatus.BAD_REQUEST);
+			}
+		} catch (HttpServerErrorException e) {
+			LOGGER.error(ERROR_LOG, e.getClass().getSimpleName(), e.getMessage());
+			return new ResponseEntity<>(new GenericResponse(e.getStatusCode().value(), "Error during RetrieveAndSendEmailProcess", e.getMessage()), e.getStatusCode());
+		} catch (Exception e) {
+			LOGGER.error("Error to process workflow, HTTPStatus={}, apiPath=/run/process/retrieveAndSendEmailProcess,  error={}", HttpStatus.INTERNAL_SERVER_ERROR, ExceptionUtils.getStackTrace(e));
+			return new ResponseEntity<>(new GenericResponse("500", "Error during RetrieveAndSendEmailProcess ", e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
+		}
+		return new ResponseEntity<>(new GenericResponse("200", "OK", response), HttpStatus.OK);
+	}
+
+	@PostMapping(value = "/run/process/sendBatchDynamicEmailRequestToPEN", consumes = MediaType.APPLICATION_JSON_VALUE)
+	public ResponseEntity<GenericResponse> sendBatchDynamicEmailRequestToPEN(@RequestBody String payload) {
+		String response = "";
+		try {
+			if(validateHookName(payload)){
+				response = workflowService.runActivitiSendBatchDynamicEmailRequestToPENWorkflow(payload);
+			}
+			else{
+				LOGGER.info("Invalid hook name");
+				return new ResponseEntity<>(new GenericResponse(400, "Invalid hook name", response), HttpStatus.BAD_REQUEST);
+			}
+		} catch (HttpServerErrorException e) {
+			LOGGER.error(ERROR_LOG, e.getClass().getSimpleName(), e.getMessage());
+			return new ResponseEntity<>(new GenericResponse(e.getStatusCode().value(), "Error during sendBatchDynamicEmailRequestToPENProcess", e.getMessage()), e.getStatusCode());
+		} catch (Exception e) {
+			LOGGER.error("Error executing response message POST error = {}", ExceptionUtils.getStackTrace(e));
+			return new ResponseEntity<>(new GenericResponse("500", "Error during sendBatchDynamicEmailRequestToPENProcess ", e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
+		}
+		return new ResponseEntity<>(new GenericResponse("200", "OK", response), HttpStatus.OK);
+	}
+
+	private String sanitiseString(String jsonStr){
+		return JsonParser.parseString(jsonStr).toString();
+	}
+
+	private boolean validateHookName(String payload) throws JsonProcessingException {
+		Map<String, Object> requestMap = objectMapper.readValue(payload, new TypeReference<>() {});
+		Map hook = (Map) requestMap.get("hook");
+		return SanitizeUtil.validatePayloadString((String) hook.get("name"));
+	}
 
-import org.apache.avro.specific.SpecificData;
-import org.apache.avro.util.Utf8;
-import org.apache.avro.message.BinaryMessageEncoder;
-import org.apache.avro.message.BinaryMessageDecoder;
-import org.apache.avro.message.SchemaStore;
-
-@org.apache.avro.specific.AvroGenerated
-public class MemberInfo extends org.apache.avro.specific.SpecificRecordBase implements org.apache.avro.specific.SpecificRecord {
-  private static final long serialVersionUID = -4492015077240138922L;
-
-
-  public static final org.apache.avro.Schema SCHEMA$ = new org.apache.avro.Schema.Parser().parse("{\"type\":\"record\",\"name\":\"MemberInfo\",\"namespace\":\"com.optum.ce.referrals.avro\",\"fields\":[{\"name\":\"requestingMember\",\"type\":{\"type\":\"record\",\"name\":\"RequestingMember\",\"fields\":[{\"name\":\"memberIdCardNbr\",\"type\":[\"null\",\"string\"],\"default\":null},{\"name\":\"firstName\",\"type\":[\"null\",\"string\"],\"default\":null},{\"name\":\"lastName\",\"type\":[\"null\",\"string\"],\"default\":null},{\"name\":\"dob\",\"type\":[\"null\",\"string\"],\"default\":null},{\"name\":\"groupNumber\",\"type\":[\"null\",\"string\"],\"default\":null},{\"name\":\"dependentSeqNbr\",\"type\":[\"null\",\"string\"],\"default\":null}]}},{\"name\":\"requestedMember\",\"type\":{\"type\":\"record\",\"name\":\"RequestedMember\",\"fields\":[{\"name\":\"memberIdCardNbr\",\"type\":[\"null\",\"string\"],\"default\":null},{\"name\":\"firstName\",\"type\":[\"null\",\"string\"],\"default\":null},{\"name\":\"lastName\",\"type\":[\"null\",\"string\"],\"default\":null},{\"name\":\"groupNumber\",\"type\":[\"null\",\"string\"],\"default\":null},{\"name\":\"dob\",\"type\":[\"null\",\"string\"],\"default\":null}]}}]}");
-  public static org.apache.avro.Schema getClassSchema() { return SCHEMA$; }
-
-  private static final SpecificData MODEL$ = new SpecificData();
-
-  private static final BinaryMessageEncoder<MemberInfo> ENCODER =
-      new BinaryMessageEncoder<>(MODEL$, SCHEMA$);
-
-  private static final BinaryMessageDecoder<MemberInfo> DECODER =
-      new BinaryMessageDecoder<>(MODEL$, SCHEMA$);
-
-  /**
-   * Return the BinaryMessageEncoder instance used by this class.
-   * @return the message encoder used by this class
-   */
-  public static BinaryMessageEncoder<MemberInfo> getEncoder() {
-    return ENCODER;
-  }
-
-  /**
-   * Return the BinaryMessageDecoder instance used by this class.
-   * @return the message decoder used by this class
-   */
-  public static BinaryMessageDecoder<MemberInfo> getDecoder() {
-    return DECODER;
-  }
-
-  /**
-   * Create a new BinaryMessageDecoder instance for this class that uses the specified {@link SchemaStore}.
-   * @param resolver a {@link SchemaStore} used to find schemas by fingerprint
-   * @return a BinaryMessageDecoder instance for this class backed by the given SchemaStore
-   */
-  public static BinaryMessageDecoder<MemberInfo> createDecoder(SchemaStore resolver) {
-    return new BinaryMessageDecoder<>(MODEL$, SCHEMA$, resolver);
-  }
-
-  /**
-   * Serializes this MemberInfo to a ByteBuffer.
-   * @return a buffer holding the serialized data for this instance
-   * @throws java.io.IOException if this instance could not be serialized
-   */
-  public java.nio.ByteBuffer toByteBuffer() throws java.io.IOException {
-    return ENCODER.encode(this);
-  }
-
-  /**
-   * Deserializes a MemberInfo from a ByteBuffer.
-   * @param b a byte buffer holding serialized data for an instance of this class
-   * @return a MemberInfo instance decoded from the given buffer
-   * @throws java.io.IOException if the given bytes could not be deserialized into an instance of this class
-   */
-  public static MemberInfo fromByteBuffer(
-      java.nio.ByteBuffer b) throws java.io.IOException {
-    return DECODER.decode(b);
-  }
-
-  private com.optum.ce.referrals.avro.RequestingMember requestingMember;
-  private com.optum.ce.referrals.avro.RequestedMember requestedMember;
-
-  /**
-   * Default constructor.  Note that this does not initialize fields
-   * to their default values from the schema.  If that is desired then
-   * one should use <code>newBuilder()</code>.
-   */
-  public MemberInfo() {}
-
-  /**
-   * All-args constructor.
-   * @param requestingMember The new value for requestingMember
-   * @param requestedMember The new value for requestedMember
-   */
-  public MemberInfo(com.optum.ce.referrals.avro.RequestingMember requestingMember, com.optum.ce.referrals.avro.RequestedMember requestedMember) {
-    this.requestingMember = requestingMember;
-    this.requestedMember = requestedMember;
-  }
-
-  @Override
-  public org.apache.avro.specific.SpecificData getSpecificData() { return MODEL$; }
-
-  @Override
-  public org.apache.avro.Schema getSchema() { return SCHEMA$; }
-
-  // Used by DatumWriter.  Applications should not call.
-  @Override
-  public java.lang.Object get(int field$) {
-    switch (field$) {
-    case 0: return requestingMember;
-    case 1: return requestedMember;
-    default: throw new IndexOutOfBoundsException("Invalid index: " + field$);
-    }
-  }
-
-  // Used by DatumReader.  Applications should not call.
-  @Override
-  @SuppressWarnings(value="unchecked")
-  public void put(int field$, java.lang.Object value$) {
-    switch (field$) {
-    case 0: requestingMember = (com.optum.ce.referrals.avro.RequestingMember)value$; break;
-    case 1: requestedMember = (com.optum.ce.referrals.avro.RequestedMember)value$; break;
-    default: throw new IndexOutOfBoundsException("Invalid index: " + field$);
-    }
-  }
-
-  /**
-   * Gets the value of the 'requestingMember' field.
-   * @return The value of the 'requestingMember' field.
-   */
-  public com.optum.ce.referrals.avro.RequestingMember getRequestingMember() {
-    return requestingMember;
-  }
-
-
-  /**
-   * Sets the value of the 'requestingMember' field.
-   * @param value the value to set.
-   */
-  public void setRequestingMember(com.optum.ce.referrals.avro.RequestingMember value) {
-    this.requestingMember = value;
-  }
-
-  /**
-   * Gets the value of the 'requestedMember' field.
-   * @return The value of the 'requestedMember' field.
-   */
-  public com.optum.ce.referrals.avro.RequestedMember getRequestedMember() {
-    return requestedMember;
-  }
-
-
-  /**
-   * Sets the value of the 'requestedMember' field.
-   * @param value the value to set.
-   */
-  public void setRequestedMember(com.optum.ce.referrals.avro.RequestedMember value) {
-    this.requestedMember = value;
-  }
-
-  /**
-   * Creates a new MemberInfo RecordBuilder.
-   * @return A new MemberInfo RecordBuilder
-   */
-  public static com.optum.ce.referrals.avro.MemberInfo.Builder newBuilder() {
-    return new com.optum.ce.referrals.avro.MemberInfo.Builder();
-  }
-
-  /**
-   * Creates a new MemberInfo RecordBuilder by copying an existing Builder.
-   * @param other The existing builder to copy.
-   * @return A new MemberInfo RecordBuilder
-   */
-  public static com.optum.ce.referrals.avro.MemberInfo.Builder newBuilder(com.optum.ce.referrals.avro.MemberInfo.Builder other) {
-    if (other == null) {
-      return new com.optum.ce.referrals.avro.MemberInfo.Builder();
-    } else {
-      return new com.optum.ce.referrals.avro.MemberInfo.Builder(other);
-    }
-  }
-
-  /**
-   * Creates a new MemberInfo RecordBuilder by copying an existing MemberInfo instance.
-   * @param other The existing instance to copy.
-   * @return A new MemberInfo RecordBuilder
-   */
-  public static com.optum.ce.referrals.avro.MemberInfo.Builder newBuilder(com.optum.ce.referrals.avro.MemberInfo other) {
-    if (other == null) {
-      return new com.optum.ce.referrals.avro.MemberInfo.Builder();
-    } else {
-      return new com.optum.ce.referrals.avro.MemberInfo.Builder(other);
-    }
-  }
-
-  /**
-   * RecordBuilder for MemberInfo instances.
-   */
-  @org.apache.avro.specific.AvroGenerated
-  public static class Builder extends org.apache.avro.specific.SpecificRecordBuilderBase<MemberInfo>
-    implements org.apache.avro.data.RecordBuilder<MemberInfo> {
-
-    private com.optum.ce.referrals.avro.RequestingMember requestingMember;
-    private com.optum.ce.referrals.avro.RequestingMember.Builder requestingMemberBuilder;
-    private com.optum.ce.referrals.avro.RequestedMember requestedMember;
-    private com.optum.ce.referrals.avro.RequestedMember.Builder requestedMemberBuilder;
-
-    /** Creates a new Builder */
-    private Builder() {
-      super(SCHEMA$, MODEL$);
-    }
-
-    /**
-     * Creates a Builder by copying an existing Builder.
-     * @param other The existing Builder to copy.
-     */
-    private Builder(com.optum.ce.referrals.avro.MemberInfo.Builder other) {
-      super(other);
-      if (isValidValue(fields()[0], other.requestingMember)) {
-        this.requestingMember = data().deepCopy(fields()[0].schema(), other.requestingMember);
-        fieldSetFlags()[0] = other.fieldSetFlags()[0];
-      }
-      if (other.hasRequestingMemberBuilder()) {
-        this.requestingMemberBuilder = com.optum.ce.referrals.avro.RequestingMember.newBuilder(other.getRequestingMemberBuilder());
-      }
-      if (isValidValue(fields()[1], other.requestedMember)) {
-        this.requestedMember = data().deepCopy(fields()[1].schema(), other.requestedMember);
-        fieldSetFlags()[1] = other.fieldSetFlags()[1];
-      }
-      if (other.hasRequestedMemberBuilder()) {
-        this.requestedMemberBuilder = com.optum.ce.referrals.avro.RequestedMember.newBuilder(other.getRequestedMemberBuilder());
-      }
-    }
-
-    /**
-     * Creates a Builder by copying an existing MemberInfo instance
-     * @param other The existing instance to copy.
-     */
-    private Builder(com.optum.ce.referrals.avro.MemberInfo other) {
-      super(SCHEMA$, MODEL$);
-      if (isValidValue(fields()[0], other.requestingMember)) {
-        this.requestingMember = data().deepCopy(fields()[0].schema(), other.requestingMember);
-        fieldSetFlags()[0] = true;
-      }
-      this.requestingMemberBuilder = null;
-      if (isValidValue(fields()[1], other.requestedMember)) {
-        this.requestedMember = data().deepCopy(fields()[1].schema(), other.requestedMember);
-        fieldSetFlags()[1] = true;
-      }
-      this.requestedMemberBuilder = null;
-    }
-
-    /**
-      * Gets the value of the 'requestingMember' field.
-      * @return The value.
-      */
-    public com.optum.ce.referrals.avro.RequestingMember getRequestingMember() {
-      return requestingMember;
-    }
-
-
-    /**
-      * Sets the value of the 'requestingMember' field.
-      * @param value The value of 'requestingMember'.
-      * @return This builder.
-      */
-    public com.optum.ce.referrals.avro.MemberInfo.Builder setRequestingMember(com.optum.ce.referrals.avro.RequestingMember value) {
-      validate(fields()[0], value);
-      this.requestingMemberBuilder = null;
-      this.requestingMember = value;
-      fieldSetFlags()[0] = true;
-      return this;
-    }
-
-    /**
-      * Checks whether the 'requestingMember' field has been set.
-      * @return True if the 'requestingMember' field has been set, false otherwise.
-      */
-    public boolean hasRequestingMember() {
-      return fieldSetFlags()[0];
-    }
-
-    /**
-     * Gets the Builder instance for the 'requestingMember' field and creates one if it doesn't exist yet.
-     * @return This builder.
-     */
-    public com.optum.ce.referrals.avro.RequestingMember.Builder getRequestingMemberBuilder() {
-      if (requestingMemberBuilder == null) {
-        if (hasRequestingMember()) {
-          setRequestingMemberBuilder(com.optum.ce.referrals.avro.RequestingMember.newBuilder(requestingMember));
-        } else {
-          setRequestingMemberBuilder(com.optum.ce.referrals.avro.RequestingMember.newBuilder());
-        }
-      }
-      return requestingMemberBuilder;
-    }
-
-    /**
-     * Sets the Builder instance for the 'requestingMember' field
-     * @param value The builder instance that must be set.
-     * @return This builder.
-     */
-
-    public com.optum.ce.referrals.avro.MemberInfo.Builder setRequestingMemberBuilder(com.optum.ce.referrals.avro.RequestingMember.Builder value) {
-      clearRequestingMember();
-      requestingMemberBuilder = value;
-      return this;
-    }
-
-    /**
-     * Checks whether the 'requestingMember' field has an active Builder instance
-     * @return True if the 'requestingMember' field has an active Builder instance
-     */
-    public boolean hasRequestingMemberBuilder() {
-      return requestingMemberBuilder != null;
-    }
-
-    /**
-      * Clears the value of the 'requestingMember' field.
-      * @return This builder.
-      */
-    public com.optum.ce.referrals.avro.MemberInfo.Builder clearRequestingMember() {
-      requestingMember = null;
-      requestingMemberBuilder = null;
-      fieldSetFlags()[0] = false;
-      return this;
-    }
-
-    /**
-      * Gets the value of the 'requestedMember' field.
-      * @return The value.
-      */
-    public com.optum.ce.referrals.avro.RequestedMember getRequestedMember() {
-      return requestedMember;
-    }
-
-
-    /**
-      * Sets the value of the 'requestedMember' field.
-      * @param value The value of 'requestedMember'.
-      * @return This builder.
-      */
-    public com.optum.ce.referrals.avro.MemberInfo.Builder setRequestedMember(com.optum.ce.referrals.avro.RequestedMember value) {
-      validate(fields()[1], value);
-      this.requestedMemberBuilder = null;
-      this.requestedMember = value;
-      fieldSetFlags()[1] = true;
-      return this;
-    }
-
-    /**
-      * Checks whether the 'requestedMember' field has been set.
-      * @return True if the 'requestedMember' field has been set, false otherwise.
-      */
-    public boolean hasRequestedMember() {
-      return fieldSetFlags()[1];
-    }
-
-    /**
-     * Gets the Builder instance for the 'requestedMember' field and creates one if it doesn't exist yet.
-     * @return This builder.
-     */
-    public com.optum.ce.referrals.avro.RequestedMember.Builder getRequestedMemberBuilder() {
-      if (requestedMemberBuilder == null) {
-        if (hasRequestedMember()) {
-          setRequestedMemberBuilder(com.optum.ce.referrals.avro.RequestedMember.newBuilder(requestedMember));
-        } else {
-          setRequestedMemberBuilder(com.optum.ce.referrals.avro.RequestedMember.newBuilder());
-        }
-      }
-      return requestedMemberBuilder;
-    }
-
-    /**
-     * Sets the Builder instance for the 'requestedMember' field
-     * @param value The builder instance that must be set.
-     * @return This builder.
-     */
-
-    public com.optum.ce.referrals.avro.MemberInfo.Builder setRequestedMemberBuilder(com.optum.ce.referrals.avro.RequestedMember.Builder value) {
-      clearRequestedMember();
-      requestedMemberBuilder = value;
-      return this;
-    }
-
-    /**
-     * Checks whether the 'requestedMember' field has an active Builder instance
-     * @return True if the 'requestedMember' field has an active Builder instance
-     */
-    public boolean hasRequestedMemberBuilder() {
-      return requestedMemberBuilder != null;
-    }
-
-    /**
-      * Clears the value of the 'requestedMember' field.
-      * @return This builder.
-      */
-    public com.optum.ce.referrals.avro.MemberInfo.Builder clearRequestedMember() {
-      requestedMember = null;
-      requestedMemberBuilder = null;
-      fieldSetFlags()[1] = false;
-      return this;
-    }
-
-    @Override
-    @SuppressWarnings("unchecked")
-    public MemberInfo build() {
-      try {
-        MemberInfo record = new MemberInfo();
-        if (requestingMemberBuilder != null) {
-          try {
-            record.requestingMember = this.requestingMemberBuilder.build();
-          } catch (org.apache.avro.AvroMissingFieldException e) {
-            e.addParentField(record.getSchema().getField("requestingMember"));
-            throw e;
-          }
-        } else {
-          record.requestingMember = fieldSetFlags()[0] ? this.requestingMember : (com.optum.ce.referrals.avro.RequestingMember) defaultValue(fields()[0]);
-        }
-        if (requestedMemberBuilder != null) {
-          try {
-            record.requestedMember = this.requestedMemberBuilder.build();
-          } catch (org.apache.avro.AvroMissingFieldException e) {
-            e.addParentField(record.getSchema().getField("requestedMember"));
-            throw e;
-          }
-        } else {
-          record.requestedMember = fieldSetFlags()[1] ? this.requestedMember : (com.optum.ce.referrals.avro.RequestedMember) defaultValue(fields()[1]);
-        }
-        return record;
-      } catch (org.apache.avro.AvroMissingFieldException e) {
-        throw e;
-      } catch (java.lang.Exception e) {
-        throw new org.apache.avro.AvroRuntimeException(e);
-      }
-    }
-  }
-
-  @SuppressWarnings("unchecked")
-  private static final org.apache.avro.io.DatumWriter<MemberInfo>
-    WRITER$ = (org.apache.avro.io.DatumWriter<MemberInfo>)MODEL$.createDatumWriter(SCHEMA$);
-
-  @Override public void writeExternal(java.io.ObjectOutput out)
-    throws java.io.IOException {
-    WRITER$.write(this, SpecificData.getEncoder(out));
-  }
-
-  @SuppressWarnings("unchecked")
-  private static final org.apache.avro.io.DatumReader<MemberInfo>
-    READER$ = (org.apache.avro.io.DatumReader<MemberInfo>)MODEL$.createDatumReader(SCHEMA$);
-
-  @Override public void readExternal(java.io.ObjectInput in)
-    throws java.io.IOException {
-    READER$.read(this, SpecificData.getDecoder(in));
-  }
-
-  @Override protected boolean hasCustomCoders() { return true; }
-
-  @Override public void customEncode(org.apache.avro.io.Encoder out)
-    throws java.io.IOException
-  {
-    this.requestingMember.customEncode(out);
-
-    this.requestedMember.customEncode(out);
-
-  }
-
-  @Override public void customDecode(org.apache.avro.io.ResolvingDecoder in)
-    throws java.io.IOException
-  {
-    org.apache.avro.Schema.Field[] fieldOrder = in.readFieldOrderIfDiff();
-    if (fieldOrder == null) {
-      if (this.requestingMember == null) {
-        this.requestingMember = new com.optum.ce.referrals.avro.RequestingMember();
-      }
-      this.requestingMember.customDecode(in);
-
-      if (this.requestedMember == null) {
-        this.requestedMember = new com.optum.ce.referrals.avro.RequestedMember();
-      }
-      this.requestedMember.customDecode(in);
-
-    } else {
-      for (int i = 0; i < 2; i++) {
-        switch (fieldOrder[i].pos()) {
-        case 0:
-          if (this.requestingMember == null) {
-            this.requestingMember = new com.optum.ce.referrals.avro.RequestingMember();
-          }
-          this.requestingMember.customDecode(in);
-          break;
-
-        case 1:
-          if (this.requestedMember == null) {
-            this.requestedMember = new com.optum.ce.referrals.avro.RequestedMember();
-          }
-          this.requestedMember.customDecode(in);
-          break;
-
-        default:
-          throw new java.io.IOException("Corrupt ResolvingDecoder.");
-        }
-      }
-    }
-  }
 }
-
-
-
-
-
-
-
-
-
-
 
