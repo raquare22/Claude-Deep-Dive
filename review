@@ -1,85 +1,256 @@
 
+import java.time.*;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeFormatterBuilder;
+import java.time.temporal.ChronoField;
+import java.util.Date;
+import java.util.Locale;
+import java.util.Set;
+
+import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import org.apache.commons.lang3.exception.ExceptionUtils;
-import org.owasp.encoder.Encode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
-import org.springframework.stereotype.Component;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.client.HttpServerErrorException;
 
-@Component
-@RestController
-@RequestMapping("/api/services/v1/")
-public class CSVProcessorController {
+//@JsonIgnoreProperties(value = { "isPrintSuppressed" })
+@JsonIgnoreProperties(ignoreUnknown = true)
+public class ClientMetadata extends ClientRootMetadata {
+	
+	private static final long serialVersionUID = 3437794273462504221L;
+	private static final Logger LOGGER = LoggerFactory.getLogger(ClientMetadata.class);
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(CSVProcessorController.class);
+	@JsonProperty("category")
+	protected String category;
+	
+	@JsonProperty("corporateMpin")
+	private String corporateMpin;
+	
+	@JsonProperty("createApplication")
+	@JsonAlias({"CreatingApp", "CreateApp"})
+	protected String createApplication;
+	
+	@JsonProperty("createdDate")
+	@JsonAlias({"Creation Date", "CHECKDATE", "PROCESSDATE", "CREATEDATE", "LetterGenerationDate", "Process", "u_orig_creation_date", "Load_Date","CreatedDate"})
+	@JsonDeserialize(using = CustomDateDeserializer.class)
+	@JsonSerialize(using = CustomDateSerializer.class)
+	protected Date createdDate;
+	
+	@JsonProperty("expiryDate")
+	protected String expiryDate;
+	
+	@JsonProperty("fileDescription")
+	@JsonAlias("SUBJECT")
+	protected String fileDescription;
+	
+	@JsonProperty("fileName")
+	@JsonAlias("FileName")
+	private String fileName;
+	
+	@JsonProperty("filePath")
+	@JsonAlias({"LETTERTYPE", "LetterCategory"})
+	private String filePath;
 
-    private static final String INTERNAL_SERVER_ERROR = "INTERNAL_SERVER_ERROR";
+	@JsonProperty("fileType")
+	@JsonAlias("FileType")
+	protected String fileType;
+	
+	@JsonProperty("providerEmailId")
+	protected String providerEmailId;
+	
+	@JsonProperty("tenant")
+	@JsonAlias("Tenant")
+	protected String tenant;
 
-    @Autowired
-    private WorkflowServiceImpl workflowService;
+	@JsonProperty("privilege")
+	@JsonAlias("privilege")
+	protected String privilege;
+	
+	@JsonProperty("postCardInd")
+	protected boolean postCardInd;
+	
+	@JsonProperty("docSentTo")
+	protected String docSentTo;
+	
+	@JsonProperty("sendToDocVault")
+	protected boolean sendToDocVault;
+	
+	@JsonProperty("sendToShutterfly")
+	protected boolean sendToShutterfly;
+	
+	@JsonProperty("dateEmailSent")
+	protected Date dateEmailSent;
+	
+	@JsonProperty("sendEmailNotifications")
+	protected boolean sendEmailNotifications;
+	
+	@JsonProperty("sendPENAPIRequest")
+	protected boolean sendPENAPIRequest;
 
-    @PostMapping(value = "/csvProcessor", consumes = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<GenericResponse> postCSVProcessor(@RequestBody String jsonStr) {
-        try {
-            return workflowService.postCSVProcessor(jsonStr);
-        } catch (HttpServerErrorException e) {
-            LOGGER.error("Error: {} {}", e.getClass().getSimpleName(), e.getMessage());
-            return new ResponseEntity<> (new GenericResponse(e.getStatusCode().value(), "Error during postCSVProcessor", e.getMessage()), e.getStatusCode());
-        } catch (Exception ex) {
-            LOGGER.error("Error posting CSV processor for error {}", ExceptionUtils.getStackTrace(ex));
-            return new ResponseEntity<>(new GenericResponse("500", "Error during postCSVProcessor: " + INTERNAL_SERVER_ERROR, ex.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
-        }
-    }
+	
+	public ClientMetadata() {
+		this.docSentTo = "";
+		this.sendToDocVault = false;
+		this.sendToShutterfly = false;
+		this.providerEmailId = "";
+		this.postCardInd = true;
+		this.dateEmailSent = null;
+		this.sendEmailNotifications = false;
+		this.sendPENAPIRequest = false;
+	}
+	
+	public Date getCreatedDate() {
+		return createdDate;
+	}
+	public void setCreatedDate(Date createdDate) {
+		this.createdDate = createdDate;
+	}
+	public String getDocSentTo() {
+		return docSentTo;
+	}
+	public void setDocSentTo(String docSentTo) {
+		this.docSentTo = docSentTo;
+	}
+	public boolean getSendToDocVault() {
+		return sendToDocVault;
+	}
+	public void setSendToDocVault(boolean sendToDocVault) {
+		this.sendToDocVault = sendToDocVault;
+	}
+	public boolean getSendToShutterfly() {
+		return sendToShutterfly;
+	}
+	public void setSendToShutterfly(boolean sendToShutterfly) {
+		this.sendToShutterfly = sendToShutterfly;
+	}
+	public Date getDateEmailSent() {
+		return dateEmailSent;
+	}
+	public void setDateEmailSent(Date dateEmailSent) {
+		this.dateEmailSent = dateEmailSent;
+	}
+	public boolean getSendEmailNotifications() {
+		return sendEmailNotifications;
+	}
+	public void setSendEmailNotifications(boolean sendEmailNotifications) {
+		this.sendEmailNotifications = sendEmailNotifications;
+	}
+	public boolean getSendPENAPIRequest() {
+		return sendPENAPIRequest;
+	}
+	public void setSendPENAPIRequest(boolean sendPENAPIRequest) {
+		this.sendPENAPIRequest = sendPENAPIRequest;
+	}
+	public String getCategory() {
+		return category;
+	}
+	public void setCategory(String category) {
+		this.category = category;
+	}
+	public String getCorporateMpin() {
+		return corporateMpin;
+	}
+	public void setCorporateMpin(String corporateMpin) {
+		this.corporateMpin = corporateMpin;
+	}
+	public String getCreateApplication() {
+		return createApplication;
+	}
+	public void setCreateApplication(String createApplication) {
+		if (createApplication != null) {
+			this.createApplication = createApplication;
+		}
+	}
+	public String getExpiryDate() {
+		return expiryDate;
+	}
+	public void setExpiryDate(String expiryDate) {
+		this.expiryDate = expiryDate;
+	}
+	public String getFileDescription() {
+		return fileDescription;
+	}
+	public void setFileDescription(String fileDescription) {
+		this.fileDescription = fileDescription;
+	}
+	public String getFileName() {
+		return fileName;
+	}
+	public void setFileName(String fileName) {
+		this.fileName = fileName;
+	}
+	public String getFilePath() {
+		return filePath;
+	}
+	public void setFilePath(String filePath) {
+		this.filePath = filePath;
+	}
+	public String getFileType() {
+		return fileType;
+	}
+	public void setFileType(String fileType) {
+		this.fileType = fileType;
+	}
+	public String getProviderEmailId() {
+		return providerEmailId;
+	}
+	public void setProviderEmailId(String providerEmailId) {
+		this.providerEmailId = providerEmailId;
+	}
+	public String getTenant() {
+		return tenant;
+	}
+	public void setTenant(String tenant) {
+		this.tenant = tenant;
+	}
+	public String getPrivilege() {
+		return privilege;
+	}
+	public void setPrivilege(String privilege) {
+		this.privilege = privilege;
+	}
+	public boolean getPostCardInd() {
+		return postCardInd;
+	}
+	public void setPostCardInd(boolean postCardInd) {
+		this.postCardInd = postCardInd;
+	}
+	public String vcpExpiryDateFormat(String vcpInput, String subCategory) {
+		String resultDate = "";
+		try{
+			Set<String> vcpSubcat = Set.of("P2", "P4", "P7", "E3");
+			if (vcpSubcat.contains(subCategory)) {
+				DateTimeFormatter dateTimeFormatter = new DateTimeFormatterBuilder()
+						.appendPattern("[MM/yyyy]")
+						.parseDefaulting(ChronoField.MONTH_OF_YEAR, 01)
+						.parseDefaulting(ChronoField.DAY_OF_MONTH, 01)
+						.parseDefaulting(ChronoField.HOUR_OF_DAY, 0)
+						.parseDefaulting(ChronoField.MINUTE_OF_HOUR, 00)
+						.parseDefaulting(ChronoField.SECOND_OF_MINUTE, 00)
+						.parseDefaulting(ChronoField.MILLI_OF_SECOND, 000)
+						.toFormatter()
+						.withLocale(Locale.US)
+						.withZone(ZoneId.of("UTC"));
 
-    @PutMapping(value = "/csvProcessor", consumes = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<GenericResponse> updateCSVProcessor(@RequestBody String jsonStr) {
-        try {
-            return workflowService.putCSVProcessor(jsonStr);
-        } catch (HttpServerErrorException e) {
-            LOGGER.error("Error: {} {}", e.getClass().getSimpleName(), e.getMessage());
-            return new ResponseEntity<> (new GenericResponse(e.getStatusCode().value(), "Error during updateCSVProcessor", e.getMessage()), e.getStatusCode());
-        } catch (Exception ex) {
-            LOGGER.error("Error updating CSV processor error={}", ExceptionUtils.getStackTrace(ex));
-            return new ResponseEntity<>(new GenericResponse("500", "Error during updateCSVProcessor: " + INTERNAL_SERVER_ERROR, ex.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
-        }
-    }
+				ZonedDateTime zdt = ZonedDateTime.parse(vcpInput, dateTimeFormatter);
+				String tempTime = zdt.format(DateTimeFormatter.ofPattern("[yyyy-MM-dd'T'HH:mm:ss.SSS'Z']"));
 
-    @GetMapping(value = "/csvProcessor/{id}")
-    public ResponseEntity<GenericResponse> getCSVProcessorById(@PathVariable String id) {
-        LOGGER.info("Entering get processor for id={}", Encode.forJava(id));
-        try {
-            return workflowService.getCSVProcessorById(id);
-        } catch (HttpServerErrorException e) {
-            LOGGER.error("Error: id={}; {} {}", Encode.forJava(id), e.getClass().getSimpleName(), e.getMessage());
-            return new ResponseEntity<> (new GenericResponse(e.getStatusCode().value(), "Error during getCSVProcessorById", e.getMessage()), e.getStatusCode());
-        } catch (Exception ex) {
-            LOGGER.error("Error getting CSV processor for id {} and error {}", Encode.forJava(id), ExceptionUtils.getStackTrace(ex));
-            return new ResponseEntity<>(new GenericResponse("500", "Error during getCSVProcessorById: " + INTERNAL_SERVER_ERROR, ex.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
-        }
-    }
+				DateTimeFormatter outputDateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
+				LocalDate inputLocaleDate = LocalDate.parse(tempTime, outputDateFormat);
 
-    @DeleteMapping(value = "/csvProcessor/delete/{id}")
-    public ResponseEntity<GenericResponse> deleteCSVProcessor(@PathVariable String id) {
-        try {
-            return workflowService.deleteCSVProcessorById(id);
-        } catch (HttpServerErrorException e) {
-            LOGGER.error("Error: {} {}", e.getClass().getSimpleName(), e.getMessage());
-            return new ResponseEntity<> (new GenericResponse(e.getStatusCode().value(), "Error during deleteCSVProcessor", e.getMessage()), e.getStatusCode());
-        } catch (Exception ex) {
-            LOGGER.error("Error deleting CSV processor error {}", ExceptionUtils.getStackTrace(ex));
-            return new ResponseEntity<>(new GenericResponse("500", "Error during deleteCSVProcessor: " + INTERNAL_SERVER_ERROR, ex.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
-        }
-    }
+				LocalDate lastDayOfMonth = inputLocaleDate.withDayOfMonth(inputLocaleDate.lengthOfMonth());
+				// set time to 23:59:59
+				LocalDateTime lastDayOfMonthAt235959 = lastDayOfMonth.atTime(23, 59, 59);
+				LocalDateTime utcDateTime = lastDayOfMonthAt235959.atOffset(ZoneOffset.UTC).toLocalDateTime();
+				resultDate = utcDateTime.format(outputDateFormat);
+			}
+		} catch (Exception e) {
+			LOGGER.error("Error processing expiry date = {}, {}", vcpInput, e.getMessage());
+			resultDate = vcpInput;
+		}
+		return resultDate;
+	}
 }
