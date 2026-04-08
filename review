@@ -1,97 +1,411 @@
 
-import java.time.*;
-import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeFormatterBuilder;
-import java.time.temporal.ChronoField;
-import java.util.Date;
-import java.util.Locale;
-import java.util.Set;
 
-import com.fasterxml.jackson.annotation.JsonAlias;
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
-import com.fasterxml.jackson.databind.annotation.JsonSerialize;
-import org.apache.commons.lang3.exception.ExceptionUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
-//@JsonIgnoreProperties(value = { "isPrintSuppressed" })
-@JsonIgnoreProperties(ignoreUnknown = true)
-public class ClientMetadata extends ClientRootMetadata {
-	
-	private static final long serialVersionUID = 3437794273462504221L;
-	private static final Logger LOGGER = LoggerFactory.getLogger(ClientMetadata.class);
+public class COSMOSDoc1 extends ClientMetadata {
 
-	@JsonProperty("category")
-	protected String category;
-	
-	@JsonProperty("corporateMpin")
-	private String corporateMpin;
-	
-	@JsonProperty("createApplication")
-	@JsonAlias({"CreatingApp", "CreateApp"})
-	protected String createApplication;
-	
-	@JsonProperty("createdDate")
-	@JsonAlias({"Creation Date", "CHECKDATE", "PROCESSDATE", "CREATEDATE", "LetterGenerationDate", "Process", "u_orig_creation_date", "Load_Date","CreatedDate"})
-	@JsonDeserialize(using = CustomDateDeserializer.class)
-	@JsonSerialize(using = CustomDateSerializer.class)
-	protected Date createdDate;
-	
-	@JsonProperty("expiryDate")
-	protected String expiryDate;
-	
-	@JsonProperty("fileDescription")
-	@JsonAlias("SUBJECT")
-	protected String fileDescription;
-	
-	@JsonProperty("fileName")
-	@JsonAlias("FileName")
-	private String fileName;
-	
-	@JsonProperty("filePath")
-	@JsonAlias({"LETTERTYPE", "LetterCategory"})
-	private String filePath;
+	private static final long serialVersionUID = 1330162657697493613L;
 
-	@JsonProperty("fileType")
-	@JsonAlias("FileType")
-	protected String fileType;
-	
-	@JsonProperty("providerEmailId")
-	protected String providerEmailId;
-	
-	@JsonProperty("tenant")
-	@JsonAlias("Tenant")
-	protected String tenant;
+	@JsonProperty("Claim Number")
+	@JsonAlias("claimNumber")
+	private String claimNumber;
 
-	@JsonProperty("privilege")
-	@JsonAlias("privilege")
-	protected String privilege;
-	
-	@JsonProperty("postCardInd")
-	protected boolean postCardInd;
-	
-	@JsonProperty("docSentTo")
-	protected String docSentTo;
-	
-	@JsonProperty("sendToDocVault")
-	protected boolean sendToDocVault;
-	
-	@JsonProperty("sendToShutterfly")
-	protected boolean sendToShutterfly;
-	
-	@JsonProperty("dateEmailSent")
-	protected Date dateEmailSent;
-	
-	@JsonProperty("sendEmailNotifications")
-	protected boolean sendEmailNotifications;
-	
-	@JsonProperty("sendPENAPIRequest")
-	protected boolean sendPENAPIRequest;
+	@JsonProperty("Sub Category")
+	@JsonAlias("subCategory")
+	private String subCategory;
 
+	@JsonProperty("ProviderTaxID")
+	@JsonAlias("tin")
+	private String tin;
+
+	@JsonProperty("Mpin")
+	@JsonAlias("mpin")
+	private String mpin="";
+
+	@JsonProperty("Provider Name")
+	@JsonAlias("physicianName")
+	private String physicianName;
 	
-	public ClientMetadata() {
+	@JsonProperty("patientAccountNumber")
+	@JsonAlias("patientAccountNumber")
+	private String patientAccountNumber;
+
+	@JsonProperty("Member ID")
+	@JsonAlias("memberId")
+	private String memberId;
+
+	@JsonProperty("Member Name")
+	@JsonAlias("memberName")
+	private String memberName;
+
+	@JsonProperty("Policy Number")
+	@JsonAlias("policyNumber")
+	private String policyNumber;
+
+	@JsonProperty("date of service")
+	@JsonAlias("dateOfService")
+	private String dateOfService;
+
+	@JsonProperty("Patient DOB")
+	@JsonAlias("patientDOB")
+	private String patientDOB;
+
+	@JsonProperty("isPrintSuppressed")
+	@JsonAlias("emailAlertReq")
+	private String emailAlertReq="Y";
+
+	@JsonProperty("Default Ind")
+	@JsonAlias("DefaultUsed")
+	private String DefaultUsed;
+
+	@JsonProperty("originalPrintTrail")
+	private String originalPrintTrail;
+
+	@JsonProperty("PassThruData")
+	private String PassThruData;
+
+	@JsonProperty("CONFIGKEY")
+	private String CONFIGKEY;
+
+	public COSMOSDoc1(){
+		this.category = "Claim";
+		this.fileType = "Letter";
+		this.tenant = "Link";
+		this.docSentTo = "";
+		this.sendToDocVault = false;
+		this.sendToShutterfly = false;
+		this.providerEmailId = "";
+		this.postCardInd = false;
+		this.dateEmailSent = null;
+		this.sendEmailNotifications = false;
+		this.sendPENAPIRequest = false;
+		this.fileDescription = "Medicare Claim Letter";
+		this.privilege = "Claim Status";
+		this.subCategory = "R1";
+		Subcategory subCat = Subcategory.valueOf(this.subCategory);
+		this.setFilePath(subCat.getFilePath());
+	}
+
+	public String getClaimNumber() {
+		return claimNumber;
+	}
+
+	public void setClaimNumber(String claimNumber) {
+		this.claimNumber = claimNumber;
+	}
+
+	public String getSubCategory() {
+		return subCategory;
+	}
+
+	public void setSubCategory(String subCategory) {
+		if(subCategory == null || subCategory.isEmpty()){
+			this.subCategory = "RR";
+			this.setFilePath(Subcategory.RR.getFilePath());
+		} else {
+			this.subCategory = subCategory;
+			Subcategory subCat = null;
+			try {
+				subCat = Subcategory.valueOf(this.subCategory);
+			} catch (Exception e) {
+				subCat = Subcategory.RR;
+			}
+			this.setFilePath(subCat.getFilePath());
+		}
+	}
+
+	public String getTin() {
+		return tin;
+	}
+
+	public void setTin(String tin) {
+		this.tin = tin;
+	}
+
+	public String getMpin() {
+		return mpin;
+	}
+
+	public void setMpin(String mpin) {
+		this.mpin = mpin;
+	}
+
+	public String getPhysicianName() {
+		return physicianName;
+	}
+
+	public void setPhysicianName(String physicianName) {
+		this.physicianName = physicianName;
+	}
+
+	public String getMemberId() {
+		return memberId;
+	}
+
+	public void setMemberId(String memberId) {
+		this.memberId = memberId;
+	}
+
+	public String getMemberName() {
+		return memberName;
+	}
+
+	public void setMemberName(String memberName) {
+		this.memberName = memberName;
+	}
+
+	public String getPolicyNumber() {
+		return policyNumber;
+	}
+
+	public void setPolicyNumber(String policyNumber) {
+		this.policyNumber = policyNumber;
+	}
+
+	public String getDateOfService() {
+		return dateOfService;
+	}
+
+	public void setDateOfService(String dateOfService) {
+		this.dateOfService = dateOfService;
+	}
+
+	public String getPatientDOB() {
+		return patientDOB;
+	}
+
+	public void setPatientDOB(String patientDOB) {
+		this.patientDOB = patientDOB;
+	}
+
+	public String getEmailAlertReq() {
+		return emailAlertReq;
+	}
+
+	public void setEmailAlertReq(String emailAlertReq) {
+		if (emailAlertReq != null && !emailAlertReq.isEmpty()){
+			this.emailAlertReq = emailAlertReq;
+		}
+	}
+
+	public String getDefaultUsed() {
+		return DefaultUsed;
+	}
+
+	public void setDefaultUsed(String defaultUsed) {
+		DefaultUsed = defaultUsed;
+	}
+
+	public String getOriginalPrintTrail() {
+		return originalPrintTrail;
+	}
+
+	public void setOriginalPrintTrail(String originalPrintTrail) {
+		this.originalPrintTrail = originalPrintTrail;
+	}
+
+	public String getPassThruData() {
+		return PassThruData;
+	}
+
+	public void setPassThruData(String passThruData) {
+		PassThruData = passThruData;
+	}
+
+	public String getCONFIGKEY() {
+		return CONFIGKEY;
+	}
+
+	public void setCONFIGKEY(String CONFIGKEY) {
+		this.CONFIGKEY = CONFIGKEY;
+	}
+	
+	public String getPatientAccountNumber() {
+		return patientAccountNumber;
+	}
+	
+	public void setPatientAccountNumber(String patientAccountNumber) {
+		this.patientAccountNumber = patientAccountNumber;
+	}
+
+	public enum ErrorMsg implements ErrorMessage {
+		CreationDate (12, "Missing or invalid data: Creation Date"),
+		ClaimNumber (12, "Missing or invalid data: Claim Number"),
+		SubCategory (12, "Missing or invalid data: Sub Category"),
+		ProviderTaxID (12,"Missing or invalid data: ProviderTaxID"),
+		Mpin (12, "Missing or invalid data: Mpin"), // "emailAlertReq!=\"N\""
+		dateofservice (12, "Missing or invalid data: date of service"),
+		isPrintSuppressed (12,"Missing or invalid data: isPrintSuppressed"),
+
+		originalPrintTrail (22, "Missing or invalid data: originalPrintTrail(SEVERE)"), // "emailAlertReq!=\"N\""
+		PassThruData (22, "Missing or invalid data: PassThruData(SEVERE)"), // "emailAlertReq!=\"N\""
+		CONFIGKEY (22, "Missing or invalid data: CONFIGKEY(SEVERE)"); // "emailAlertReq!=\"N\""
+
+		private Integer errorCode;
+		private String errorMessage;
+
+		ErrorMsg(Integer code, String message) {
+			this.errorCode = code;
+			this.errorMessage = message;
+		}
+
+		public int getErrorCode() {
+			return errorCode;
+		}
+		public String getErrorMessage() {
+			return errorMessage;
+		}
+
+	}
+
+	public enum Subcategory {
+
+		// COSMOSDoc1
+
+		R1 ("R1", "Medicare/Action Required"),
+		RR ("RR", "Medicare/Other");
+
+		private String subCat;
+		private String filePath;
+
+		Subcategory(String subCat, String filePath){
+			this.subCat = subCat;
+			this.filePath = filePath;
+		}
+		public String getSubCat() {
+			return subCat;
+		}
+
+		public String getFilePath() {
+			return filePath;
+		}
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+===
+
+
+
+public class COSMOSPRA extends ClientMetadata {
+	
+	private static final long serialVersionUID = -797273316412247183L;
+	
+	@JsonProperty("TIN")
+	@JsonAlias("tin")
+	private String tin;
+
+	@JsonProperty("ProviderMPIN")
+	@JsonAlias("mpin")
+	private String mpin="";
+	
+	@JsonProperty("isPrintSuppressed")
+	@JsonAlias("emailAlertReq")
+	private String emailAlertReq="Y";
+	
+	@JsonProperty("CHECKNUMBER")
+	@JsonAlias("CheckTraceNumber")
+	private String CheckTraceNumber;
+	
+	@JsonProperty("physicianName")
+	@JsonAlias("PHYSICIANNAME")
+	private String physicianName;
+
+	@JsonProperty("EFT_Ind")
+	private String EFT_Ind;
+	
+	@JsonProperty("835_Ind")
+	private String ind_835;
+	
+	@JsonProperty("PTRS")
+	private String PTRS;
+	
+	@JsonProperty("DIV")
+	private String DIV;
+	
+	@JsonProperty("CLAIMNUMBER")
+	@JsonAlias("multClaimNumber")
+	private String multClaimNumber;
+	
+	@JsonProperty("DefaultUsed")
+	private String DefaultUsed;
+	
+	@JsonProperty("CheckAmt")
+	private String CheckAmt;
+	
+	@JsonProperty("CONFIGKEY")
+	private String CONFIGKEY;
+	
+	@JsonProperty("originalPrintTrail")
+	private String originalPrintTrail;
+	
+	@JsonProperty("PassThruData")
+	private String PassThruData;
+	
+	@JsonProperty("MailToAddress1") 
+	private String MailToAddress1;
+	
+	@JsonProperty("MailToAddress2") 
+	private String MailToAddress2;
+	
+	@JsonProperty("MailToAddress3") 
+	private String MailToAddress3;
+	
+	@JsonProperty("MailToAddress4") 
+	private String MailToAddress4;
+	
+	@JsonProperty("MailToAddress5") 
+	private String MailToAddress5;
+	
+	@JsonProperty("MailToAddress6") 
+	private String MailToAddress6;
+	
+	@JsonAlias("subCategory")
+	@JsonProperty("SubCategory")
+	protected String subCategory;
+	
+	@JsonProperty("paymentNumber")
+	@JsonAlias("vendor_pay_id")
+	private String paymentNumber;
+
+	private boolean addedToCosmosPraResponseFile;
+
+	private boolean merged;
+	
+	private String PTRS_FIFTEEN;
+
+	public COSMOSPRA() {
+		this.tenant = "Link";
+		this.category = "Payment Document";
+		this.fileDescription = "Payment Document";
+		this.fileType = "Letter";
+		this.privilege = "Claim Status";
 		this.docSentTo = "";
 		this.sendToDocVault = false;
 		this.sendToShutterfly = false;
@@ -100,157 +414,744 @@ public class ClientMetadata extends ClientRootMetadata {
 		this.dateEmailSent = null;
 		this.sendEmailNotifications = false;
 		this.sendPENAPIRequest = false;
+		this.addedToCosmosPraResponseFile = false;
+		this.merged = false;
+		this.subCategory = "PR";
+		this.createApplication = "CheckWrite";
+		Subcategory subCat = Subcategory.valueOf(this.subCategory);
+		this.setFilePath(subCat.getFilePath());
+	}
+
+	public String getTin() {
+		return tin;
+	}
+
+	public void setTin(String tin) {
+		this.tin = tin;
+	}
+
+	public String getMpin() {
+		return mpin;
+	}
+
+	public void setMpin(String mpin) {
+		if (mpin != null) {
+			this.mpin = mpin;
+		}
+	}
+
+	public String getEmailAlertReq() {
+		return emailAlertReq;
+	}
+
+	public void setEmailAlertReq(String emailAlertReq) {
+		if (emailAlertReq != null && !emailAlertReq.isEmpty()){
+			this.emailAlertReq = emailAlertReq;
+		}
 	}
 	
-	public Date getCreatedDate() {
-		return createdDate;
+	public String getPhysicianName() {
+		return physicianName;
 	}
-	public void setCreatedDate(Date createdDate) {
-		this.createdDate = createdDate;
-	}
-	public String getDocSentTo() {
-		return docSentTo;
-	}
-	public void setDocSentTo(String docSentTo) {
-		this.docSentTo = docSentTo;
-	}
-	public boolean getSendToDocVault() {
-		return sendToDocVault;
-	}
-	public void setSendToDocVault(boolean sendToDocVault) {
-		this.sendToDocVault = sendToDocVault;
-	}
-	public boolean getSendToShutterfly() {
-		return sendToShutterfly;
-	}
-	public void setSendToShutterfly(boolean sendToShutterfly) {
-		this.sendToShutterfly = sendToShutterfly;
-	}
-	public Date getDateEmailSent() {
-		return dateEmailSent;
-	}
-	public void setDateEmailSent(Date dateEmailSent) {
-		this.dateEmailSent = dateEmailSent;
-	}
-	public boolean getSendEmailNotifications() {
-		return sendEmailNotifications;
-	}
-	public void setSendEmailNotifications(boolean sendEmailNotifications) {
-		this.sendEmailNotifications = sendEmailNotifications;
-	}
-	public boolean getSendPENAPIRequest() {
-		return sendPENAPIRequest;
-	}
-	public void setSendPENAPIRequest(boolean sendPENAPIRequest) {
-		this.sendPENAPIRequest = sendPENAPIRequest;
-	}
-	public String getCategory() {
-		return category;
-	}
-	public void setCategory(String category) {
-		this.category = category;
-	}
-	public String getCorporateMpin() {
-		return corporateMpin;
-	}
-	public void setCorporateMpin(String corporateMpin) {
-		this.corporateMpin = corporateMpin;
-	}
-	public String getCreateApplication() {
-		return createApplication;
-	}
-	public void setCreateApplication(String createApplication) {
-		if (createApplication != null) {
-			this.createApplication = createApplication;
-		}
-	}
-	public String getExpiryDate() {
-		return expiryDate;
-	}
-	public void setExpiryDate(String expiryDate) {
-		this.expiryDate = expiryDate;
-	}
-	public String getFileDescription() {
-		return fileDescription;
-	}
-	public void setFileDescription(String fileDescription) {
-		this.fileDescription = fileDescription;
-	}
-	public String getFileName() {
-		return fileName;
-	}
-	public void setFileName(String fileName) {
-		this.fileName = fileName;
-	}
-	public String getFilePath() {
-		return filePath;
-	}
-	public void setFilePath(String filePath) {
-		this.filePath = filePath;
-	}
-	public String getFileType() {
-		return fileType;
-	}
-	public void setFileType(String fileType) {
-		this.fileType = fileType;
-	}
-	public String getProviderEmailId() {
-		return providerEmailId;
-	}
-	public void setProviderEmailId(String providerEmailId) {
-		this.providerEmailId = providerEmailId;
-	}
-	public String getTenant() {
-		return tenant;
-	}
-	public void setTenant(String tenant) {
-		this.tenant = tenant;
-	}
-	public String getPrivilege() {
-		return privilege;
-	}
-	public void setPrivilege(String privilege) {
-		this.privilege = privilege;
-	}
-	public boolean getPostCardInd() {
-		return postCardInd;
-	}
-	public void setPostCardInd(boolean postCardInd) {
-		this.postCardInd = postCardInd;
-	}
-	public String vcpExpiryDateFormat(String vcpInput, String subCategory) {
-		String resultDate = "";
-		try{
-			Set<String> vcpSubcat = Set.of("P2", "P4", "P7", "E3");
-			if (vcpSubcat.contains(subCategory)) {
-				DateTimeFormatter dateTimeFormatter = new DateTimeFormatterBuilder()
-						.appendPattern("[MM/yyyy]")
-						.parseDefaulting(ChronoField.MONTH_OF_YEAR, 01)
-						.parseDefaulting(ChronoField.DAY_OF_MONTH, 01)
-						.parseDefaulting(ChronoField.HOUR_OF_DAY, 0)
-						.parseDefaulting(ChronoField.MINUTE_OF_HOUR, 00)
-						.parseDefaulting(ChronoField.SECOND_OF_MINUTE, 00)
-						.parseDefaulting(ChronoField.MILLI_OF_SECOND, 000)
-						.toFormatter()
-						.withLocale(Locale.US)
-						.withZone(ZoneId.of("UTC"));
 
-				ZonedDateTime zdt = ZonedDateTime.parse(vcpInput, dateTimeFormatter);
-				String tempTime = zdt.format(DateTimeFormatter.ofPattern("[yyyy-MM-dd'T'HH:mm:ss.SSS'Z']"));
+	public void setPhysicianName(String physicianName) {
+		this.physicianName = physicianName;
+	}
 
-				DateTimeFormatter outputDateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
-				LocalDate inputLocaleDate = LocalDate.parse(tempTime, outputDateFormat);
+	public String getEFT_Ind() {
+		return EFT_Ind;
+	}
 
-				LocalDate lastDayOfMonth = inputLocaleDate.withDayOfMonth(inputLocaleDate.lengthOfMonth());
-				// set time to 23:59:59
-				LocalDateTime lastDayOfMonthAt235959 = lastDayOfMonth.atTime(23, 59, 59);
-				LocalDateTime utcDateTime = lastDayOfMonthAt235959.atOffset(ZoneOffset.UTC).toLocalDateTime();
-				resultDate = utcDateTime.format(outputDateFormat);
+	public void setEFT_Ind(String eFT_Ind) {
+		EFT_Ind = eFT_Ind;
+	}
+
+	public String getInd_835() {
+		return ind_835;
+	}
+
+	public void setInd_835(String ind_835) {
+		this.ind_835 = ind_835;
+	}
+
+	public String getPTRS() {
+		return PTRS;
+	}
+
+	public void setPTRS(String pTRS) {
+		PTRS = pTRS;
+	}
+
+	public String getDIV() {
+		return DIV;
+	}
+
+	public void setDIV(String dIV) {
+		DIV = dIV;
+	}
+
+	public String getMultClaimNumber() {
+		return multClaimNumber;
+	}
+
+	public void setMultClaimNumber(String multClaimNumber) {
+		this.multClaimNumber = multClaimNumber;
+	}
+
+	public String getDefaultUsed() {
+		return DefaultUsed;
+	}
+
+	public void setDefaultUsed(String defaultUsed) {
+		DefaultUsed = defaultUsed;
+	}
+
+	public String getCheckAmt() {
+		return CheckAmt;
+	}
+
+	public void setCheckAmt(String checkAmt) {
+		CheckAmt = checkAmt;
+	}
+
+	public String getCONFIGKEY() {
+		return CONFIGKEY;
+	}
+
+	public void setCONFIGKEY(String cONFIGKEY) {
+		CONFIGKEY = cONFIGKEY;
+	}
+
+	public String getOriginalPrintTrail() {
+		return originalPrintTrail;
+	}
+
+	public void setOriginalPrintTrail(String originalPrintTrail) {
+		this.originalPrintTrail = originalPrintTrail;
+	}
+
+	public String getPassThruData() {
+		return PassThruData;
+	}
+
+	public void setPassThruData(String passThruData) {
+		PassThruData = passThruData;
+	}
+
+	public String getMailToAddress1() {
+		return MailToAddress1;
+	}
+
+	public void setMailToAddress1(String mailToAddress1) {
+		MailToAddress1 = mailToAddress1;
+	}
+
+	public String getMailToAddress2() {
+		return MailToAddress2;
+	}
+
+	public void setMailToAddress2(String mailToAddress2) {
+		MailToAddress2 = mailToAddress2;
+	}
+
+	public String getMailToAddress3() {
+		return MailToAddress3;
+	}
+
+	public void setMailToAddress3(String mailToAddress3) {
+		MailToAddress3 = mailToAddress3;
+	}
+
+	public String getMailToAddress4() {
+		return MailToAddress4;
+	}
+
+	public void setMailToAddress4(String mailToAddress4) {
+		MailToAddress4 = mailToAddress4;
+	}
+
+	public String getMailToAddress5() {
+		return MailToAddress5;
+	}
+
+	public void setMailToAddress5(String mailToAddress5) {
+		MailToAddress5 = mailToAddress5;
+	}
+
+	public String getMailToAddress6() {
+		return MailToAddress6;
+	}
+
+	public void setMailToAddress6(String mailToAddress6) {
+		MailToAddress6 = mailToAddress6;
+	}
+	
+	public String getSubCategory() {
+		return subCategory;
+	}
+	
+	public String getPaymentNumber() {
+		return paymentNumber;
+	}
+	
+	public void setPaymentNumber(String paymentNumber) {
+		this.paymentNumber = paymentNumber;
+	}
+	
+	public String getPTRS_FIFTEEN() {
+		return PTRS_FIFTEEN;
+	}
+
+	public void setPTRS_FIFTEEN(String pTRS_FIFTEEN) {
+		PTRS_FIFTEEN = pTRS_FIFTEEN;
+	}
+	
+	public boolean isAddedToCosmosPraResponseFile() {
+		return addedToCosmosPraResponseFile;
+	}
+
+	public void setAddedToCosmosPraResponseFile(boolean addedToCosmosPraResponseFile) {
+		this.addedToCosmosPraResponseFile = addedToCosmosPraResponseFile;
+	}
+
+	public boolean isMerged() {
+		return merged;
+	}
+
+	public void setMerged(boolean merged) {
+		this.merged = merged;
+	}
+	
+	public void setSubCategory(String subCategory) {
+		if(subCategory == null || subCategory.isEmpty()){
+			this.subCategory = "PR";
+			this.setFilePath(Subcategory.PR.getFilePath());
+		} else {
+			this.subCategory = subCategory;
+			Subcategory subCat = null;
+			try {
+				subCat = Subcategory.valueOf(this.subCategory);
+			} catch (Exception e) {
+				subCat = Subcategory.PR;
 			}
-		} catch (Exception e) {
-			LOGGER.error("Error processing expiry date = {}, {}", vcpInput, e.getMessage());
-			resultDate = vcpInput;
+			this.setFilePath(subCat.getFilePath());
 		}
-		return resultDate;
+
+		if (PTRS != null && subCategory != null && ! subCategory.isEmpty() && PTRS.length() > 15) {
+			this.setPTRS_FIFTEEN(StringUtils.left(PTRS, 15));
+		} else {
+			this.setPTRS_FIFTEEN(PTRS);
+		}
+		
+		if(this.getExpiryDate() != null && this.getExpiryDate().length() == 7){
+			this.setExpiryDate(this.vcpExpiryDateFormat(this.getExpiryDate(), this.subCategory));}
+
 	}
+	
+	public String getCheckTraceNumber() {
+		return CheckTraceNumber;
+	}
+
+	public void setCheckTraceNumber(String checkTraceNumber) {
+		CheckTraceNumber = checkTraceNumber;
+	}
+
+	public enum ErrorMsg implements ErrorMessage {
+		TIN (12, "Missing or invalid data: TIN"), // EFT_Ind==\"Y\"
+		ProviderMPIN (12, "Missing or invalid data: ProviderMPIN"), // EFT_Ind==\"N\" && emailAlertReq!=\"N\"
+		SubCategory (12, "Missing or invalid data: SubCategory"), // EFT_Ind==\"N\"
+		isPrintSuppressed (12,"Missing or invalid data: isPrintSuppressed"),
+		CHECKDATE (12, "Missing or invalid data: CHECKDATE"),
+		
+		CONFIGKEY (22, "Missing or invalid data: CONFIGKEY(SEVERE)"), // EFT_Ind==\"N\" && emailAlertReq!=\"N\"
+		originalPrintTrail (22, "Missing or invalid data: originalPrintTrail(SEVERE)"), // EFT_Ind==\"N\" && emailAlertReq!=\"N\"
+		PassThruData (22, "Missing or invalid data: PassThruData(SEVERE)"), // EFT_Ind==\"N\" && emailAlertReq!=\"N\"
+
+		MailToAddress1 (22, "Missing or invalid data: MailToAddress1(SEVERE)"), // EFT_Ind==\"N\" && emailAlertReq!=\"N\"
+		MailToAddress2 (22, "Missing or invalid data: MailToAddress2(SEVERE)"), // EFT_Ind==\"N\" && emailAlertReq!=\"N\"
+		MailToAddress4 (22, "Missing or invalid data: MailToAddress4(SEVERE)"), // EFT_Ind==\"N\" && emailAlertReq!=\"N\"
+		MailToAddress5 (22, "Missing or invalid data: MailToAddress5(SEVERE)"), // EFT_Ind==\"N\" && emailAlertReq!=\"N\"
+		MailToAddress6 (22, "Missing or invalid data: MailToAddress6(SEVERE)"), // EFT_Ind==\"N\" && emailAlertReq!=\"N\"
+		
+		CHECKNUMBER (12, "Missing or invalid data: CHECKNUMBER"), // EFT_Ind==\"N\" && subCategory != \"P4\"
+		EFT_Ind (22, "Missing or invalid data: EFT_Ind(SEVERE)"),
+		CLAIMNUMBER (12, "Missing or invalid data: CLAIMNUMBER");
+		
+		
+		private int errorCode;
+	    private String errorMessage;
+
+	    ErrorMsg(int code, String message) {
+	        this.errorCode = code;
+	        this.errorMessage = message;
+	    }
+
+	    public int getErrorCode() {
+	        return errorCode;
+	    }
+	    public String getErrorMessage() {
+	        return errorMessage;
+	    }
+
+	}
+	
+	public enum Subcategory {
+		P3 ("P3", "Medicare/Detailed PRAs"),
+		P4 ("P4", "Medicare/Virtual Card Payments and Info Only PRAs"),
+		P8 ("P8", "Commercial/Zero-Dollar PRAs"),
+		P9 ("P9", "Medicare/Zero-Dollar PRAs"),
+		P0 ("P0", "Community Plan/Zero-Dollar PRAs"),
+		E1 ("E1", "Other/Zero-Dollar PRAs"),
+		PR ("PR", "Other PRAs/Other");
+		
+		private String subCat;
+		private String filePath;
+		
+		Subcategory(String subCat, String filePath){
+			this.subCat = subCat;
+			this.filePath = filePath;
+		}
+		public String getSubCat() {
+	        return subCat;
+	    }
+		
+		public String getFilePath() {
+			return filePath;
+		}
+	}
+
+	
+	
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+===
+
+
+
+
+
+public class COSMOSPRACDC extends ClientMetadata {
+
+	private static final long serialVersionUID = -797273316412247183L;
+
+	@JsonProperty("TIN")
+	@JsonAlias("tin")
+	private String tin;
+
+	@JsonProperty("ProviderMPIN")
+	@JsonAlias("mpin")
+	private String mpin = "";
+
+	@JsonProperty("isPrintSuppressed")
+	@JsonAlias("emailAlertReq")
+	private String emailAlertReq = "Y";
+
+	@JsonProperty("CHECKNUMBER")
+	@JsonAlias("CheckTraceNumber")
+	private String CheckTraceNumber;
+
+	@JsonProperty("physicianName")
+	@JsonAlias("PHYSICIANNAME")
+	private String physicianName;
+
+	@JsonProperty("EFT_Ind")
+	private String EFT_Ind;
+
+	@JsonProperty("835_Ind")
+	private String ind_835;
+
+	@JsonProperty("PTRS")
+	private String PTRS;
+
+	@JsonProperty("DIV")
+	private String DIV;
+
+	@JsonProperty("CLAIMNUMBER")
+	@JsonAlias("multClaimNumber")
+	private String multClaimNumber;
+
+	@JsonProperty("DefaultUsed")
+	private String DefaultUsed;
+
+	@JsonProperty("CheckAmt")
+	private String CheckAmt;
+
+	@JsonProperty("CONFIGKEY")
+	private String CONFIGKEY;
+
+	@JsonProperty("originalPrintTrail")
+	private String originalPrintTrail;
+
+	@JsonProperty("PassThruData")
+	private String PassThruData;
+
+	@JsonProperty("MailToAddress1")
+	private String MailToAddress1;
+
+	@JsonProperty("MailToAddress2")
+	private String MailToAddress2;
+
+	@JsonProperty("MailToAddress3")
+	private String MailToAddress3;
+
+	@JsonProperty("MailToAddress4")
+	private String MailToAddress4;
+
+	@JsonProperty("MailToAddress5")
+	private String MailToAddress5;
+
+	@JsonProperty("MailToAddress6")
+	private String MailToAddress6;
+
+	@JsonAlias("subCategory")
+	@JsonProperty("SubCategory")
+	protected String subCategory;
+
+	@JsonProperty("paymentNumber")
+	@JsonAlias("vendor_pay_id")
+	private String paymentNumber;
+
+	private boolean addedToCosmosPraResponseFile;
+
+	private boolean merged;
+
+	private String PTRS_FIFTEEN;
+
+	public COSMOSPRACDC() {
+		this.tenant = "Link";
+		this.category = "Payment Document";
+		this.fileDescription = "Payment Document";
+		this.fileType = "Letter";
+		this.privilege = "Claim Status";
+		this.docSentTo = "";
+		this.sendToDocVault = false;
+		this.sendToShutterfly = false;
+		this.providerEmailId = "";
+		this.postCardInd = true;
+		this.dateEmailSent = null;
+		this.sendEmailNotifications = false;
+		this.sendPENAPIRequest = false;
+		this.addedToCosmosPraResponseFile = false;
+		this.merged = false;
+		this.subCategory = "PR";
+		this.createApplication = "CheckWrite";
+		Subcategory subCat = Subcategory.valueOf(this.subCategory);
+		this.setFilePath(subCat.getFilePath());
+	}
+
+	public String getTin() {
+		return tin;
+	}
+
+	public void setTin(String tin) {
+		this.tin = tin;
+	}
+
+	public String getMpin() {
+		return mpin;
+	}
+
+	public void setMpin(String mpin) {
+		if (mpin != null) {
+			this.mpin = mpin;
+		}
+	}
+
+	public String getEmailAlertReq() {
+		return emailAlertReq;
+	}
+
+	public void setEmailAlertReq(String emailAlertReq) {
+		if (emailAlertReq != null && !emailAlertReq.isEmpty()) {
+			this.emailAlertReq = emailAlertReq;
+		}
+	}
+
+	public String getPhysicianName() {
+		return physicianName;
+	}
+
+	public void setPhysicianName(String physicianName) {
+		this.physicianName = physicianName;
+	}
+
+	public String getEFT_Ind() {
+		return EFT_Ind;
+	}
+
+	public void setEFT_Ind(String eFT_Ind) {
+		EFT_Ind = eFT_Ind;
+	}
+
+	public String getInd_835() {
+		return ind_835;
+	}
+
+	public void setInd_835(String ind_835) {
+		this.ind_835 = ind_835;
+	}
+
+	public String getPTRS() {
+		return PTRS;
+	}
+
+	public void setPTRS(String pTRS) {
+		PTRS = pTRS;
+	}
+
+	public String getDIV() {
+		return DIV;
+	}
+
+	public void setDIV(String dIV) {
+		DIV = dIV;
+	}
+
+	public String getMultClaimNumber() {
+		return multClaimNumber;
+	}
+
+	public void setMultClaimNumber(String multClaimNumber) {
+		this.multClaimNumber = multClaimNumber;
+	}
+
+	public String getDefaultUsed() {
+		return DefaultUsed;
+	}
+
+	public void setDefaultUsed(String defaultUsed) {
+		DefaultUsed = defaultUsed;
+	}
+
+	public String getCheckAmt() {
+		return CheckAmt;
+	}
+
+	public void setCheckAmt(String checkAmt) {
+		CheckAmt = checkAmt;
+	}
+
+	public String getCONFIGKEY() {
+		return CONFIGKEY;
+	}
+
+	public void setCONFIGKEY(String cONFIGKEY) {
+		CONFIGKEY = cONFIGKEY;
+	}
+
+	public String getOriginalPrintTrail() {
+		return originalPrintTrail;
+	}
+
+	public void setOriginalPrintTrail(String originalPrintTrail) {
+		this.originalPrintTrail = originalPrintTrail;
+	}
+
+	public String getPassThruData() {
+		return PassThruData;
+	}
+
+	public void setPassThruData(String passThruData) {
+		PassThruData = passThruData;
+	}
+
+	public String getMailToAddress1() {
+		return MailToAddress1;
+	}
+
+	public void setMailToAddress1(String mailToAddress1) {
+		MailToAddress1 = mailToAddress1;
+	}
+
+	public String getMailToAddress2() {
+		return MailToAddress2;
+	}
+
+	public void setMailToAddress2(String mailToAddress2) {
+		MailToAddress2 = mailToAddress2;
+	}
+
+	public String getMailToAddress3() {
+		return MailToAddress3;
+	}
+
+	public void setMailToAddress3(String mailToAddress3) {
+		MailToAddress3 = mailToAddress3;
+	}
+
+	public String getMailToAddress4() {
+		return MailToAddress4;
+	}
+
+	public void setMailToAddress4(String mailToAddress4) {
+		MailToAddress4 = mailToAddress4;
+	}
+
+	public String getMailToAddress5() {
+		return MailToAddress5;
+	}
+
+	public void setMailToAddress5(String mailToAddress5) {
+		MailToAddress5 = mailToAddress5;
+	}
+
+	public String getMailToAddress6() {
+		return MailToAddress6;
+	}
+
+	public void setMailToAddress6(String mailToAddress6) {
+		MailToAddress6 = mailToAddress6;
+	}
+
+	public String getSubCategory() {
+		return subCategory;
+	}
+	
+	public String getPaymentNumber() {
+		return paymentNumber;
+	}
+	
+	public void setPaymentNumber(String paymentNumber) {
+		this.paymentNumber = paymentNumber;
+	}
+
+	public String getPTRS_FIFTEEN() {
+		return PTRS_FIFTEEN;
+	}
+
+	public void setPTRS_FIFTEEN(String pTRS_FIFTEEN) {
+		PTRS_FIFTEEN = pTRS_FIFTEEN;
+	}
+
+	public boolean isAddedToCosmosPraResponseFile() {
+		return addedToCosmosPraResponseFile;
+	}
+
+	public void setAddedToCosmosPraResponseFile(boolean addedToCosmosPraResponseFile) {
+		this.addedToCosmosPraResponseFile = addedToCosmosPraResponseFile;
+	}
+
+	public boolean isMerged() {
+		return merged;
+	}
+
+	public void setMerged(boolean merged) {
+		this.merged = merged;
+	}
+
+	public void setSubCategory(String subCategory) {
+		if (subCategory == null || subCategory.isEmpty()) {
+			this.subCategory = "PR";
+			this.setFilePath(Subcategory.PR.getFilePath());
+		} else {
+			this.subCategory = subCategory;
+			Subcategory subCat = null;
+			try {
+				subCat = Subcategory.valueOf(this.subCategory);
+			} catch (Exception e) {
+				subCat = Subcategory.PR;
+			}
+			this.setFilePath(subCat.getFilePath());
+		}
+
+		if (PTRS != null && subCategory != null && !subCategory.isEmpty() && PTRS.length() > 15) {
+			this.setPTRS_FIFTEEN(StringUtils.left(PTRS, 15));
+		} else {
+			this.setPTRS_FIFTEEN(PTRS);
+		}
+
+		if (this.getExpiryDate() != null && this.getExpiryDate().length() == 7) {
+			this.setExpiryDate(this.vcpExpiryDateFormat(this.getExpiryDate(), this.subCategory));
+		}
+
+	}
+
+	public String getCheckTraceNumber() {
+		return CheckTraceNumber;
+	}
+
+	public void setCheckTraceNumber(String checkTraceNumber) {
+		CheckTraceNumber = checkTraceNumber;
+	}
+
+	public enum ErrorMsg implements ErrorMessage {
+		TIN(12, "Missing or invalid data: TIN"), // EFT_Ind==\"Y\"
+		ProviderMPIN(12, "Missing or invalid data: ProviderMPIN"), // EFT_Ind==\"N\" && emailAlertReq!=\"N\"
+		SubCategory(12, "Missing or invalid data: SubCategory"), // EFT_Ind==\"N\"
+		isPrintSuppressed(12, "Missing or invalid data: isPrintSuppressed"),
+		CHECKDATE(12, "Missing or invalid data: CHECKDATE"),
+
+		CONFIGKEY(22, "Missing or invalid data: CONFIGKEY(SEVERE)"), // EFT_Ind==\"N\" && emailAlertReq!=\"N\"
+		originalPrintTrail(22, "Missing or invalid data: originalPrintTrail(SEVERE)"), // EFT_Ind==\"N\" &&
+																						// emailAlertReq!=\"N\"
+		PassThruData(22, "Missing or invalid data: PassThruData(SEVERE)"), // EFT_Ind==\"N\" && emailAlertReq!=\"N\"
+
+		MailToAddress1(22, "Missing or invalid data: MailToAddress1(SEVERE)"), // EFT_Ind==\"N\" && emailAlertReq!=\"N\"
+		MailToAddress2(22, "Missing or invalid data: MailToAddress2(SEVERE)"), // EFT_Ind==\"N\" && emailAlertReq!=\"N\"
+		MailToAddress3(22, "Missing or invalid data: MailToAddress3(SEVERE)"), // EFT_Ind==\"N\" && emailAlertReq!=\"N\"
+
+		CHECKNUMBER(12, "Missing or invalid data: CHECKNUMBER"), // EFT_Ind==\"N\" && subCategory != \"P4\"
+		EFT_Ind(22, "Missing or invalid data: EFT_Ind(SEVERE)"),
+		CLAIMNUMBER(12, "Missing or invalid data: CLAIMNUMBER");
+
+		private int errorCode;
+		private String errorMessage;
+
+		ErrorMsg(int code, String message) {
+			this.errorCode = code;
+			this.errorMessage = message;
+		}
+
+		@Override
+		public int getErrorCode() {
+			return errorCode;
+		}
+
+		@Override
+		public String getErrorMessage() {
+			return errorMessage;
+		}
+
+	}
+
+	public enum Subcategory {
+		P3("P3", "Medicare/Detailed PRAs"), P4("P4", "Medicare/Virtual Card Payments and Info Only PRAs"),
+		P8("P8", "Commercial/Zero-Dollar PRAs"), P9("P9", "Medicare/Zero-Dollar PRAs"),
+		P0("P0", "Community Plan/Zero-Dollar PRAs"), E1("E1", "Other/Zero-Dollar PRAs"), PR("PR", "Other PRAs/Other");
+
+		private String subCat;
+		private String filePath;
+
+		Subcategory(String subCat, String filePath) {
+			this.subCat = subCat;
+			this.filePath = filePath;
+		}
+
+		public String getSubCat() {
+			return subCat;
+		}
+
+		public String getFilePath() {
+			return filePath;
+		}
+	}
+
+}
+
+
+
