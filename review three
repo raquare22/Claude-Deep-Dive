@@ -1,0 +1,552 @@
+
+
+
+
+public class CustomDateDeserializer extends StdDeserializer<Date> {
+
+	private static final long serialVersionUID = -1026166191652831116L;
+
+	private static final Logger LOGGER = LogManager.getLogger(CustomDateDeserializer.class);
+
+	// 12/31/2021 5:45:22 PM
+
+	private DateTimeFormatter dateTimeFormatter = new DateTimeFormatterBuilder()
+            .appendPattern("[MM/dd/yyyy H:mm:ss]")
+            .appendPattern("[MMddyyyy]")
+            .appendPattern("[MM/dd/yyyy]")
+            .appendPattern("[MM/dd/yy]")
+            .appendPattern("[M/dd/yyyy]")
+            .appendPattern("[MM-dd-yyyy]")
+            .parseDefaulting(ChronoField.MONTH_OF_YEAR, 01)
+            .parseDefaulting(ChronoField.DAY_OF_MONTH, 01)
+            .parseDefaulting(ChronoField.HOUR_OF_DAY, 0)
+            .parseDefaulting(ChronoField.MINUTE_OF_HOUR, 00)
+            .parseDefaulting(ChronoField.SECOND_OF_MINUTE, 00)
+            .parseDefaulting(ChronoField.MILLI_OF_SECOND, 000)
+            .toFormatter()
+            .withLocale(Locale.US)
+            .withZone(ZoneId.of("UTC"));
+
+	private DateTimeFormatter dateTimeFormatter1 = new DateTimeFormatterBuilder()
+            .appendPattern("[MM/dd/yyy hh:mm:ss a]")
+            .appendPattern("[MM/dd/yyyy h:mm:ss a]")
+            .appendPattern("[MM/d/yyyy h:mm:ss a]")
+            .appendPattern("[M/dd/yyyy h:mm:ss a]")
+            .appendPattern("[M/d/yyyy h:mm:ss a]")
+            .appendPattern("[d/MM/yyyy h:mm:ss a]")
+            .appendPattern("[dd/M/yyyy h:mm:ss a]")
+            .appendPattern("[dd/MM/yyyy h:mm:ss a]")
+            .appendPattern("[d/M/yyyy h:mm:ss a]")
+            .appendPattern("[dd/MM/yyyy HH:mm:ss]")
+            .parseDefaulting(ChronoField.MONTH_OF_YEAR, 01)
+            .parseDefaulting(ChronoField.DAY_OF_MONTH, 01)
+            .parseDefaulting(ChronoField.MINUTE_OF_HOUR, 00)
+            .parseDefaulting(ChronoField.SECOND_OF_MINUTE, 00)
+            .parseDefaulting(ChronoField.MILLI_OF_SECOND, 000)
+            .toFormatter()
+            .withLocale(Locale.US)
+            .withZone(ZoneId.of("UTC"));
+
+	private DateTimeFormatter dateTimeFormatter2 = new DateTimeFormatterBuilder()
+            .appendPattern("[yyyy-MM-dd HH:mm:ss.SSS]")
+            .parseDefaulting(ChronoField.MONTH_OF_YEAR, 01)
+            .parseDefaulting(ChronoField.DAY_OF_MONTH, 01)
+            .parseDefaulting(ChronoField.MINUTE_OF_HOUR, 00)
+            .parseDefaulting(ChronoField.SECOND_OF_MINUTE, 00)
+            .toFormatter()
+            .withLocale(Locale.US)
+            .withZone(ZoneId.of("UTC"));
+
+    private DateTimeFormatter dateFormatter3 = DateTimeFormatter.ofPattern("MMMM dd, yyyy", Locale.US);
+
+    private DateTimeFormatter dateFormatter4 = DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.US);
+
+    private DateTimeFormatter outputFormat = DateTimeFormatter.ofPattern("[yyyy-MM-dd'T'HH:mm:ss.SSS'Z']");
+
+    private static final ThreadLocal<SimpleDateFormat> formatter = ThreadLocal.withInitial(() -> new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"));
+
+	public CustomDateDeserializer() {
+        this(null);
+    }
+
+    public CustomDateDeserializer(Class<?> vc) {
+        super(vc);
+    }
+
+	@Override
+    public Date deserialize(JsonParser jsonparser, DeserializationContext context) throws IOException, JsonProcessingException {
+        ZonedDateTime zdt;
+        String convertedDate;
+        String date = jsonparser.getText();
+        try {
+            if (date == null || date.isEmpty()) {
+                return null;
+            }
+            zdt = ZonedDateTime.parse(date, dateTimeFormatter);
+            convertedDate = zdt.format(outputFormat);
+            LOGGER.debug("convertedDate={}", convertedDate);
+            return formatter.get().parse(convertedDate);
+        } catch (Exception e1) {
+            LOGGER.debug("Failed dateTimeFormatter: date={}; e={}", date, e1.getMessage());
+            try {
+                zdt = ZonedDateTime.parse(date, dateTimeFormatter1);
+                convertedDate = zdt.format(outputFormat);
+                LOGGER.debug("convertedDate={}", convertedDate);
+                return formatter.get().parse(convertedDate);
+            } catch (Exception e2) {
+                LOGGER.debug("Failed dateTimeFormatter1: date={}; e={}", date, e1.getMessage());
+                try {
+                    zdt = ZonedDateTime.parse(date, dateTimeFormatter2);
+                    convertedDate = zdt.format(outputFormat);
+                    LOGGER.debug("convertedDate={}", convertedDate);
+                    return formatter.get().parse(convertedDate);
+                } catch (Exception e3) {
+                    LOGGER.debug("Failed dateTimeFormatter2: date={}; e={}", date, e3.getMessage());
+                    try {
+                        LocalDate ld = LocalDate.parse(date, dateFormatter3);
+                        zdt = ld.atStartOfDay(ZoneId.of("UTC"));
+                        convertedDate = zdt.format(outputFormat);
+                        LOGGER.debug("convertedDate={}", convertedDate);
+                        return formatter.get().parse(convertedDate);
+                    } catch (Exception e4) {
+                        LOGGER.debug("Failed dateFormatter: date={}; e={}", date, e4.getMessage());
+                        try{
+                            LocalDate ld = LocalDate.parse(date, dateFormatter4);
+                            zdt = ld.atStartOfDay(ZoneId.of("UTC"));
+                            convertedDate = zdt.format(outputFormat);
+                            LOGGER.debug("convertedDate={}", convertedDate);
+                            return formatter.get().parse(convertedDate);
+                        } catch (Exception e5) {
+                            LOGGER.error("Failed dateFormatter5: date={}; e={}", date, e4.getMessage());
+                            return null;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+=====
+
+
+
+public class CustomizeDateDeserializer extends StdDeserializer<Date> implements ContextualDeserializer {
+	
+	private static final long serialVersionUID = 5875147769183417249L;
+
+	private static final Logger LOGGER = LoggerFactory.getLogger(CustomizeDateDeserializer.class);
+
+	private String customDateFormat = null;
+	 
+	public CustomizeDateDeserializer() {
+		super(Date.class);
+	}
+
+	public CustomizeDateDeserializer(String customDateFormat) {
+		super(Date.class);
+		this.customDateFormat = customDateFormat;
+	}
+	
+	@Override
+	public JsonDeserializer<?> createContextual(DeserializationContext ctxt, BeanProperty property)
+			throws JsonMappingException {
+		CustomDateFormat cusAnn = property.getAnnotation(CustomDateFormat.class);
+        if (cusAnn != null) {
+            String cusDateFormat = cusAnn.dateFormat();
+            // return a new instance, so that different properties will not share the same deserializer instance
+            return new CustomizeDateDeserializer(cusDateFormat);
+        }
+        return this;
+	}
+
+	@Override
+	public Date deserialize(JsonParser jsonParser, DeserializationContext context)
+			throws IOException {
+
+		Date date = null;
+		String dateStg = jsonParser.getText();
+
+		try {
+			if (StringUtils.isNullOrEmpty(dateStg)) {
+				return null;
+			}
+			SimpleDateFormat formatter = new SimpleDateFormat(this.customDateFormat);
+			formatter.setTimeZone(TimeZone.getTimeZone("UTC"));
+			try {
+				date = formatter.parse(dateStg);
+			} catch (ParseException e) {
+				// if the first format fails, try the second format
+				SimpleDateFormat formatter2 = new SimpleDateFormat("MMMM dd, yyyy");
+				formatter2.setTimeZone(TimeZone.getTimeZone("UTC"));
+				date = formatter2.parse(dateStg);
+			}
+
+		} catch (ParseException e) {
+			LOGGER.error("CustomJsonDateDeserializer {} dateStg {}", ExceptionUtils.getStackTrace(e), dateStg);
+		}
+		return date;
+	}
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+====
+
+
+@JsonInclude(JsonInclude.Include.NON_NULL)
+@JsonIgnoreProperties(ignoreUnknown = true)
+public class P360TXGCDocument implements Serializable {
+
+    @JsonProperty(value = "npi")
+    private String npi;
+    @JsonProperty(value = "ExemptionApprovalStatus")
+    private String ExemptionApprovalStatus;
+    @JsonProperty(value = "ExemptionStartDt")
+    private String ExemptionStartDt;
+    @JsonProperty(value = "ExemptionEndDt")
+
+    private String ExemptionEndDt;
+    @JsonProperty(value = "ExemptionCycleStartDt")
+    private String ExemptionCycleStartDt;
+    @JsonProperty(value = "ExemptionCycleEndDt")
+    private String ExemptionCycleEndDt;
+
+//    @JsonProperty(value = "Codes")
+//    private P360TXGCCodes[] Codes;
+
+//    public P360TXGCCodes[] getCodes() {
+//        return Codes;
+//    }
+//
+//    public void setCodes(P360TXGCCodes[] codes) {
+//        Codes = codes;
+//    }
+
+    public String getNpi() {
+        return npi;
+    }
+
+    public void setNpi(String npi) {
+        this.npi = npi;
+    }
+
+    public String getExemptionApprovalStatus() {
+        return ExemptionApprovalStatus;
+    }
+
+    public void setExemptionApprovalStatus(String exemptionApprovalStatus) {
+        ExemptionApprovalStatus = exemptionApprovalStatus;
+    }
+
+    public String getExemptionStartDt() {
+        return ExemptionStartDt;
+    }
+
+    public void setExemptionStartDt(String exemptionStartDt) {
+        ExemptionStartDt = exemptionStartDt;
+    }
+
+    public String getExemptionEndDt() {
+        return ExemptionEndDt;
+    }
+
+    public void setExemptionEndDt(String exemptionEndDt) {
+        ExemptionEndDt = exemptionEndDt;
+    }
+
+    public String getExemptionCycleStartDt() {
+        return ExemptionCycleStartDt;
+    }
+
+    public void setExemptionCycleStartDt(String exemptionCycleStartDt) {
+        ExemptionCycleStartDt = exemptionCycleStartDt;
+    }
+
+    public String getExemptionCycleEndDt() {
+        return ExemptionCycleEndDt;
+    }
+
+    public void setExemptionCycleEndDt(String exemptionCycleEndDt) {
+        ExemptionCycleEndDt = exemptionCycleEndDt;
+    }
+
+    @Override
+    public String toString() {
+        return "P360TXGCDocument{" +
+                "npi=" + npi +
+                ", ExemptionApprovalStatus='" + ExemptionApprovalStatus + '\'' +
+                ", ExemptionStartDt='" + ExemptionStartDt + '\'' +
+                ", ExemptionEndDt='" + ExemptionEndDt + '\'' +
+                ", ExemptionCycleStartDt='" + ExemptionCycleStartDt + '\'' +
+                ", ExemptionCycleEndDt='" + ExemptionCycleEndDt + '\'' +
+//                ", Codes=" + Arrays.toString(Codes) +
+                '}';
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+=====
+====
+
+
+
+
+
+public class CommonConstants {
+	public static final String SPRING_PROFILES_ACTIVE = "spring.profiles.active";
+	
+	public static final List<String> DEFAULT_SUBCATEGORY_LIST = new ArrayList<String>(Arrays.asList("CC", "PR", "RR", "OP", "XX", "ZZ"));
+
+	public static final String SOMETHING_WENT_WRONG = "SOMETHING WENT WRONG ERROR={}";
+
+	public static final String FDS_RETRY_COUNT_MAX = "FDSRetryCountMax";
+	public static final String FDS_RETRY_SLEEP_TIME_MS = "FDSRetrySleepTimeMS";
+	public static final String FDS_DOCUMENTS_URL = "FDSDocumentsUrl";
+	public static final String FDS_POST_PDO_DOCUMENTS_URL = "FDSPostPDODocumentsUrl";
+	public static final String FDS_RETENTION_PERIOD = "FDSRetentionPeriod";
+
+	public static final String FS2_DOCUMENTS_BODY_NAME = "documents";
+
+	public static final String INGEST_ROOT = "INGEST_ROOT";
+	public static final String CSV_JSON_FILENAME = "csv.json";
+
+	public static final String QUEUED_ID = "id";
+	public static final String QUEUED_PATH_VARIABLE = "pathVariable";
+	public static final String QUEUED_API_URL = "apiUrl";
+	public static final String QUEUED_DELEGATE = "delegate";
+	public static final String QUEUED_DELEGATE_PARMS = "delegateParms";
+	public static final String QUEUED_RETRY_CNT = "retryCount";
+	public static final String QUEUED_REQUEST = "queuedRequest";
+	public static final String QUEUED_HTTP_METHOD = "httpMethod";
+
+	public static final String SEND_QUEUE_NEEDS_SPACE_ID = "SendQueueNeedsSpaceId";
+
+	public static final String CSV_SEND_QUEUE_AUTO_ERROR = "CsvSendQueueAutoError";
+	public static final String HOOK_SEND_QUEUE_AUTO_ERROR = "HookSendQueueAutoError";
+	public static final String METADATA_SEND_QUEUE_AUTO_ERROR = "MetadataSendQueueAutoError";
+
+	public static final String FTP_ROOT_DIR = "ftp_rootdir";
+
+	public static final String EMAIL_ALERT_REQ = "emailAlertReq";
+
+	// email properties
+	public static final String ELR_SMTP_RELAY_HOST = "ELR_SMTP_RELAY_HOST";
+	public static final String SERVER_TYPE = "serverType";
+
+	public static final String ENGINE_PORT_DEFAULT = "8081";
+	public static final String AZURE_WITH_IDENTIFIERS_URL = "AzureWithIdentifiersUrl";
+	public static final String AZURE_URL = "AzureUrl";
+	public static final String AZURE_SCHEDULE_URL = "AzureScheduleUrl";
+	public static final String AZURE_DLQ_URL = "AzureDlqUrl";
+	public static final String ENGINE_DELIGATE_URL = "EngineDelegateUrl";
+	public static final String HIGH_QUEUE = "HighPriorityQueue";
+	public static final String MEDIUM_QUEUE = "MediumPriorityQueue";
+	public static final String LOW_QUEUE = "LowPriorityQueue";
+
+
+	private CommonConstants(){throw new AssertionError();}
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+=======
+
+
+public final class ProcessKeys {
+    private ProcessKeys() {
+        throw new AssertionError("cannot instantiate");
+    }
+
+    public static final String PROCESS_METADATA = "processorMetaData";
+    public static final String SFTP_PROCESS_KEY = "sftpProcess";
+    public static final String SFTP_ZIP_UNZIP_PROCESS_KEY = "sftpZipUnzipProcess";
+    public static final String UNZIP_FILE_PROCESS_KEY = "processFileUnzip";
+    public static final String PROCESS_METADATA_PROCESS_KEY = "processMetadataFiles";
+    public static final String PROCESS_METADATA_CALLBACK_PROCESS_KEY = "processMetadataFilesCallback"; 
+    public static final String CSV_SFTP_PROCESS_KEY = "csvSftpProcess"; 
+    public static final String STATUSFILE_PROCESS_KEY = "createStatusFileAndAckProcess";
+    public static final String SHUTTERFLY_PROCESS_KEY = "sendDocumentsToShutterflyProcess";
+    public static final String STORAGE_ERROR_SHUTTERFLY_PROCESS_KEY = "sendStorageErrorToShutterfly";
+    public static final String RESPONSEFILE_PROCESS_KEY = "createResponseFileProcess";
+    public static final String RESPONSEFILE_PROCESS_KEY_USP_CLAIMS="createResponseFileProcessUSPClaims";
+    public static final String BOUNCE_PROCESS_KEY = "bouncedProviderEmailAddressProcess";
+    public static final String RETRIEVE_PROVIDER_EMAIL_PROCESS_KEY = "retrieveProviderEmailAddressProcess";
+    public static final String REQUIRED_FIELD_RULE_PROCESS_KEY = "requiredFieldRuleProcess";
+    public static final String RETRIEVE_CORPORATE_MPIN_PROCESS_KEY = "retrieveCorporateMPINv2Process";
+    public static final String PROVIDER_EMAIL_NOTIFICATION_PROCESS_KEY = "providerEmailNotificationProcess";
+    public static final String MATCH_AND_MERGE_PROCESS_KEY = "matchAndMergeDocumentsFromDbProcess";
+    public static final String EMAIL_PROCESSOR_TRANSACTION_METADATA_PROCESS_KEY = "emailProcessorTransactionMetadataProcess";
+    public static final String CLEANUP_PROCESS_KEY = "processCleanupFilesCreateACK";
+    public static final String DOCLIB_PROCESS_KEY = "postDocumentDocvaultForElgsProcess";
+    public static final String CSV_CLEANUP_PROCESS_KEY = "csvCleanupFilesProcess";
+    public static final String GENERIC_WORKFLOW_PROCESS_KEY = "GENERIC_WORKFLOW_PROCESS_KEY";
+    public static final String POST_DOCUMENT_DOCLIB_FOR_ELGS_PROCESS_KEY = "postDocumentDocvaultForElgsProcess";
+    public static final String CALL_REST_API_WITH_MSG_SERVICE_ON_ERROR_CALLBACK_PROCESS_KEY = "callRestApiWithMsgServiceOnErrorCallback"; 
+    public static final String PROCESS_TEXT_FILE = "processTextFile"; 
+    public static final String PROCESS_SFTP_SEND_EMAIL = "sftpSendEmailProcess";
+    public static final String RETRIEVE_AND_SEND_METADATA_PROCESS = "retrieveAndSendMetadataProcess";
+    public static final String RESPONSE_MESSAGE_PROCESS_KEY = "createResponseMessageProcess";
+    public static final String RETRIEVE_AND_SEND_EMAIL_PROCESS = "retrieveAndSendEmailProcess";
+    public static final String SEND_BATCH_DYNAMIC_REQUEST_TO_PEN = "sendBatchDynamicEmailRequestToPEN";
+
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+====
