@@ -1,1265 +1,489 @@
 
 
-public class UNET extends ClientMetadata {
-
-	private static final long serialVersionUID = -2745167202889686149L;
-
-	@JsonProperty("ICNNUMBER")
-	@JsonAlias("claimNumber")
-	private String claimNumber;
-
-	@JsonProperty("LETTERTYPE")
-	@JsonAlias("subCategory")
-	private String subCategory;
-
-	@JsonProperty("PROVIDERTAXID")
-	@JsonAlias("tin")
-	private String tin;
-
-	@JsonProperty("tinSuff")
-	private String tinSuff;
-
-	@JsonProperty("EmplAltId")
-	@JsonAlias("MemberAltID")
-	private String MemberAltID;
-
-	@JsonProperty("isPrintSuppressed")
-	@JsonAlias("emailAlertReq")
-	private String emailAlertReq="Y";
-
-	@JsonProperty("PHYSICIANNAME")
-	@JsonAlias("providerName")
-	private String providerName;
-
-	@JsonProperty("POLICYNBR")
-	@JsonAlias("policyNumber")
-	private String policyNumber;
-
-	@JsonProperty("EMPLOYEENAME")
-	@JsonAlias("memberName")
-	private String memberName;
-
-	@JsonProperty("DATEOFSERVICE")
-	@JsonAlias("dateOfService")
-	@JsonDeserialize(using = CustomizeDateDeserializer.class)
-	@CustomDateFormat(dateFormat = "MM/dd/yyyy")
-	private Date dateOfService;
-
-	@JsonProperty("PATIENTNAME")
-	@JsonAlias("PatientName")
-	private String PatientName;
-
-	@JsonProperty("PATDOB")
-	@JsonAlias("patientDOB")
-	private String patientDOB;
-	
-	@JsonProperty("PatNbr")
-	@JsonAlias("patientAccountNumber")
-	private String patientAccountNumber;
-
-	@JsonProperty("ProvNPI")
-	@JsonAlias("npi")
-	private String npi;
-
-	@JsonProperty("IndivProvMPIN")
-	@JsonAlias("mpin")
-	private String mpin="";
-
-	@JsonProperty("EMPLOYEEID")
-	@JsonAlias("memberId")
-	private String memberId;
-
-	@JsonProperty("ELGSLETTERGENID")
-	private String ELGSLETTERGENID;
-
-	@JsonProperty("DefaultUsed")
-	private String DefaultUsed;
-
-	@JsonProperty("PassThruData")
-	private String PassThruData;
-
-	@JsonProperty("HistoryID")
-	@JsonAlias("LetterHistoryID")
-	private String LetterHistoryID;
-
-	@JsonProperty("OriginPrintTrail")
-	@JsonAlias("originalPrintTrail")
-	private String originalPrintTrail;
-
-	@JsonProperty("ConfigKey")
-	@JsonAlias("CONFIGKEY")
-	private String CONFIGKEY;
-
-	@JsonProperty("MailToAddress1")
-	private String MailToAddress1;
-
-	@JsonProperty("MailToAddress2")
-	private String MailToAddress2;
-
-	@JsonProperty("MailToAddress3")
-	private String MailToAddress3;
-
-	@JsonProperty("MailToAddress4")
-	private String MailToAddress4;
-
-	@JsonProperty("MailToAddress5")
-	private String MailToAddress5;
-
-	@JsonProperty("MailToAddress6")
-	private String MailToAddress6;
-
-	@JsonProperty("providerId")
-	private String providerId;
-
-	public UNET(){
-		
-		
-		this.fileType = "Letter";
-		this.tenant = "Link";
-		this.createApplication = "ELGS";
-		this.docSentTo = "";
-		this.sendToDocVault = false;
-		this.sendToShutterfly = false;
-		this.providerEmailId = "";
-		this.postCardInd = true;
-		this.dateEmailSent = null;
-		this.sendEmailNotifications = false;
-		this.sendPENAPIRequest = false;
-		this.privilege = "Claim Status";
-		this.providerId = "ELGS";
-		this.subCategory = "CC";
-		Subcategory subCat = Subcategory.valueOf(this.subCategory);
-		this.setFilePath(subCat.getFilePath());
-	}
-
-	public String getTinSuff() {
-		return tinSuff;
-	}
-
-	public void setTinSuff(String tinSuff) {
-		this.tinSuff = tinSuff;
-	}
-
-	public String getClaimNumber() {
-		return claimNumber;
-	}
-
-	public void setClaimNumber(String claimNumber) {
-		this.claimNumber = claimNumber;
-	}
-
-	public String getSubCategory() {
-		return subCategory;
-	}
-
-	public void setSubCategory(String subCategory) {
-		if(subCategory == null || subCategory.isEmpty()){
-			this.subCategory = "CC";
-			this.setFilePath(Subcategory.CC.getFilePath());
-			this.setCategory("Claim");
-		} else {
-			this.subCategory = subCategory;
-			Subcategory subCat = null;
-			try {
-				subCat = Subcategory.valueOf(this.subCategory);
-			} catch (Exception e) {
-				subCat = Subcategory.CC;
-			}
-			if(subCategory.equalsIgnoreCase("C5"))
-			{
-				this.setCategory("Overpayment Documents");
-			}
-			else
-				this.setCategory("Claim");
-
-			
-			this.setFilePath(subCat.getFilePath());
-		}
-	}
-
-	public String getTin() {
-		return tin;
-	}
-
-	public void setTin(String tin) {
-		if (tin.length() > 9) {
-			this.tin = tin.substring(0, 9);
-			this.tinSuff = tin.substring(9);
-		} else {
-			this.tin = tin;
-		}
-	}
-
-	public String getMemberAltID() {
-		return MemberAltID;
-	}
-
-	public void setMemberAltID(String memberAltID) {
-		MemberAltID = memberAltID;
-	}
-
-	public String getEmailAlertReq() {
-		return emailAlertReq;
-	}
-
-	public void setEmailAlertReq(String emailAlertReq) {
-		if (emailAlertReq != null && !emailAlertReq.isEmpty()){
-			this.emailAlertReq = emailAlertReq;
-		}
-	}
-
-	public String getProviderName() {
-		return providerName;
-	}
-
-	public void setProviderName(String providerName) {
-		this.providerName = providerName;
-	}
-
-	public String getPolicyNumber() {
-		return policyNumber;
-	}
-
-	public void setPolicyNumber(String policyNumber) {
-		this.policyNumber = policyNumber;
-	}
-
-	public String getMemberName() {
-		return memberName;
-	}
-
-	public void setMemberName(String memberName) {
-		this.memberName = memberName;
-	}
-
-	public Date getDateOfService() {
-		return dateOfService;
-	}
-
-	public void setDateOfService(Date dateOfService) {
-		this.dateOfService = dateOfService;
-	}
-
-	public String getPatientName() {
-		return PatientName;
-	}
-
-	public void setPatientName(String patientName) {
-		PatientName = patientName;
-	}
-
-	public String getPatientDOB() {
-		return patientDOB;
-	}
-
-	public void setPatientDOB(String patientDOB) {
-		this.patientDOB = patientDOB;
-	}
-	
-	private String getPatientAccountNumber() {
-		return patientAccountNumber;
-	}
-
-	private void setPatientAccountNumber(String patientAccountNumber) {
-		this.patientAccountNumber = patientAccountNumber;
-	}
-
-	public String getNpi() {
-		return npi;
-	}
-	
-	public void setNpi(String npi) {
-		this.npi = npi;
-	}
-
-	public String getMpin() {
-		return mpin;
-	}
-
-	public void setMpin(String mpin) {
-		if (mpin != null && !mpin.isEmpty()) {
-			String paddedMpin = StringUtils.leftPad(mpin, 9, '0');
-			this.mpin = paddedMpin;
-		}
-	}
-
-	public String getMemberId() {
-		return memberId;
-	}
-
-	public void setMemberId(String memberId) {
-		this.memberId = memberId;
-	}
-
-	public String getELGSLETTERGENID() {
-		return ELGSLETTERGENID;
-	}
-
-	public void setELGSLETTERGENID(String ELGSLETTERGENID) {
-		this.ELGSLETTERGENID = ELGSLETTERGENID;
-	}
-
-	public String getDefaultUsed() {
-		return DefaultUsed;
-	}
-
-	public void setDefaultUsed(String defaultUsed) {
-		DefaultUsed = defaultUsed;
-	}
-
-	public String getPassThruData() {
-		return PassThruData;
-	}
-
-	public void setPassThruData(String passThruData) {
-		PassThruData = passThruData;
-	}
-
-	public String getLetterHistoryID() {
-		return LetterHistoryID;
-	}
-
-	public void setLetterHistoryID(String letterHistoryID) {
-		LetterHistoryID = letterHistoryID;
-	}
-
-	public String getOriginalPrintTrail() {
-		return originalPrintTrail;
-	}
-
-	public void setOriginalPrintTrail(String originalPrintTrail) {
-		this.originalPrintTrail = originalPrintTrail;
-	}
-
-	public String getCONFIGKEY() {
-		return CONFIGKEY;
-	}
-
-	public void setCONFIGKEY(String CONFIGKEY) {
-		this.CONFIGKEY = CONFIGKEY;
-	}
-
-	public String getMailToAddress1() {
-		return MailToAddress1;
-	}
-
-	public void setMailToAddress1(String mailToAddress1) {
-		MailToAddress1 = mailToAddress1;
-	}
-
-	public String getMailToAddress2() {
-		return MailToAddress2;
-	}
-
-	public void setMailToAddress2(String mailToAddress2) {
-		MailToAddress2 = mailToAddress2;
-	}
-
-	public String getMailToAddress3() {
-		return MailToAddress3;
-	}
-
-	public void setMailToAddress3(String mailToAddress3) {
-		MailToAddress3 = mailToAddress3;
-	}
-
-	public String getMailToAddress4() {
-		return MailToAddress4;
-	}
-
-	public void setMailToAddress4(String mailToAddress4) {
-		MailToAddress4 = mailToAddress4;
-	}
-
-	public String getMailToAddress5() {
-		return MailToAddress5;
-	}
-
-	public void setMailToAddress5(String mailToAddress5) {
-		MailToAddress5 = mailToAddress5;
-	}
-
-	public String getMailToAddress6() {
-		return MailToAddress6;
-	}
-
-	public void setMailToAddress6(String mailToAddress6) {
-		MailToAddress6 = mailToAddress6;
-	}
-
-	public String getProviderId() {
-		return providerId;
-	}
-
-	public void setProviderId(String providerId) {
-		this.providerId = providerId;
-	}
-
-	public enum ErrorMsg implements ErrorMessage {
-		SUBJECT (12, "Missing or invalid data: SUBJECT"),
-		PROCESSDATE (12, "Missing or invalid data: PROCESSDATE"),
-		ICNNUMBER (12, "Missing or invalid data: ICNNUMBER"),
-		LETTERTYPE (12,"Missing or invalid data: LETTERTYPE"),
-		PROVIDERTAXID (12, "Missing or invalid data: PROVIDERTAXID"),
-		isPrintSuppressed (12, "Missing or invalid data: isPrintSuppressed"),
-		DATEOFSERVICE (12, "Missing or invalid data: DATEOFSERVICE"),
-		IndivProvMPIN (12, "Missing or invalid data: IndivProvMPIN"), // "emailAlertReq!=\"N\""
-
-		PassThruData (22, "Missing or invalid data: PassThruData(SEVERE)"), // "emailAlertReq!=\"N\""
-		HistoryID (22, "Missing or invalid data: HistoryID(SEVERE)"), //  "emailAlertReq!=\"N\""
-		OriginPrintTrail (22, "Missing or invalid data: OriginPrintTrail(SEVERE)"), // "emailAlertReq!=\"N\""
-		MailToAddress1 (22, "Missing or invalid data: MailToAddress1(SEVERE)"), // "emailAlertReq!=\"N\""
-		MailToAddress2 (22, "Missing or invalid data: MailToAddress2(SEVERE)"), // "emailAlertReq!=\"N\""
-		MailToAddress4 (22, "Missing or invalid data: MailToAddress4(SEVERE)"), // "emailAlertReq!=\"N\""
-		MailToAddress5 (22, "Missing or invalid data: MailToAddress5(SEVERE)"), // "emailAlertReq!=\"N\""
-		MailToAddress6 (22, "Missing or invalid data: MailToAddress6(SEVERE)"); // "emailAlertReq!=\"N\""
-
-		private int errorCode;
-		private String errorMessage;
-
-		ErrorMsg(int code, String message) {
-			this.errorCode = code;
-			this.errorMessage = message;
-		}
-
-		public int getErrorCode() {
-			return errorCode;
-		}
-		public String getErrorMessage() {
-			return errorMessage;
-		}
-
-	}
-
-	public enum Subcategory {
-
-		// UNET (ELGS)
-		C1 ("C1", "Commercial/Action Required"),
-		C2 ("C2", "Commercial/Claim Receipt Acknowledgement"),
-		C3 ("C3", "Commercial/Denials"),
-		C4 ("C4", "Commercial/Please Review (FYI)"),
-		C5 ("C5", "Commercial Overpayment Letters/Overpayment Identified"),
-		C6 ("C6", "Commercial/Claim Reconsideration"),
-		C7 ("C7", "Commercial/Approvals"),
-		C8 ("C8", "Commercial/Copy of Member Letters"),
-		CC ("CC", "Commercial/Other");
-
-		private String subCat;
-		private String filePath;
-
-		Subcategory(String subCat, String filePath){
-			this.subCat = subCat;
-			this.filePath = filePath;
-			
-		}
-		public String getSubCat() {
-			return subCat;
-		}
-
-		public String getFilePath() {
-			return filePath;
-		}
-		
-	}
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-====
-
-
-
-public class UNETPRA extends ClientMetadata {
-	
-	private static final long serialVersionUID = 2458995411009671654L;
-	
-	@JsonProperty("tin")
-	@JsonAlias("ProviderTAXID")
-	private String tin;
-	
-	@JsonProperty("mpin")
-	@JsonAlias("IndivProviderMPIN")
-	private String mpin="";
-	
-	@JsonProperty("emailAlertReq")
-	@JsonAlias("IsPrintSuppressed")
-	private String emailAlertReq="Y";
-	
-	@JsonProperty("EFT_Ind")
-	private String EFT_Ind;
-
-	@JsonProperty("835_Ind")
-	private String Ind_835;
-
-	@JsonProperty("physicianName")
-	@JsonAlias("PHYSICIANNAME")
-	private String physicianName;
-	
-	@JsonProperty("CheckTraceNumber")
-	private String CheckTraceNumber;
-	
-	@JsonProperty("multClaimNumber")
-	@JsonAlias("ICNNUMBER")
-	private String multClaimNumber;
-	
-	@JsonProperty("memberId")
-	@JsonAlias("MemberID")
-	private String memberId;
-	
-	@JsonProperty("DefaultUsed")
-	private String DefaultUsed;
-	
-	@JsonProperty("CheckAmt")
-	private String CheckAmt;
-	
-	@JsonProperty("CONFIGKEY")
-	private String CONFIGKEY;
-	
-	@JsonProperty("originalPrintTrail")
-	private String originalPrintTrail;
-	
-	@JsonProperty("PassThruData")
-	private String PassThruData;
-	
-	@JsonProperty("MailToAddress1") 
-	private String MailToAddress1;
-	
-	@JsonProperty("MailToAddress2") 
-	private String MailToAddress2;
-	
-	@JsonProperty("MailToAddress3") 
-	private String MailToAddress3;
-	
-	@JsonProperty("MailToAddress4") 
-	private String MailToAddress4;
-	
-	@JsonProperty("MailToAddress5") 
-	private String MailToAddress5;
-	
-	@JsonProperty("MailToAddress6") 
-	private String MailToAddress6;
-	
-	@JsonProperty("LETTERTYPE")
-//	@JsonAlias("LETTERTYPE")
-	protected String subCategory;
-	
-	@JsonProperty("NPI")
-	@JsonAlias("BillingNPI")
-	private String NPI;
-	
-	@JsonProperty("paymentNumber")
-	@JsonAlias("vendor_pay_id")
-	private String paymentNumber;
-	
-	public UNETPRA() {
-		this.category = "Payment Document";
-		this.fileType = "Letter";
-		this.tenant = "Link";
-		this.fileDescription = "Provider Remittance Advice";
-		this.createApplication = "PmntEng";
-		this.docSentTo = "";
-		this.sendToDocVault = false;
-		this.sendToShutterfly = false;
-		this.providerEmailId = "";
-		this.postCardInd = true;
-		this.dateEmailSent = null;
-		this.sendEmailNotifications = false;
-		this.sendPENAPIRequest = false;
-		this.privilege = "Claim Status";
-		this.subCategory = "PR";
-		Subcategory subCat = Subcategory.valueOf(this.subCategory);
-		this.setFilePath(subCat.getFilePath());
-	}
-
-	public String getTin() {
-		return tin;
-	}
-
-	public void setTin(String tin) {
-		this.tin = tin;
-	}
-
-	public String getMpin() {
-		return mpin;
-	}
-
-	public void setMpin(String mpin) {
-		if (mpin != null){
-			this.mpin = mpin;
-		}
-	}
-
-	public String getEmailAlertReq() {
-		return emailAlertReq;
-	}
-
-	public void setEmailAlertReq(String emailAlertReq) {
-		if (emailAlertReq != null && !emailAlertReq.isEmpty()){
-			this.emailAlertReq = emailAlertReq;
-		}
-	}
-
-	public String getEFT_Ind() {
-		return EFT_Ind;
-	}
-
-	public void setEFT_Ind(String eFT_Ind) {
-		EFT_Ind = eFT_Ind;
-	}
-
-	public String getPhysicianName() {
-		return physicianName;
-	}
-
-	public void setPhysicianName(String physicianName) {
-		this.physicianName = physicianName;
-	}
-
-	public String getCheckTraceNumber() {
-		return CheckTraceNumber;
-	}
-
-	public void setCheckTraceNumber(String checkTraceNumber) {
-		CheckTraceNumber = checkTraceNumber;
-	}
-
-	public String getMultClaimNumber() {
-		return multClaimNumber;
-	}
-
-	public void setMultClaimNumber(String multClaimNumber) {
-		this.multClaimNumber = multClaimNumber;
-	}
-
-	public String getMemberId() {
-		return memberId;
-	}
-
-	public void setMemberId(String memberId) {
-		this.memberId = memberId;
-	}
-
-	public String getDefaultUsed() {
-		return DefaultUsed;
-	}
-
-	public void setDefaultUsed(String defaultUsed) {
-		DefaultUsed = defaultUsed;
-	}
-
-	public String getCheckAmt() {
-		return CheckAmt;
-	}
-
-	public void setCheckAmt(String checkAmt) {
-		CheckAmt = checkAmt;
-	}
-
-	public String getCONFIGKEY() {
-		return CONFIGKEY;
-	}
-
-	public void setCONFIGKEY(String cONFIGKEY) {
-		CONFIGKEY = cONFIGKEY;
-	}
-
-	public String getOriginalPrintTrail() {
-		return originalPrintTrail;
-	}
-
-	public void setOriginalPrintTrail(String originalPrintTrail) {
-		this.originalPrintTrail = originalPrintTrail;
-	}
-
-	public String getPassThruData() {
-		return PassThruData;
-	}
-
-	public void setPassThruData(String passThruData) {
-		PassThruData = passThruData;
-	}
-
-	public String getMailToAddress1() {
-		return MailToAddress1;
-	}
-
-	public void setMailToAddress1(String mailToAddress1) {
-		MailToAddress1 = mailToAddress1;
-	}
-
-	public String getMailToAddress2() {
-		return MailToAddress2;
-	}
-
-	public void setMailToAddress2(String mailToAddress2) {
-		MailToAddress2 = mailToAddress2;
-	}
-
-	public String getMailToAddress3() {
-		return MailToAddress3;
-	}
-
-	public void setMailToAddress3(String mailToAddress3) {
-		MailToAddress3 = mailToAddress3;
-	}
-
-	public String getMailToAddress4() {
-		return MailToAddress4;
-	}
-
-	public void setMailToAddress4(String mailToAddress4) {
-		MailToAddress4 = mailToAddress4;
-	}
-
-	public String getMailToAddress5() {
-		return MailToAddress5;
-	}
-
-	public void setMailToAddress5(String mailToAddress5) {
-		MailToAddress5 = mailToAddress5;
-	}
-
-	public String getMailToAddress6() {
-		return MailToAddress6;
-	}
-
-	public void setMailToAddress6(String mailToAddress6) {
-		MailToAddress6 = mailToAddress6;
-	}
-	
-	public String getInd_835() {
-		return Ind_835;
-	}
-
-	public void setInd_835(String ind_835) {
-		Ind_835 = ind_835;
-	}
-
-	public String getSubCategory() {
-		return subCategory;
-	}
-	
-	public String getNPI() {
-		return NPI;
-	}
-	
-	public String getPaymentNumber() {
-		return paymentNumber;
-	}
-	
-	public void setPaymentNumber(String paymentNumber) {
-		this.paymentNumber = paymentNumber;
-	}
-	
-	public void setSubCategory(String subCategory) {
-		if(subCategory == null || subCategory.isEmpty()){
-			this.subCategory = "PR";
-			this.setFilePath(Subcategory.PR.getFilePath());
-		} else {
-			this.subCategory = subCategory;
-			Subcategory subCat = null;
-			try {
-				subCat = Subcategory.valueOf(this.subCategory);
-			} catch (Exception e) {
-				subCat = Subcategory.PR;
-			}
-			this.setFilePath(subCat.getFilePath());
-		}
-		
-		if(this.getExpiryDate() != null && this.getExpiryDate().length() == 7){
-			this.setExpiryDate(this.vcpExpiryDateFormat(this.getExpiryDate(), this.subCategory));}
-	}
-	
-	
-	public enum ErrorMsg implements ErrorMessage {
-		ProviderTAXID_12 (12, "Missing or invalid data: ProviderTAXID"), // can be 12 or 22??
-		// err 12: EFT_Ind==\"Y\" && emailAlertReq==\"N\" || EFT_Ind==\"N\" && emailAlertReq==\"Y\" || EFT_Ind==\"N\" && emailAlertReq==\"N\"		
-		ProviderTAXID_22 (22, "Missing or invalid data: ProviderTAXID(SEVERE)"), // can be 12 or 22??
-		//err 22: EFT_Ind==\"Y\" && emailAlertReq==\"Y\"
-		
-		IndivProviderMPIN (12, "Missing or invalid data: IndivProviderMPIN"),
-		LETTERTYPE (12, "Missing or invalid data: LETTERTYPE"),
-		IsPrintSuppressed (12,"Missing or invalid data: isPrintSuppressed"),
-		PROCESSDATE (12, "Missing or invalid data: PROCESSDATE"),
-		
-		CONFIGKEY (22, "Missing or invalid data: CONFIGKEY(SEVERE)"), // "EFT_Ind==\"N\" && emailAlertReq==\"Y\"
-		originalPrintTrail (22, "Missing or invalid data: originalPrintTrail(SEVERE)"), // "EFT_Ind==\"N\" && emailAlertReq==\"Y\"
-		PassThruData (22, "Missing or invalid data: PassThruData(SEVERE)"), // "EFT_Ind==\"N\" && emailAlertReq==\"Y\"
-
-		MailToAddress1 (22, "Missing or invalid data: MailToAddress1(SEVERE)"), // "EFT_Ind==\"N\" && emailAlertReq==\"Y\"
-		MailToAddress3 (22, "Missing or invalid data: MailToAddress3(SEVERE)"), // "EFT_Ind==\"N\" && emailAlertReq==\"Y\"
-		
-		CheckTraceNumber (12, "Missing or invalid data: CheckTraceNumber"),
-		EFT_Ind (22, "Missing or invalid data: EFT_Ind(SEVERE)"),
-		ICNNUMBER (12, "Missing or invalid data: ICNNUMBER");
-		
-		
-		private int errorCode;
-	    private String errorMessage;
-
-	    ErrorMsg(int code, String message) {
-	        this.errorCode = code;
-	        this.errorMessage = message;
-	    }
-
-	    public int getErrorCode() {
-	        return errorCode;
-	    }
-	    public String getErrorMessage() {
-	        return errorMessage;
-	    }
-
-	}
-	
-	public enum Subcategory {
-		
-		P1 ("P1", "Commercial/Detailed PRAs"),
-		P2 ("P2", "Commercial/Virtual Card Payments and Info Only PRAs"),
-		P8 ("P8", "Commercial/Zero-Dollar PRAs"),
-		P9 ("P9", "Medicare/Zero-Dollar PRAs"),
-		P0 ("P0", "Community Plan/Zero-Dollar PRAs"),
-		E1 ("E1", "Other/Zero-Dollar PRAs"),
-		PR ("PR", "Other PRAs/Other");
-		
-		private String subCat;
-		private String filePath;
-		
-		Subcategory(String subCat, String filePath){
-			this.subCat = subCat;
-			this.filePath = filePath;
-		}
-		public String getSubCat() {
-	        return subCat;
-	    }
-		
-		public String getFilePath() {
-			return filePath;
-		}
-	}
-	
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-====
-
-
-public class USPClaims extends ClientMetadata {
-
-
-    @JsonProperty("LETTERTYPE")
-    private String subCategory;
-
-    @JsonProperty("PROVIDERTAXID")
-    private String tin;
-
-    @JsonProperty("IndivProvMPIN")
-    private String mpin;
-
-    @JsonProperty("isPrintSuppressed")
-    private String emailAlertReq;
-
-    @JsonProperty("DATEOFSERVICE")
-    private String dateOfService;
-
-    @JsonProperty("POLICYNBR")
-    private String policyNumber;
-
-    @JsonProperty("PATIENTNAME")
-    private String PatientName;
-
-    @JsonProperty("PATDOB")
-    private String patientDOB;
-
-    @JsonProperty("ICNNUMBER")
-    private String claimNumber;
-
-    @JsonProperty("PHYSICIANNAME")
-    private String providerName;
-
-    @JsonProperty("EMPLOYEEID")
-    private String memberId;
-
-    @JsonProperty("EMPLOYEENAME")
-    private String memberName;
-
-    @JsonProperty("EmplAltId")
-    private String MemberAltId;
-
-    @JsonProperty("PassThruData")
-    private String PassThruData;
-
-    @JsonProperty("OriginPrintTrail")
-    private String originalPrintTrail;
-
-    @JsonProperty("ConfigKey")
-    private String CONFIGKEY;
-
-    @JsonProperty("MailToAddress1")
-    private String MailToAddress1;
-
-    @JsonProperty("MailToAddress2")
-    private String MailToAddress2;
-
-    @JsonProperty("MailToAddress3")
-    private String MailToAddress3;
-
-    @JsonProperty("MailToAddress4")
-    private String MailToAddress4;
-
-    @JsonProperty("MailToAddress5")
-    private String MailToAddress5;
-
-    @JsonProperty("MailToAddress6")
-    private String MailToAddress6;
-
-    @JsonProperty("RecipientID")
-    private String recipientId;
-
-
-    public USPClaims(){
-        this.category = "Claim";
-        this.fileType = "Letter";
-        this.tenant = "Link";
-        this.fileDescription = "";
-        this.createApplication = "CIRRUS";
-        this.docSentTo = "";
-        this.sendToDocVault = false;
-        this.sendToShutterfly = false;
-        this.providerEmailId = "";
-        this.postCardInd = true;
-        this.dateEmailSent = null;
-        this.sendEmailNotifications = false;
-        this.sendPENAPIRequest = false;
-        this.privilege = "Claim Status";
-        this.subCategory = "CC";
-        Subcategory subCat =Subcategory.valueOf(this.subCategory);
-        this.setFilePath(subCat.getFilePath());
+@Component
+public class ProcessSummary {
+    private static final Logger log = LoggerFactory.getLogger(ProcessSummary.class);
+    private static final String OUTCOME_KEY = "outcome";
+    private static final String ERROR_KEY = "error";
+    private static final String ERROR_READING_ZIP_CONTENT_LOCATION = "There was an error reading zip content location.";
+    private static final String ERROR_VALIDATING_SUMMARY_AGAINST_ZIP_CONTENT = "Error validating summary XML against zip contents. \n{}";
+    private static final String LOCK_FILE_EXTENTION = "txt";
+    
+    private static final String PROCESSOR_TRANSACTION_ID = "processorTransactionId";
+    private static final String SUMMARY_FILE =  "summaryFile";
+    private static final String SUMMARY_FILE_LOCATION =  "summaryFileLocation";
+    private static final String SUMMARY_FILE_BATCH_ID =  "summaryFileBatchId";
+    private static final String ACTIVITY_PROCESS_KEY = "activityProcessKey";
+    private static final String PATH_LOCATION = "pathLocation";
+    
+    private ProcessorError processorError;
+
+    @Autowired ProcessorService processorService;
+
+
+    /**********    Constructors *************/
+    public ProcessSummary(){
+        // Required Constructor
+    }
+    // Test constructor
+    public ProcessSummary(ProcessorService processorServiceSource){
+        processorService = processorServiceSource;
     }
 
+    public void processSummaryFile(ProcessorTransaction processorTransaction) {
 
-    public String getSubCategory() {
-        return subCategory;
-    }
+        // Return if transaction has Fatal errors
+        if(processorTransaction.getStatus() == MetaDataStatus.FATAL_ERROR){
+            return;
+        }
+        
+        ProcessorExecutionRecord executionRecord = ProcessorTaskUtil.createProcessorExecutionRecord("Retrieving summary file", processorTransaction);
+        HashMap<String,String> message = new HashMap<>();
 
-    public void setSubCategory(String subCategory) {
-        if(subCategory == null || subCategory.isEmpty()){
-            this.subCategory = "CC";
-            this.setFilePath(Subcategory.CC.getFilePath());
-        } else {
-            this.subCategory = subCategory;
-            USPClaims.Subcategory subCat = null;
-            try {
-                subCat = USPClaims.Subcategory.valueOf(this.subCategory);
-            } catch (Exception e) {
-                subCat = USPClaims.Subcategory.CC;
-            }
-            this.setFilePath(subCat.getFilePath());
+        File summaryFile = null;
+        try {
+            List outcome = getSummaryFile(processorTransaction.getLocation());
+            summaryFile = (File) outcome.get(0);
+
+            message.put(OUTCOME_KEY, (String) outcome.get(1));
+        } catch (FileNotFoundException e) {
+            log.error("processSummaryFile Summary File not found {}={}, {}={} {}",
+					PROCESSOR_TRANSACTION_ID, processorTransaction != null ? processorTransaction.getId() : "NULL",
+					SUMMARY_FILE, processorTransaction != null ? processorTransaction.getLocation() : "NULL",
+					ExceptionUtils.getStackTrace(e));
+            message.put(OUTCOME_KEY, "Summary file was NOT found");
+            message.put(ERROR_KEY, e.toString());
+
+            processorError = new ProcessorError(ProcessorErrorCode.FILE_NOT_FOUND);
+            processorTransaction.getSummary().addError(processorError);
+
+            processorTransaction.setStatus(MetaDataStatus.FATAL_ERROR);
+        }
+        catch (IOException e){
+            log.error("processSummaryFile Could not read file location; {}={}, {}={} {}",
+					PROCESSOR_TRANSACTION_ID, processorTransaction != null ? processorTransaction.getId() : "NULL",
+					SUMMARY_FILE_LOCATION, processorTransaction != null ? processorTransaction.getLocation() : "NULL",
+					ExceptionUtils.getStackTrace(e));
+            message.put(OUTCOME_KEY, "Could not read file location");
+            message.put(ERROR_KEY, e.toString());
+
+            processorError = new ProcessorError(ProcessorErrorCode.UNKNOWN_ERROR_READING_FILE);
+            processorTransaction.getSummary().addError(processorError);
+
+            processorTransaction.setStatus(MetaDataStatus.FATAL_ERROR);
+        }
+        finally {
+            ProcessorTaskUtil.updateProcessTransactionWithExecutionRecord(processorService, processorTransaction, executionRecord, message);
+        }
+
+        // Continue?
+        if(processorTransaction.getStatus() == MetaDataStatus.FATAL_ERROR){
+            return;
+        }
+
+        executionRecord = ProcessorTaskUtil.createProcessorExecutionRecord("Parsing summary file", processorTransaction);
+        message = new HashMap<>();
+        SummaryFile summaryXML = null;
+        SummaryFileWithAttributes summaryFileWithAttributes = null;
+        try {
+        	summaryFileWithAttributes = Parser.parseXMLFile(summaryFile, SummaryFileWithAttributes.class);
+        	summaryFileCountFieldValidation(summaryFileWithAttributes, processorTransaction, message);
+        	summaryXML = new SummaryFile();
+        	convertSummaryFileWithAttributesToSummaryFile(summaryXML, summaryFileWithAttributes);
+            message.put(OUTCOME_KEY, "Summary file parsed");
+        } catch (JsonParseException e) {
+            log.error("processSummaryFile Could not parse summary file {}={}, {}={} {}",
+					PROCESSOR_TRANSACTION_ID, processorTransaction != null ? processorTransaction.getId() : "NULL",
+					SUMMARY_FILE, summaryFile != null ? summaryFile.getName() : "NULL",
+					ExceptionUtils.getStackTrace(e));
+            message.put(OUTCOME_KEY, "Could not parse summary file.");
+            message.put(ERROR_KEY, e.toString());
+
+            processorError = new ProcessorError(ProcessorErrorCode.FILE_COULD_NOT_BE_PARSED);
+            processorTransaction.getSummary().addError(processorError);
+
+            processorTransaction.setStatus(MetaDataStatus.FATAL_ERROR);
+        } catch (JsonMappingException e) {
+            log.error("processSummaryFile XML in summary file could not be mapped correctly {}={}, {}={} {}",
+					PROCESSOR_TRANSACTION_ID, processorTransaction != null ? processorTransaction.getId() : "NULL",
+					SUMMARY_FILE, summaryFile != null ? summaryFile.getName() : "NULL",
+					ExceptionUtils.getStackTrace(e));
+            message.put(OUTCOME_KEY, "XML in summary file could not be mapped correctly.");
+            message.put(ERROR_KEY, e.toString());
+
+            processorError = new ProcessorError(ProcessorErrorCode.XML_COULD_NOT_BE_MAPPED_IN_SUMMARY);
+            processorTransaction.getSummary().addError(processorError);
+
+            processorTransaction.setStatus(MetaDataStatus.FATAL_ERROR);
+        } catch (IOException e) {
+            log.error("processSummaryFile Could not read summary file {}={}, {}={} {}",
+					PROCESSOR_TRANSACTION_ID, processorTransaction != null ? processorTransaction.getId() : "NULL",
+					SUMMARY_FILE, summaryFile != null ? summaryFile.getName() : "NULL",
+					ExceptionUtils.getStackTrace(e));
+
+            message.put(OUTCOME_KEY, "Could not parse summary file");
+            message.put(ERROR_KEY, e.toString());
+
+            processorError = new ProcessorError(ProcessorErrorCode.UNKNOWN_ERROR_READING_FILE);
+            processorTransaction.getSummary().addError(processorError);
+
+            processorTransaction.setStatus(MetaDataStatus.FATAL_ERROR);
+        }
+        finally {
+            ProcessorTaskUtil.updateProcessTransactionWithExecutionRecord(processorService, processorTransaction, executionRecord, message);
+        }
+
+        // Continue?
+        if(processorTransaction.getStatus() == MetaDataStatus.FATAL_ERROR){
+            return;
+        }
+
+
+        executionRecord = ProcessorTaskUtil.createProcessorExecutionRecord("Performing initial validation", processorTransaction);
+        message = new HashMap<>();
+
+        // Performing High level Validation
+        List outcome = summaryXMLHighLevelValidation(summaryXML);
+
+        if(!(Boolean) outcome.get(0)){
+            processorTransaction.getSummary().addError((ProcessorError) outcome.get(2));
+
+            processorTransaction.setStatus(MetaDataStatus.FATAL_ERROR);
+
+            ProcessorTaskUtil.updateProcessTransactionWithExecutionRecord(processorService, processorTransaction, executionRecord, (HashMap) outcome.get(1));
+
+            return;
+        }
+
+        //Save Summary XML
+        processorTransaction.getSummary().setXmlObject(summaryXML);
+
+        message.put(OUTCOME_KEY, "High level validation compelte.");
+        ProcessorTaskUtil.updateProcessTransactionWithExecutionRecord(processorService, processorTransaction, executionRecord, message);
+
+
+
+        // Validate
+        summaryFileValidation(summaryXML, processorTransaction);
+
+        List filesToProcess = processorTransaction.getFileToProcessList();
+
+        if( filesToProcess == null || filesToProcess.isEmpty()){
+            processorTransaction.setStatus(MetaDataStatus.FATAL_ERROR);
+            processorService.saveProcessorTransactionMetaData(processorTransaction);
         }
     }
+	/**
+	 * @param summaryXML
+	 * @param summaryFileWithAttributes
+	 * @return
+	 */
+	private void convertSummaryFileWithAttributesToSummaryFile(SummaryFile summaryXML,
+			SummaryFileWithAttributes summaryFileWithAttributes) {
+		if(summaryFileWithAttributes != null){
+			summaryXML.setBatchId(summaryFileWithAttributes.getBatchId());
+			summaryXML.setCount(summaryFileWithAttributes.getCount());
+			summaryXML.setDataGroup(summaryFileWithAttributes.getDataGroup());
+			summaryXML.setFileList(summaryFileWithAttributes.getFileListAsStringNames());
+		}
+	}
 
-    public String getTin() {
-        return tin;
+    public List<Object> getSummaryFile(String summaryFileLocation) throws IOException {
+        List toReturn = new ArrayList<>();
+
+        final Path location = Paths.get(summaryFileLocation);
+        List<File> summaryFiles = new ArrayList<>();
+        try(final DirectoryStream<Path> stream = Files.newDirectoryStream(location, "*.summary")){
+            stream.forEach(file -> summaryFiles.add(file.toFile()));
+
+        } catch (Exception e) {
+        	log.error("getSummaryFile {}={} {}",
+					SUMMARY_FILE_LOCATION, summaryFileLocation,
+					ExceptionUtils.getStackTrace(e));
+            throw e;
+        }
+
+        // Getting Summary File
+        if(summaryFiles.isEmpty()) {
+            log.error("getSummaryFile: No Summary File found; {}={}",
+					SUMMARY_FILE_LOCATION, summaryFileLocation);
+            throw new FileNotFoundException("No Summary File found; " + SUMMARY_FILE_LOCATION + "=" + summaryFileLocation);	
+        }
+        else{
+            Collections.sort(summaryFiles);
+            toReturn.add(summaryFiles.get(0));
+            if(summaryFiles.size() > 1) {
+                log.warn("Found more than one summary file. Using first summary file; {}={}", SUMMARY_FILE_LOCATION, summaryFileLocation);
+                toReturn.add("Found more than one summary file. Using first summary file");
+            }
+            else{
+                toReturn.add("Summary file was found");
+            }
+        }
+
+        return toReturn;
     }
 
-    public void setTin(String tin) {
-        this.tin = tin;
+    public List summaryXMLHighLevelValidation(SummaryFile summaryXML) {
+        List toReturn = new ArrayList<>();
+        HashMap<String,String> message = new HashMap<>();
+
+        toReturn.add(true);
+
+        if(summaryXML.getFileList() == null || summaryXML.getFileList().isEmpty()){
+            toReturn.set(0, false);
+
+            message.put(OUTCOME_KEY, "XML missing Files Node");
+            toReturn.add(message);
+
+            toReturn.add(new ProcessorError(ProcessorErrorCode.XML_MISSING_FILES_TO_PROCESS));
+        }
+
+        return toReturn;
     }
 
-    public String getMpin() {
-        return mpin;
+    public void summaryFileValidation(SummaryFile summaryXML, ProcessorTransaction processorTransaction) {
+        final String metadataExtension = "metadata";
+
+        ProcessorExecutionRecord executionRecord = ProcessorTaskUtil.createProcessorExecutionRecord("Performing validation of summary xml against zip contents", processorTransaction);
+
+        validateCountAgainstFileList(summaryXML, processorTransaction, executionRecord);
+
+        final Path location = Paths.get(processorTransaction.getLocation());
+
+        // Collecting file names.
+        final List<String> files = summaryXML.getFileList();
+
+        // Collecting Metadata Files
+        final List<String> metadataFiles = getMetadataFiles(metadataExtension, location, processorTransaction, executionRecord);
+        if(processorTransaction.getStatus() == MetaDataStatus.FATAL_ERROR){
+            ProcessorTaskUtil.updateProcessTransactionWithExecutionRecord(processorService, processorTransaction, executionRecord);
+            return;
+        }
+
+        // Collecting All files
+        final List<String> filesAtContentLocation = getFilesAtLocation(location, processorTransaction, executionRecord);
+        if(processorTransaction.getStatus() == MetaDataStatus.FATAL_ERROR){
+            ProcessorTaskUtil.updateProcessTransactionWithExecutionRecord(processorService, processorTransaction, executionRecord);
+            return;
+        }
+
+        calculateTotalBytesForTransaction(processorTransaction, location);
+
+
+        cycleThroughZipFiles(processorTransaction, metadataExtension, executionRecord, files, metadataFiles, filesAtContentLocation);
+
+        // Were there any missing files?
+        checkIfFilesWereMissing(processorTransaction, metadataExtension);
+
+        ProcessorTaskUtil.updateProcessTransactionWithExecutionRecord(processorService, processorTransaction, executionRecord);
     }
     
-    public void setMpin(String mpin) {
-        if (mpin != null && !mpin.isEmpty()) {
-            String paddedMpin = StringUtils.leftPad(mpin, 9, '0');
-            this.mpin = paddedMpin;
+	public void summaryFileCountFieldValidation(SummaryFileWithAttributes summaryFileWithAttributes,
+			ProcessorTransaction processorTransaction, HashMap<String, String> message) {
+		try {
+			Integer.parseInt(summaryFileWithAttributes.getCount());
+		} catch (NumberFormatException e) {
+			log.error("summaryFileCountFieldValidation Bad format in summary file Count {}={}, {}={} {}",
+					PROCESSOR_TRANSACTION_ID, processorTransaction != null ? processorTransaction.getId() : "NULL",
+					SUMMARY_FILE_BATCH_ID, summaryFileWithAttributes != null ? summaryFileWithAttributes.getBatchId() : "NULL",
+					ExceptionUtils.getStackTrace(e));
+			message.put(OUTCOME_KEY, "Bad format in summary file Count.");
+			message.put(ERROR_KEY, e.toString());
+			processorTransaction = Optional.ofNullable(processorTransaction).orElseThrow(NullPointerException::new);
+			processorError = new ProcessorError(ProcessorErrorCode.NUMBER_FORMAT_EXCEPTION_SUMMARY_COUNT);
+			processorTransaction.getSummary().addError(processorError);
+
+			processorTransaction.setStatus(MetaDataStatus.FATAL_ERROR);
+		}
+	}
+
+    private static final void calculateTotalBytesForTransaction(ProcessorTransaction processorTransaction, Path location) {
+        // Getting total bytes to be processed
+        String[] excludeExtensions = {"zip", "metadata", "summary"};
+        final Long totalBytesToBeProcessed = totalBytesAtLocation(location, Arrays.asList(excludeExtensions));
+        processorTransaction.getSummary().getProcessingMetrics().setTotalBytes(totalBytesToBeProcessed);
+    }
+
+    private static final void checkIfFileIsMetadataAndHasCorrespondingFile(String fileName, String metadataExtension, List<String> files, ProcessorExecutionRecord executionRecord, ProcessorTransaction processorTransaction){
+        if(
+            fileName.endsWith(metadataExtension) &&
+            files.stream().noneMatch(fileNameProvided ->
+                !fileNameProvided.equals(fileName) &&
+                fileNameProvided.startsWith(Utilities.stripFileExtension(fileName))
+            )
+        ) {
+            HashMap<String, String> messageForFile = new HashMap<>();
+            messageForFile.put(OUTCOME_KEY, "Metadata File did not have corresponding file.");
+            messageForFile.put(ERROR_KEY, "No file found for metadata file " + fileName);
+            ProcessorTaskUtil.addMessageToProcessorExecutionRecord(executionRecord, messageForFile);
+            processorTransaction.addMissingFile(fileName);
+            processorTransaction.addExtraFile(fileName);
         }
     }
 
-    public String getEmailAlertReq() {
-        return emailAlertReq;
-    }
-    public void setEmailAlertReq(String emailAlertReq) {
-        if (emailAlertReq != null && !emailAlertReq.isEmpty()){
-            this.emailAlertReq = emailAlertReq;
+    private static final void checkIfFilesWereMissing(ProcessorTransaction processorTransaction, String metadataExtension){
+        List<String> missingFiles = processorTransaction.getMissingFileList();
+
+        if(missingFiles != null && !missingFiles.isEmpty()){
+            if(!missingFiles.stream().noneMatch( fileName -> fileName.endsWith(metadataExtension))){
+                processorTransaction.getSummary().addError(new ProcessorError(ProcessorErrorCode.EXTRA_METADATA_FILE_FOUND));
+            }
+            
+            for (String fileName : missingFiles) {
+            	if (!fileName.endsWith(metadataExtension) && !fileName.endsWith(LOCK_FILE_EXTENTION) && !fileName.startsWith(".nfs")) {
+            	  	processorTransaction.getSummary().addError(new ProcessorError(ProcessorErrorCode.EXTRA_FILE_FOUND_WITH_NO_METADATA, fileName));
+            	}
+            }
         }
     }
 
-    public String getDateOfService() {
-        return dateOfService;
-    }
+    private void cycleThroughZipFiles(ProcessorTransaction processorTransaction, String metadataExtension, ProcessorExecutionRecord executionRecord, List<String> files, List<String> metadataFiles, List<String> filesAtContentLocation) {
+        // Cycling through files
+        final boolean[] hasExtraFiles = {false};
+        final boolean[] extraFileProcessed = {false};
+        final ProcessorExecutionRecord finalExecutionRecord = executionRecord;
+        filesAtContentLocation.stream().forEach(fileName -> {
+            // Only check non-metadata/summary/zip files
+            if (!fileName.endsWith(metadataExtension) && !fileName.endsWith("summary") && !fileName.endsWith("zip") && !fileName.endsWith(LOCK_FILE_EXTENTION) && !fileName.startsWith(".nfs")) {
+                boolean isExtraFile = !fileInList(files, fileName, finalExecutionRecord, processorTransaction);
 
-    public void setDateOfService(String dateOfService) {
-        this.dateOfService = dateOfService;
-    }
+                if(isExtraFile) {
+                    hasExtraFiles[0] = true;
+                }
 
-    public String getPolicyNumber() {
-        return policyNumber;
-    }
+                if(hasMetadataFile(fileName, metadataExtension, metadataFiles, finalExecutionRecord, processorTransaction)) {
+                    if(isExtraFile){
+                        extraFileProcessed[0] = true;
+                    }
 
-    public void setPolicyNumber(String policyNumber) {
-        this.policyNumber = policyNumber;
-    }
+                    processorTransaction.addFileToProcess(fileName);
+                }
+            } else {
+                checkIfFileIsMetadataAndHasCorrespondingFile(fileName, metadataExtension, filesAtContentLocation, finalExecutionRecord, processorTransaction);
+            }
+        });
 
-    public String getPatientName() {
-        return PatientName;
-    }
-
-    public void setPatientName(String patientName) {
-        PatientName = patientName;
-    }
-
-    public String getPatientDOB() {
-        return patientDOB;
-    }
-
-    public void setPatientDOB(String patientDOB) {
-        this.patientDOB = patientDOB;
-    }
-
-    public String getClaimNumber() {
-        return claimNumber;
-    }
-
-    public void setClaimNumber(String claimNumber) {
-        this.claimNumber = claimNumber;
-    }
-
-    public String getProviderName() {
-        return providerName;
-    }
-
-    public void setProviderName(String providerName) {
-        this.providerName = providerName;
-    }
-
-    public String getMemberId() {
-        return memberId;
-    }
-
-    public void setMemberId(String memberId) {
-        this.memberId = memberId;
-    }
-
-    public String getMemberName() {
-        return memberName;
-    }
-
-    public void setMemberName(String memberName) {
-        this.memberName = memberName;
-    }
-
-    public String getMemberAltId() {
-        return MemberAltId;
-    }
-
-    public void setMemberAltId(String memberAltId) {
-    	this.MemberAltId = memberAltId;
-    }
-
-    public String getPassThruData() {
-        return PassThruData;
-    }
-
-    public void setPassThruData(String passThruData) {
-    	this.PassThruData = passThruData;
-    }
-
-    public String getOriginalPrintTrail() {
-        return originalPrintTrail;
-    }
-
-    public void setOriginalPrintTrail(String originalPrintTrail) {
-        this.originalPrintTrail = originalPrintTrail;
-    }
-
-    public String getCONFIGKEY() {
-        return CONFIGKEY;
-    }
-
-    public void setCONFIGKEY(String CONFIGKEY) {
-        this.CONFIGKEY = CONFIGKEY;
-    }
-
-    public String getMailToAddress1() {
-        return MailToAddress1;
-    }
-
-    public void setMailToAddress1(String mailToAddress1) {
-    	this.MailToAddress1 = mailToAddress1;
-    }
-
-    public String getMailToAddress2() {
-        return MailToAddress2;
-    }
-
-    public void setMailToAddress2(String mailToAddress2) {
-    	this.MailToAddress2 = mailToAddress2;
-    }
-
-    public String getMailToAddress3() {
-        return MailToAddress3;
-    }
-
-    public void setMailToAddress3(String mailToAddress3) {
-    	this.MailToAddress3 = mailToAddress3;
-    }
-
-    public String getMailToAddress4() {
-        return MailToAddress4;
-    }
-
-    public void setMailToAddress4(String mailToAddress4) {
-    	this.MailToAddress4 = mailToAddress4;
-    }
-
-    public String getMailToAddress5() {
-        return MailToAddress5;
-    }
-
-    public void setMailToAddress5(String mailToAddress5) {
-        this.MailToAddress5 = mailToAddress5;
-    }
-
-    public String getMailToAddress6() {
-        return MailToAddress6;
-    }
-
-    public void setMailToAddress6(String mailToAddress6) {
-        this.MailToAddress6 = mailToAddress6;
-    }
-
-    public String getRecipientId() { return recipientId; }
-
-    public void setRecipientId(String recipientId) { this.recipientId = recipientId; }
-
-    public enum ErrorMsg implements ErrorMessage {
-
-        PROVIDERTAXID (12, "Missing or invalid data: Provider TIN"),
-        IndivProvMPIN (12, "Missing or invalid data: Provider MPIN"),
-        LETTERTYPE (12, "Missing or invalid data: subCategory"),
-        isPrintSuppressed (12,"Missing or invalid data: isPrintSuppressed"),
-        PROCESSDATE (12, "Missing or invalid data: CreateDate"),
-        DATEOFSERVICE(12, "Missing or invalid data:  Date of Service"),
-        ICNNUMBER(12,"Missing or invalid data: Claim Number"),
-        SUBJECT(12, "Missing or invalid data: Subject"),
-        RecipientID(12, "Missing or invalid data: Recipient ID"),
-
-        ConfigKey (22, "Missing or invalid data: CONFIGKEY(SEVERE)"),
-        OriginPrintTrail (22, "Missing or invalid data: OriginalPrintTrail(SEVERE)"),
-        PassThruData (22, "Missing or invalid data: PassThruData(SEVERE)"),
-        MailToAddress1 (22, "Missing or invalid data: MailToAddress1(SEVERE)"),
-        MailToAddress2 (22, "Missing or invalid data: MailToAddress2(SEVERE)"),
-        MailToAddress4 (22, "Missing or invalid data: MailToAddress4(SEVERE)");
-
-        private int errorCode;
-        private String errorMessage;
-
-        ErrorMsg(int code, String message) {
-            this.errorCode = code;
-            this.errorMessage = message;
-        }
-
-        public int getErrorCode() {
-            return errorCode;
-        }
-        public String getErrorMessage() {
-            return errorMessage;
+        if(hasExtraFiles[0] && extraFileProcessed[0]){
+            processorTransaction.getSummary().addError(new ProcessorError(ProcessorErrorCode.PDF_FILE_NAME_MISMATCH));
         }
     }
 
-    public enum Subcategory {
-        // USP Claims
-        C1 ("C1", "Commercial/Action Required"),
-        C2 ("C2", "Commercial/Claim Receipt Acknowledgement"),
-        C3 ("C3", "Commercial/Denials"),
-        C4 ("C4", "Commercial/Please Review (FYI)"),
-        C6 ("C6", "Commercial/Claim Reconsideration Upheld"),
-        C7 ("C7", "Commercial/Therapy Approvals"),
-        C8 ("C8", "Commercial/Copy of Member Letters"),
-        CC ("CC", "Commercial/Other");
-
-        private String subCat;
-        private String filePath;
-
-        Subcategory(String subCat, String filePath){
-            this.subCat = subCat;
-            this.filePath = filePath;
+    private static boolean fileInList(List<String> files, String fileName, ProcessorExecutionRecord executionRecord, ProcessorTransaction processorTransaction){
+        boolean fileInList = true;
+        // Is it in the list
+        if (!files.contains(fileName)) {
+            fileInList = false;
+            HashMap<String, String> messageForFile = new HashMap<>();
+            messageForFile.put(OUTCOME_KEY, "File was not specified in XML.");
+            messageForFile.put(ERROR_KEY, "File: " + fileName);
+            ProcessorTaskUtil.addMessageToProcessorExecutionRecord(executionRecord, messageForFile);
+            processorTransaction.addExtraFile(fileName);
         }
-        public String getSubCat() {
-            return subCat;
+		return fileInList;
+    }
+
+    private static List<String> getFilesAtLocation(Path location, ProcessorTransaction processorTransaction, ProcessorExecutionRecord executionRecord){
+        List<String> files = new ArrayList<>();
+        HashMap<String, String> message = new HashMap<>();
+
+        try(final Stream<Path> stream = Files.list(location)){
+            stream.filter(Files::isRegularFile).forEach(file -> files.add(file.getFileName().toString()));
+            message.put(OUTCOME_KEY, "Retrieved all files in content location");
+        } catch (Exception e) {
+            log.error("getFilesAtLocation: {} {}={}, {}={}, {}={} {}",
+            		ERROR_VALIDATING_SUMMARY_AGAINST_ZIP_CONTENT,
+					PROCESSOR_TRANSACTION_ID, processorTransaction != null ? processorTransaction.getId() : "NULL",
+					ACTIVITY_PROCESS_KEY, executionRecord != null ? executionRecord.getActivitiProcessKey() : "NULL",
+					PATH_LOCATION, location != null ? location.toString() : "NULL",
+					ExceptionUtils.getStackTrace(e));
+            message.put(OUTCOME_KEY, ERROR_READING_ZIP_CONTENT_LOCATION);
+            message.put(ERROR_KEY, e.toString());
+            processorTransaction = Optional.ofNullable(processorTransaction).orElseThrow(NullPointerException::new);
+            ProcessorError processorError = new ProcessorError(ProcessorErrorCode.UNKNOWN_ERROR_READING_FILE);
+            processorTransaction.getSummary().addError(processorError);
+
+            processorTransaction.setStatus(MetaDataStatus.FATAL_ERROR);
+        }
+        finally {
+            ProcessorTaskUtil.addMessageToProcessorExecutionRecord(executionRecord, message);
         }
 
-        public String getFilePath() {
-            return filePath;
+        return files;
+    }
+
+
+    private static final List<String> getMetadataFiles(String metadataExtension, Path location, ProcessorTransaction processorTransaction, ProcessorExecutionRecord executionRecord){
+        final List<String> metadataFiles = new ArrayList<>();
+        HashMap<String, String> message = new HashMap<>();
+
+        try{
+
+            FileUtil.getFilesByExtension(metadataExtension, location)
+                .stream()
+                .forEach(file ->
+                    metadataFiles.add(file.getName())
+                );
+            message.put(OUTCOME_KEY, "Retrieved all metadata files from location");
+        } catch (Exception e) {
+            log.error("getMetadataFiles {} {}={}, {}={}, {}={} {}",
+            		ERROR_VALIDATING_SUMMARY_AGAINST_ZIP_CONTENT,
+					PROCESSOR_TRANSACTION_ID, processorTransaction != null ? processorTransaction.getId() : "NULL",
+					ACTIVITY_PROCESS_KEY, executionRecord != null ? executionRecord.getActivitiProcessKey() : "NULL",
+					PATH_LOCATION, location != null ? location.toString() : "NULL",
+					ExceptionUtils.getStackTrace(e));
+
+            message.put(OUTCOME_KEY, ERROR_READING_ZIP_CONTENT_LOCATION);
+            message.put(ERROR_KEY, e.toString());
+            processorTransaction = Optional.ofNullable(processorTransaction).orElseThrow(NullPointerException::new);
+            processorTransaction.getSummary().addError(new ProcessorError(ProcessorErrorCode.UNKNOWN_ERROR_READING_FILE));
+
+            processorTransaction.setStatus(MetaDataStatus.FATAL_ERROR);
         }
+        finally {
+            ProcessorTaskUtil.addMessageToProcessorExecutionRecord(executionRecord, message);
+        }
+
+
+        return metadataFiles;
+    }
+
+    private static final boolean hasMetadataFile(String fileName, String metadataExtension, List<String> metadataFiles, ProcessorExecutionRecord executionRecord, ProcessorTransaction processorTransaction){
+
+        // Replacing extension
+        String fileNameWithReplaceExtenstion = Utilities.replaceExtension(fileName, metadataExtension);
+        boolean hasMetadataFile = !metadataFiles.stream().noneMatch(metadataFileName -> metadataFileName.equals(fileNameWithReplaceExtenstion));
+
+        if(!hasMetadataFile) {
+//            HashMap<String, String> messageForFile = new HashMap<>();
+//            messageForFile.put(OUTCOME_KEY, "File did not have corresponding metadata file.");
+//            messageForFile.put(ERROR_KEY, "No metadata file found for " + fileName);
+//            processorTransaction.getSummary().addError(new ProcessorError(ProcessorErrorCode.NO_METADATA_FILE_FOUND, fileName));
+//            ProcessorTaskUtil.addMessageToProcessorExecutionRecord(executionRecord, messageForFile);
+            processorTransaction.addMissingFile(fileName);
+        }
+
+        return hasMetadataFile;
+    }
+
+    private void validateCountAgainstFileList(SummaryFile summaryXML, ProcessorTransaction processorTransaction, ProcessorExecutionRecord executionRecord){
+        HashMap<String, String>  message = new HashMap<>();
+        int summaryXMLCount=Integer.parseInt(summaryXML.getCount());
+        if(summaryXMLCount != summaryXML.getFileList().size()){
+            String errorMessage = "Count is at " + summaryXML.getCount() + " and there are " + summaryXML.getFileList().size() + " files listed.";
+            message.put(OUTCOME_KEY, "There is mismatch between count and specified files.");
+            message.put(ERROR_KEY, errorMessage);
+
+            processorError = new ProcessorError(ProcessorErrorCode.FILE_COUNT_MISMATCH);
+            processorError.setErrorMessage(processorError.getErrorMessage() + " " + errorMessage);
+            processorTransaction.getSummary().addError(processorError);
+
+        }
+        else{
+            message.put(OUTCOME_KEY, "Count and specified files totals matched.");
+        }
+
+        ProcessorTaskUtil.addMessageToProcessorExecutionRecord(executionRecord, message);
     }
 }
 
@@ -1272,6 +496,865 @@ public class USPClaims extends ClientMetadata {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+==
+
+
+@Service("PostDocumentDataDocvault")
+public class PostDocumentDataDocvault extends OptumJavaDelegateBase {
+
+
+	static final String DUPLICATE_ENTRY_RESPONSE = "Duplicate entry";
+	static final String DOCLIB_DUPLICATE_ENTRY_RESPONSE = "fileId already exists";
+	static final String UNABLE_TO_PROCESS_REQUEST = "we are unable to process your request at this time";
+	private static final String ERROR = "ERROR";
+
+	private static final String COMPLETE = "COMPLETE";
+	private static final String STATUS = "STATUS";
+	private static final String FAILURE_MSG = "failure_message";
+	private static final String SUCCESS_MSG = "success_message";
+	private static final String FAILURE_SHUTTERFLY_MSG = "failure_shutterfly_message";
+	private static final String METADATA_PREFIX = "metadata.";
+	
+	private static final Logger LOGGER = LoggerFactory.getLogger(PostDocumentDataDocvault.class);
+	private static final List<String> REQ_VARS = List.of(
+			Workflow.DOCUMENT_IDS_MESSAGE,
+			Workflow.DOCLIB_REST_URL, 
+			Workflow.OUTPUT_FILE_DIR, 
+			Workflow.JSON_FILE, 
+			Workflow.SLA_TIME,
+			Workflow.TEMPLATE_NAME,
+			Workflow.DOCLIB_OAUTH_URL,
+            Workflow.DOCLIB_CLIENT_ID,
+            Workflow.DOCLIB_CLIENT_SECRET
+	);
+	private final DateFormat df;
+
+	@Autowired
+	private RestTemplate restTemplate;
+	
+	@Autowired
+	private DocumentMetaDataService documentMetaDataService;
+    
+    @Autowired
+    private HookService hookService;
+    
+    @Autowired
+	private OauthManagerUtil oauthManagerUtil;
+
+    @Autowired
+    private HookTransaction hookTransaction;
+
+	@Value("${DOCLIB_TPS:25}")
+	private int DOCLIB_TPS;
+
+
+	public PostDocumentDataDocvault() {
+		super(REQ_VARS);
+		df = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
+		df.setTimeZone(TimeZone.getTimeZone("UTC"));
+	}
+
+	@Override
+	protected void doExecute(DelegateExecution execution) {
+		try {
+			postDocument(execution);
+		} catch (Exception e) {
+			LOGGER.error("msg: {}", e.getMessage());
+			setExitNow(execution);
+		}
+	}
+
+	@SuppressWarnings("unchecked")
+	void postDocument(DelegateExecution execution) throws OutOfRetriesException {
+		RateLimiter rateLimiter = RateLimiter.create(DOCLIB_TPS);
+
+		List<String> successDocumentList = new ArrayList<>();
+		List<String> failureDocumentList = new ArrayList<>();
+		List<String> failureShutterflyDocumentList = new ArrayList<>();
+		List<DocumentMetaData> documentList = null;
+		DocumentMetaData document = null;
+
+		String jsonFile = execution.getVariable(Workflow.JSON_FILE, String.class);
+
+		try {
+			documentList = WorkFlowUtil.readDocumentsFromJsonFile(jsonFile, "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
+			} catch (IOException e) {
+			LOGGER.error("doExecute Unable to get DocumentMetadata {}={}, {}={} {}", "delegateExecutionId",
+					getDelegateExecutionId(execution), "jsonFile", jsonFile, ExceptionUtils.getStackTrace(e));
+			addErrorMsg("TransformJsonAndGenerateFile-->doExecute-->Unable to get DocumentMetadata",
+					WorkFlowUtil.getStackTrace(e));
+			return;
+		}
+		try {
+			String localUploadTime = df.format(new Date());
+
+			Map<String, Object> successUpdateMap = new HashMap<>(
+					Map.of(METADATA_PREFIX + Workflow.METADATA_DOCLIB_API_RESPONSE, true,
+							METADATA_PREFIX + Workflow.METADATA_DOCLIB_UPLOAD_DATE, localUploadTime,
+							METADATA_PREFIX + Workflow.METADATA_DOCSENTTO_FIELD, Workflow.METADATA_DOCSENTTO_DOCLIB));
+			
+			
+			// emailAlertReq == N or emailAlertReq == Y and SLA not passed
+			Map<String, Object> failureUpdateMap = new HashMap<>(
+					Map.of(METADATA_PREFIX + Workflow.METADATA_DOCLIB_API_RESPONSE, false
+					));
+			
+			 
+			// emailAlertReq == Y and SLA passed
+			Map<String, Object> failureUpdateMapShutterfly = new HashMap<>(
+					Map.of(METADATA_PREFIX + Workflow.METADATA_DOCLIB_API_RESPONSE, false,
+//							METADATA_PREFIX + Workflow.SEND_TO_DOCVAULT, false,
+							METADATA_PREFIX + Workflow.SEND_TO_SHUTTERFLY, true
+					));
+
+			execution.setTransientVariable("successUpdateMap", successUpdateMap);
+			execution.setTransientVariable("failureUpdateMap", failureUpdateMap);
+			
+			processMetadata(execution, documentList, successDocumentList, failureDocumentList, failureShutterflyDocumentList, rateLimiter);
+			
+			
+			// Mongo multi update for sendToShutterfly true
+			if (!failureShutterflyDocumentList.isEmpty()) {
+				documentMetaDataService.saveDocumentMetaDataMulti(failureShutterflyDocumentList, failureUpdateMapShutterfly);
+			}
+			
+			execution.setTransientVariable("successDocumentList", successDocumentList);
+			execution.setTransientVariable("failureDocumentList", failureDocumentList);
+
+		} catch (Exception e) {
+			LOGGER.error("exception to post docLib exception {}", ExceptionUtils.getStackTrace(e));
+			addErrorMsg("Exception", e.getMessage());
+		} finally {
+			execution.setTransientVariable("successDocumentList", successDocumentList);
+			execution.setTransientVariable("failureDocumentList", failureDocumentList);
+			updateHookTransaction(execution, successDocumentList, failureDocumentList, failureShutterflyDocumentList);
+			
+		}
+
+	}
+
+	public void processMetadata(DelegateExecution execution, List<DocumentMetaData> documentList,
+			List<String> successDocumentList, List<String> failureDocumentList, List<String> failureShutterflyDocumentList, RateLimiter rateLimiter) {
+		
+		Integer slaTime = execution.getVariable(Workflow.SLA_TIME, Integer.class);
+		Integer batchSize = execution.getVariable(Workflow.BATCH_SIZE,Integer.class);
+		Map<String, Object> successUpdateMap = (Map<String, Object>) execution.getVariable("successUpdateMap");
+		Map<String, Object> failureUpdateMap = (Map<String, Object>) execution.getVariable("failureUpdateMap");
+		Map<String, String> message = new HashMap<>();
+		long countSuccessUpdated = 0;
+    	long countFailureUpdated = 0;
+    	
+	    HookTransactionMetaData hookTransactionMetaData = null;
+		hookTransactionMetaData = execution.getVariable(Workflow.HOOK_TRANSACTION_METADATA, HookTransactionMetaData.class);
+		List<String> successdocList  = new ArrayList<>();
+		List<String> failuredocList  = new ArrayList<>();
+		int counter = 0;
+		for (DocumentMetaData document : documentList) {
+			try {
+				// if document already has docLibAPIResponse: true, skip sending to DocLib
+				var documentFromDB = documentMetaDataService.getDocumentMetaData(document.getId());
+				if (documentFromDB != null && documentFromDB.getMetadata() != null 
+						&& Boolean.TRUE.equals( documentFromDB.getMetadata().getBoolean(Workflow.METADATA_DOCLIB_API_RESPONSE, false) )) {
+					LOGGER.info("Document already uploaded to DocLib id={}", document.getId());
+					continue;
+				}
+				
+				var endpoint = execution.getVariable(Workflow.DOCLIB_REST_URL, String.class);
+
+				var attachments = new ArrayList<AttachmentMetaData>();
+				var attachmentMetaData = new AttachmentMetaData();
+
+				attachmentMetaData.setFsId(document.getDocumentAttachments().get(0).getFsId());
+				attachmentMetaData.setFileName(document.getDocumentAttachments().get(0).getName());
+				attachmentMetaData.setDateCreated(document.getDateCreated());
+				attachmentMetaData.setSpaceId(document.getSpaceId());
+				attachmentMetaData.setCloudSpaceId(document.getDocumentAttachments().get(0).getSpaceId());
+				attachmentMetaData.setAttachmentId(document.getDocumentAttachments().get(0).getAttachmentId());
+				attachmentMetaData.setFileSize(document.getDocumentAttachments().get(0).getFileSize());
+				attachmentMetaData.setContentType(document.getDocumentAttachments().get(0).getContentType());
+				attachments.add(attachmentMetaData);
+
+				var documentJsonStr = DocumentResponseUtil.buildDocumentResponseInJson(document, attachments);
+
+				var templateName = execution.getVariable(Workflow.TEMPLATE_NAME, String.class);
+
+				documentJsonStr = TemplateFactory.getInstance(templateName).convertWithTemplate(documentJsonStr);
+
+				LOGGER.info("docId={}, documentJsonStr={}", document.getId(), documentJsonStr);
+
+
+				var jsonToDocLib = List.of(documentJsonStr).toString();
+
+				if (jsonToDocLib.charAt(0) == '[' && jsonToDocLib.charAt(jsonToDocLib.length() - 1) == ']') {
+					jsonToDocLib = jsonToDocLib.substring(1, jsonToDocLib.length() - 1);
+				}
+
+				ResponseEntity<String> response = null;
+
+				response = postDocumentToDocLibWithRetry(endpoint, jsonToDocLib, execution,
+						document.getId(), rateLimiter);
+
+				int responseStatus = response.getStatusCode().value();
+
+				if (responseStatus == 200) {
+					if (!ObjectUtils.defaultIfNull(response.getBody(), StringUtils.EMPTY)
+							.contains(UNABLE_TO_PROCESS_REQUEST) && isResponseSuccess(response.getBody())) {
+						LOGGER.info("getting success response and response body {} and payload {}", Encode.forJava(response.getBody()),
+								jsonToDocLib);
+
+						var msg = String.format("Success response %s, for payload %s", response.getBody(),
+								jsonToDocLib);
+						execution.setTransientVariable(Workflow.DOCLIB_API_RESPONSE_SUCCESS_MESSAGE, msg);
+						execution.setTransientVariable(STATUS, COMPLETE);
+
+						successDocumentList.add(document.getId());
+						successdocList.add(document.getId());
+
+					} else {
+						var msg = String.format("Error response %s, for payload %s", response.getBody(), jsonToDocLib);
+
+						execution.setTransientVariable(Workflow.DOCLIB_API_RESPONSE_ERROR_MESSAGE, msg);
+						execution.setTransientVariable(STATUS, ERROR);
+
+						if (checkShutterflyCriteria(document, slaTime)) {
+							failureShutterflyDocumentList.add(document.getId());
+						} else {
+							failureDocumentList.add(document.getId());
+							failuredocList.add(document.getId());
+						}
+						
+					}
+
+				} else {
+
+					if (ObjectUtils.defaultIfNull(response.getBody(), StringUtils.EMPTY)
+							.contains(DUPLICATE_ENTRY_RESPONSE)
+							|| ObjectUtils.defaultIfNull(response.getBody(), StringUtils.EMPTY)
+									.contains(DOCLIB_DUPLICATE_ENTRY_RESPONSE)) {
+						LOGGER.info("getting error response and response body {} and payload {}", Encode.forJava(response.getBody()),
+								jsonToDocLib);
+
+						var msg = String.format("DocLib Error response %s, for payload %s", response.getBody(),
+								jsonToDocLib);
+
+						
+
+						execution.setTransientVariable(Workflow.DOCLIB_API_RESPONSE_ERROR_MESSAGE, msg);
+						execution.setTransientVariable(STATUS, ERROR);
+						successDocumentList.add(document.getId());
+						successdocList.add(document.getId());
+					} else {
+						var msg = String.format("Error response %s, for payload %s", response.getBody(), jsonToDocLib);
+						execution.setTransientVariable(Workflow.DOCLIB_API_RESPONSE_ERROR_MESSAGE, msg);
+						execution.setTransientVariable(STATUS, ERROR);
+
+						if (checkShutterflyCriteria(document, slaTime)) {
+							failureShutterflyDocumentList.add(document.getId());
+						} else {
+							failureDocumentList.add(document.getId());
+							failuredocList.add(document.getId());
+						}
+					}
+				}
+			} catch (OutOfRetriesException e) {
+				failureDocumentList.add(document.getId());
+				LOGGER.error("OutOfRetriesException to post docLib exception {}", ExceptionUtils.getStackTrace(e));
+				addErrorMsg("Exception", e.getMessage());
+			} catch (Exception e) {
+				failureDocumentList.add(document.getId());
+				LOGGER.error("Error to post doclib for documentId {} {}", document.getId(),
+						ExceptionUtils.getStackTrace(e));
+
+			}
+			counter++;
+			
+			if(counter == batchSize) {
+			
+				if (!CollectionUtils.isEmpty(successDocumentList) || !CollectionUtils.isEmpty(failureDocumentList)) {
+	            	LOGGER.debug("Document id list is not empty, using multi update");
+	            	
+	            	if (!CollectionUtils.isEmpty(successdocList) && !MapUtils.isEmpty(successUpdateMap)) {
+	            		countSuccessUpdated = countSuccessUpdated + documentMetaDataService.saveDocumentMetaDataMulti(successdocList, successUpdateMap);
+	            		LOGGER.info("Success Documents updated are {} ", countSuccessUpdated);  
+	            		successdocList.clear();
+	            	}
+	            	
+	            	if (!CollectionUtils.isEmpty(failuredocList) && !MapUtils.isEmpty(failureUpdateMap)) {
+	            		countFailureUpdated = countFailureUpdated + documentMetaDataService.saveDocumentMetaDataMulti(failuredocList, failureUpdateMap);
+	            		LOGGER.info("Failure Documents updated are {} ", countFailureUpdated);
+	            		failuredocList.clear();
+	            	}
+	            }
+				counter = 0;
+			}
+		}
+		if (!CollectionUtils.isEmpty(successdocList) && !MapUtils.isEmpty(successUpdateMap)) {
+			countSuccessUpdated = countSuccessUpdated + documentMetaDataService.saveDocumentMetaDataMulti(successdocList, successUpdateMap);
+			LOGGER.info("Total success documents updated are {} ", countSuccessUpdated);
+			successdocList.clear();
+		}
+		
+		if (!CollectionUtils.isEmpty(failuredocList) && !MapUtils.isEmpty(failureUpdateMap)) {
+    		countFailureUpdated = countFailureUpdated + documentMetaDataService.saveDocumentMetaDataMulti(failuredocList, failureUpdateMap);
+    		LOGGER.info("Total failure Documents updated are {} ", countFailureUpdated);  
+    		failuredocList.clear();
+    	}
+		message.put("count_success_documents_updated", Long.toString(countSuccessUpdated));
+    	message.put("count_failure_documents_updated", Long.toString(countFailureUpdated));
+    	
+    	hookTransaction.updateHookTransaction(execution, hookTransactionMetaData, message);
+	}
+
+	
+	ResponseEntity<String> postDocumentToDocLibWithRetry(String endpoint, String jsonToDocLib,
+			DelegateExecution execution, String docId, RateLimiter rateLimiter) throws OutOfRetriesException {
+		rateLimiter.acquire();
+		ResponseEntity<String> response = null;
+
+    	var docLibUrl = execution.getVariable(Workflow.DOCLIB_OAUTH_URL, String.class);
+        var docLibClientId = execution.getVariable(Workflow.DOCLIB_CLIENT_ID, String.class);
+        var docLibClientSecret = execution.getVariable(Workflow.DOCLIB_CLIENT_SECRET, String.class);
+      
+		
+		var numRetries = execution.getVariable(Workflow.NUM_RETRIES, Number.class);
+		var timeToWaitMS = execution.getVariable(Workflow.TIME_TO_WAIT, Number.class);
+		
+
+		var retryHandler = new RetryOnExceptionHandler(numRetries, timeToWaitMS);
+		String msg;
+		while (retryHandler.shouldRetry()) {
+			try {
+				try {
+					if (retryHandler.isRetry()) {
+						String newToken = oauthManagerUtil.getOauthToken("tokenStargate", docLibClientId, docLibClientSecret, "client_credentials", docLibUrl, true, null);
+						String newAccessToken = "Bearer " + newToken;
+						LOGGER.info("postDocumentToDocLibWithRetry retrying doclib call with new token");
+
+						response = postDocumentToDocLib(endpoint, newAccessToken, jsonToDocLib);
+					} else {
+						String token = oauthManagerUtil.getOauthToken("tokenStargate", docLibClientId, docLibClientSecret, "client_credentials", docLibUrl, false, null);
+						var accessToken = "Bearer " + token;
+						response = postDocumentToDocLib(endpoint, accessToken, jsonToDocLib);
+					}
+					break;
+				} catch (HttpClientErrorException.Unauthorized e) {
+					LOGGER.error("HttpClientErrorException Unauthorized for documentId={}, responseBody={}, statusCode={}", docId, e.getResponseBodyAsString(), e.getStatusCode());
+
+					retryHandler.setTimeToWaitMS(Long.sum(retryHandler.getTimeToWaitMS(), 250L));
+					retryHandler.exceptionOccurred();
+				}catch (HttpClientErrorException e) {
+					LOGGER.error("HttpClientErrorException for documentId={}, responseBody={}, statusCode={}", docId, e.getResponseBodyAsString(), e.getStatusCode());
+
+					return new ResponseEntity<>(e.getResponseBodyAsString(), e.getStatusCode());					
+				} catch (HttpServerErrorException e) {
+					if (e instanceof HttpServerErrorException.GatewayTimeout || e instanceof HttpServerErrorException.BadGateway) {
+						LOGGER.error("HttpClientErrorException for documentId={}, responseBody={}, statusCode={}", docId, e.getResponseBodyAsString(), e.getStatusCode());
+
+
+						retryHandler.setTimeToWaitMS(Long.sum(retryHandler.getTimeToWaitMS(), 250L));
+						retryHandler.exceptionOccurred();
+					}
+					else {
+						LOGGER.error("{} exception for documentId={}, responseBody={}, statusCode={}", e.getClass().getSimpleName(), docId, e.getResponseBodyAsString(), e.getStatusCode());
+
+						return new ResponseEntity<>(e.getResponseBodyAsString(), e.getStatusCode());
+					}
+				} catch (RestClientException e) {
+					LOGGER.error("RestClientException for document {} and exception {} ", docId,
+							ExceptionUtils.getStackTrace(e));
+
+					retryHandler.setTimeToWaitMS(Long.sum(retryHandler.getTimeToWaitMS(), 250L));
+					retryHandler.exceptionOccurred();
+				} catch(RuntimeException  e) {
+					LOGGER.error("{} for document {} and exception {} ", e.getClass().getSimpleName(), docId,
+							ExceptionUtils.getStackTrace(e));
+
+					retryHandler.setTimeToWaitMS(Long.sum(retryHandler.getTimeToWaitMS(), 250L));
+					retryHandler.exceptionOccurred();
+				}
+				
+			} catch (OutOfRetriesException e) {
+				msg = String.format(
+						"RestClientException to endpoint %s and exhausted %s retries with retry time %s millis",
+						endpoint, retryHandler.getNumRetries(), retryHandler.getTimeToWaitMS());
+				LOGGER.error(Encode.forJava(msg));
+
+				addErrorMsg("RestClientException", msg);
+				throw new OutOfRetriesException(msg);
+			}
+		}
+		return response;
+	}
+
+	ResponseEntity<String> postDocumentToDocLib(String endpoint, String accessToken, String document)
+			throws RestClientException {
+		var headers = new HttpHeaders();
+		headers.setContentType(MediaType.APPLICATION_JSON);
+		headers.set("accept", "application/json");
+		headers.set("Authorization", accessToken);
+		HttpEntity<String> request = new HttpEntity<>(document, headers);
+		
+		return restTemplate.postForEntity(Encode.forJava(endpoint), request, String.class);
+	}
+
+	private String getDelegateExecutionId(DelegateExecution execution) {
+		return execution != null ? execution.getId() : "NULL";
+	}
+	
+	protected boolean checkShutterflyCriteria(DocumentMetaData doc, Integer slaTime) {
+		Document metadata = doc.getMetadata();
+		
+		if (metadata.get("emailAlertReq").equals("Y")) {
+			Date dateCreated = doc.getDateCreated();
+			ZonedDateTime zdtDateCreated = ZonedDateTime.ofInstant(dateCreated.toInstant(),
+                    ZoneId.systemDefault());
+			ZonedDateTime createDatePlusSLA = zdtDateCreated.plusMinutes(slaTime * 60);
+			// if sla is passed, return TRUE
+			return createDatePlusSLA.isBefore(ZonedDateTime.now());
+		} else {
+			return false;
+		}
+		
+	}
+	
+	public void updateHookTransaction(DelegateExecution execution, List<String> successList, List<String> failureList, List<String> failureShutterflyList) {
+		HookTransactionMetaData hookTransactionMetaData = null;
+		hookTransactionMetaData = execution.getVariable(Workflow.HOOK_TRANSACTION_METADATA, HookTransactionMetaData.class);
+		var hookExecutionList = hookTransactionMetaData.getHookExecutionList();
+
+    	Map<String, String> hookExecutionMessage = null;
+    	if (hookExecutionList != null && !hookExecutionList.isEmpty() && hookExecutionList.get(0) != null
+    			&& hookExecutionList.get(0).getMessageList() != null && !hookExecutionList.get(0).getMessageList().isEmpty() 
+    			&& hookExecutionList.get(0).getMessageList().get(0) != null) {
+    		
+    		hookExecutionMessage = hookTransactionMetaData.getHookExecutionList().get(0).getMessageList().get(0);
+    		hookExecutionMessage.put(SUCCESS_MSG, successList.toString());
+    		hookExecutionMessage.put(FAILURE_MSG, failureList.toString());
+    		hookExecutionMessage.put(FAILURE_SHUTTERFLY_MSG, failureShutterflyList.toString());
+    		
+    		hookTransactionMetaData.getHookExecutionList().get(0).updateMessage(hookExecutionMessage);
+        	hookTransactionMetaData.setStatus(execution.getVariable(STATUS).toString());
+        	hookService.updateHookTransaction(hookTransactionMetaData);
+    	} else {
+    		hookExecutionMessage = new HashMap<>();
+    		hookExecutionMessage.put(SUCCESS_MSG, successList.toString());
+    		hookExecutionMessage.put(FAILURE_MSG, failureList.toString());
+    		hookExecutionMessage.put(FAILURE_SHUTTERFLY_MSG, failureShutterflyList.toString());
+    	}
+	}
+	
+	public boolean isResponseSuccess(String responseBody) {
+		boolean isSuccess = false;
+		try {
+			Map<String, Object> responseMap = new ObjectMapper().readValue(responseBody, HashMap.class);
+			Map metadata = (Map) responseMap.get("metadata");
+			int count = Integer.parseInt(metadata.get(Workflow.COMMON_SUCCESS).toString());
+			isSuccess = (count > 0);
+		} catch (JsonProcessingException e) {
+			LOGGER.error("Error to parse response object {}", ExceptionUtils.getStackTrace(e));
+		}
+		return isSuccess;
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+===
+
+
+
+import org.apache.commons.text.CaseUtils;
+
+public enum OptumProcessEnum {
+
+    START("start"),
+    END("end"),
+    STD_PROCESS_CATEGORY("stdProcessCategory"),
+    TRANSFORM_MERGE_PROCESS("transformMergeProcess"),
+    TRANSFORM_PROCESS("transformProcess"),
+    DATABASE_INSERT_PROCESS("databaseInsertProcess"),
+    CSV_CLEANUP_FILES_PROCESS("csvCleanupFilesProcess"),
+    SECURE_MESSAGE_PROCESS("secureMessageProcess"),
+    SECURE_MESSAGE_WITH_TEMPLATE_PROCESS("secureMessageWithTemplateProcess"),
+    RABBIT_MQ_PROCESS("rabbitMQProcess"),
+    RABBIT_MQ_FOR_ELGS_PROCESS("rabbitMQForELGSProcess"),
+    RABBIT_MQ_READER_PROCESS("rabbitMQReaderProcess"),
+
+    PREPROCESS_VALIDATION_PROCESS("preprocessValidationProcess"),
+
+    TRANSFORM_MERGE_PROCESS_ASYNC("transformMergeProcessAsync"),
+    SFTP_PROCESS("sftpProcess"),
+
+    METADATA_FILE_PROCESS("metadataFileProcess"),
+    FILE_UNZIP_PROCESS("fileUnzipProcess"),
+    CLEANUP_FILES_CREATE_ACK_PROCESS("cleanupFilesCreateACKProcess"),
+
+    BOUNCED_PROVIDER_EMAIL_ADDRESS_PROCESS("bouncedProviderEmailAddressProcess"),
+
+    RETRIEVE_PROVIDER_EMAIL_ADDRESS_PROCESS("retrieveProviderEmailAddressProcess"),
+    RETRIEVE_CORPORATE_MPIN_PROCESS("retrieveCorporateMPINProcess"),
+
+    PROCESSOR_RESTART_PROCESS("processorRestartProcess"),
+	DELETE_RECORDS_ON_EXPIRY_DATE_PROCESS("deleteRecordsOnExpiryDateProcess"),
+
+    EMAIL_DOCUMENT_PROCESS("emailDocumentProcess"),
+    ORS_INTEGRATION_PROCESS("orsIntegrationProcess"),
+
+    PURGE_DOCUMENT_PROCESS("purgeDocumentProcess"),
+    CSV_TO_FDS_DOCUMENT_PROCESS("csvToFdsDocumentProcess"),
+
+    CSV_SFTP_PROCESS("csvSftpProcess"),
+    CALL_REST_API_PROCESS("callRestApiProcess"),
+
+    NO_CORPORATE_MPIN_OR_NO_EMAIL_ADDRESS_PROCESS("noCorporateMPINOrNoEmailAddressRerouteProcess"),
+
+    SEND_TO_SHUTTERFLY_PROCESS("sendToShutterflyProcess"),
+    SEND_DOCUMENTS_TO_SHUTTERFLY_PROCESS("sendDocumentsToShutterflyProcess"),
+
+    RETRIEVE_CORPORATE_MPIN_V2_PROCESS("retrieveCorporateMPINv2Process"),
+
+    IRIS_COPAY_HOLD_PROCESS("irisCopayHoldProcess"),
+
+    MAP_DOCUMENTS_FROM_DB_TO_SFTP_DIRECTORY_PROCESS("mapDocumentsFromDbToSftpDirectoryProcess"),
+
+    TRANSFORM_MERGE_ATTACHMENTS_UPDATE_DOCUMENT_PROCESS ("transformMergeAttachmentsUpdateDocumentProcess"),
+
+    CLEANUP_FILES_CREATE_ACK_TEMPLATE_PROCESS("cleanupFilesCreateACKProcessWithTemplateProcess"),
+
+    SFTP_OUTBOUND_PROCESS("sftpOutboundProcess"),
+
+    WORKFLOW1("workflow1"),
+
+    CHECK_SPACE_PROPERTIES_PROCESS("checkSpacePropertiesForFormSettings"),
+
+    REQUIRED_FIELD_RULE_PROCESS("requiredFieldRuleProcess"),
+
+    FORM_SUBMITTED_TRANSACTION_SEND_EMAIL_PROCESS("formSubmittedTransactionSendEmailProcess"),
+
+    DOCUMENT_EXPIRATION_EMAILS_PROCESS("documentExpirationEmailsProcess"),
+    MATCH_AND_MERGE_DOCUMENTS_FROM_DB_PROCESS("matchAndMergeDocumentsFromDbProcess"),
+    SECURE_MESSAGE_WITH_UPDATE_DOCUMENT_PROCESS("secureMessageWithUpdateDocumentProcess"),
+    EMAIL_PROCESSOR_TRANSACTION_METADATA_PROCESS("emailProcessorTransactionMetadataProcess"),
+    SIMPLE_EMAIL_PROCESS("simpleEmailProcess"),
+
+    POST_DOCUMENT_DOCVAULT_PROCESS,
+    POST_DOCUMENT_DOCVAULT_FOR_ELGS_PROCESS,
+    PROVIDER_EMAIL_NOTIFICATION_POST_PROCESS("providerEmailNotificationPostProcess"),
+    PROVIDER_EMAIL_NOTIFICATION_PROCESS("providerEmailNotificationProcess"),
+	APPEALS_RESPONSE_FILE_PROCESS("AppealsResponseFileProcess");
+
+
+    private final String name;
+
+    /*
+     * Add an enum as all caps with underscore word separator
+     * Do not use parens with String and this constructor
+     * will create a String in camel case with the first letter in lowercase
+     * We are keeping previous entered Strings for backward compatibility*
+     * Comma separated enum list, last entry closes with semicolon
+     * Keep the name below 46 characters
+     */
+    private OptumProcessEnum() {
+        name = CaseUtils.toCamelCase(this.name(), false, '_');
+    }
+
+    /*
+     * Enter a String when adding an enum
+     * The toString() method will return the String you enter
+     * By convention we are starting the names for processes with a lowercase letter
+     * Keep the name below 46 characters (example: with concat of Process:1:22916 want to keep below 64 for id_ column)
+     */
+    private OptumProcessEnum(String value) {
+        this.name = value;
+    }
+
+    @Override
+    public String toString() {
+        return this.name;
+    }
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+=====
+
+
+
+import org.apache.commons.text.CaseUtils;
+
+public enum OptumTaskEnum {
+	
+    STD_TASK_CATEGORY("stdTaskCategory"),
+    
+    CLEAN_INGEST_TASK("CleanIngestFiles"),
+    MERGE_TASK("MergeFiles"),
+    TRANSFORM_TASK("TransformToPdf"),
+    WAIT_TASK("RelayMetaData"),
+    CREATE_DOCUMENT_TASK("CreateDocument"),
+    UPDATE_DOCUMENT_TASK("UpdateDocument"),
+    CREATE_ATTACHMENT_TASK("CreateAttachment"),
+    DELETE_INGEST_FILES_TASK("DeleteIngestFiles"),
+    SWITCH_TO_ASYNC_TASK("SwitchToAsync"),
+    DATABASE_INSERT_TASK("DatabaseInsert"),
+    
+    SECURE_MESSAGE_TASK("SecureMessage"),
+    SECURE_MESSAGE_WITH_TEMPLATE_TASK("SecureMessageWithTemplate"),
+    REQUIRED_VARS_FOR_SECURE_MESSAGE_WITH_TEMPLATE_TASK("RequiredVarsForSecureMessageWithTemplate"),
+    OAUTH_FOR_SMAPI_TASK("OauthForSmapi"),
+    RABBIT_MQ_TASK("RabbitMQ"),
+    RABBIT_MQ_READER_TASK("RabbitMQReader"),
+    RABBIT_MQ_POST_TASK("RabbitMQPost"),
+    
+    PREPROCESS_VALIDATION_TASK("PreprocessValidation"),
+    CLEANUP_RABBIT_MQ_READER_TASK("CleanupRabbitMQReader"),
+   
+    ERROR_HANDLER_TASK("ErrorHandler"),
+
+    SFTP_TASK("Sftp"),
+    SFTP_CLEANUP_TASK("SftpCleanup"),
+    
+    CSV_SFTP_TASK("CsvSftp"),
+    CALL_REST_API_TASK("CallRestApi"),
+      
+    METADATA_FILE_TASK("MetadataFile"),
+    FILE_UNZIP_TASK("FileUnzip"),
+    CLEANUP_FILES_CREATE_ACK_TASK("CleanupFilesCreateACK"),
+    CREATE_ACK_FILE_TASK("CreateACKFile"),
+    SEND_ACK_FILE_TO_SFTP_SERVER_TASK("SendACKFileToSftpServer"),
+    MOVE_ORIGINAL_ZIP_TO_ARCHIVE_FOLDER_TASK("MoveOriginalZipToArchiveFolder"),
+    DELETE_WORKING_DIRECTORY_TASK("DeleteWorkingDirectory"),
+    CSV_DELETE_WORKING_DIRECTORY_TASK("CSVDeleteWorkingDirectory"),
+	
+	CSV_UPDATE_PROCESSOR_TRANSACTION_STATUS_TASK("CsvUpdateProcessorTransactionStatus"),
+	
+	CSV_MOVE_ORIGINAL_TO_ARCHIVE_FOLDER_TASK("CsvMoveOriginalToArchiveFolder"),
+    
+	IDENTIFY_DOCUMENTS_TASK("IdentifyDocuments"),
+	MANIPULATE_PDF_FILE_TASK("ManipulatePdfFile"),
+	IDENTIFY_SHUTTERFLY_DOCUMENTS_TASK("IdentifyShutterflyDocuments"),
+    
+	OAUTH_TASK("Oauth"),
+    RETRIEVE_PROVIDER_EMAIL_ADDRESS_TASK("RetrieveProviderEmailAddress"),
+	CREATE_SHUTTERFLY_DOCUMENTS("CreateShutterflyDocuments"),
+    RETRIEVE_CORPORATE_MPIN_TASK("RetrieveCorporateMPIN"),
+    RETRIEVE_CORPORATE_MPIN_V2_TASK("RetrieveCorporateMPINv2"),
+    SAVE_CORPORATE_MPIN_TASK("SaveCorporateMPIN"),
+    EMAIL_FDS_SSMO("EmailFdsSsmo"),
+
+    PROCESSOR_RESTART_TASK("ProcessorRestart"),
+    CREATE_ONE_ZIPFILE_PRINTSERVICES_TASK("CreateOneZipfilePrintServices"),
+    DELETE_RECORDS_ON_EXPIRY_DATE_TASK("DeleteRecordsOnExpiryDate"),
+
+    OAUTH_MANAGER_TASK("OauthManager"),
+    BUILD_EMAIL_TASK("BuildEmail"),
+    SEND_EMAIL_TASK("SendEmail"),
+    CONNECT_AND_RETRIEVE_DOC_RECORD_TASK("ConnectAndRetrieveDocRecord"),
+    UPDATE_DOCUMENT_SENT_TO_PRINT_SERVICES_IF_NEEDED("UpdateDocumentSentToPrintServicesIfNeeded"),
+    
+    NO_CORPORATE_MPIN_OR_NO_EMAIL_ADDRESS_DOCUMENTS_TASK("IdentifyNoMPINOrNoEmailAddressDocuments"),
+    CONNECT_AND_RETRIEVE_DOCUMENTS_TASK("ConnectAndRetrieveDocuments"),
+
+	RABBIT_MQ_RECORD_INGEST_TASK("RabbitMqRecordIngestTask"),
+
+	MAP_FIELDS_TO_ORS_API("MapFieldsToOrsApi"),
+
+	SEND_DOCUMENT_TO_ORS_API("SendDocumentToOrsApi"),
+
+	PURGE_DOCUMENT_TASK("PurgeDocument"),
+
+	JSON_FILE_TO_REST_API("JsonFileToRestApi"),
+
+	CSV_TO_JSON_FILE_TASK("CsvToJsonFile"),
+
+	ORS_SOAP_LOGGER("ORSSoapLogger"),
+
+	HTTP_POST("HttpPost"),
+
+	HTTP_URL_ENCODED_FORM_POST("HttpUrlEncodedFormPost"),
+
+	HTTP_GET("HttpGet"),
+
+    JSON_PARSER("JsonParser"),
+
+    IRIS_COPAY_HOLD_WRAPPER("IrisCopayHoldWrapper"),
+    
+    REQUIRED_VARS_FOR_MAP_DOCUMENTS_TO_SFTP_DIRECTORY_TASK("RequiredVarsForMapDocumentsToSftpDirectoryTask"),
+    
+    IDENTIFY_DOCUMENTS_FROM_DB("IdentifyDocumentsFromDb"),
+    TRANSFORM_JSON_FILE_WITH_TEMPLATE("TransformJsonFileWithTemplate"),
+    
+	RETRIEVE_ATTACHMENTS_AND_FORMPDF("RetrieveAttachmentsAndFormPdf"),
+
+	TRANSFORM_MERGE_TASK("TransformAndMerge"),
+
+	UPDATE_DOCUMENT_API_TASK("UpdateDocumentApi"),
+
+	VERIFY_REQ_VARS_FOR_TRANSFORM_PROCESS("VerifyRequiredVarsForTransformProcess"),
+	
+	REQUIRED_VARS_FOR_CLEANUP_FILES_CREATE_ACK_TEMPLATE_TASK("RequiredVarsCleanUpAndACkTemplate"),
+	
+	RETRIEVE_PROCESSOR_TRANSACTIONS_TASK("RetrieveProcessorTransaction"),
+	
+	CREATE_ACK_TEMPLATE_TASK("CreateAckTemplate"),
+	
+	SEND_FILE_TO_SFTP_TASK("SendFileToSFTP"),
+
+	VERIFY_REQ_VARS_FOR_SFTP_PROCESS("VerifyRequiredVarsForSftpProcess"),
+
+	PERFORM_OUTBOUND_SFTP("PerformOutboundSftp"),
+	
+	SFTP_OUTBOUND_SEND_EMAIL_NOTIFICATION_TASK("SftpOutboundSendEmailNotification"),
+
+	RETRIEVE_MERGED_ATTACHMENT("RetrieveAttachment"),
+
+    UPDATE_PROCESSOR_TRANSACTION_LIST_TASK_1("UpdateProcessorTransactionList_1"),
+
+    UPDATE_PROCESSOR_TRANSACTION_LIST_TASK_2("UpdateProcessorTransactionList_2"),	
+
+	SEND_RESPONSE_TO_SFTP_TASK("SendResponseFileToSftp"),
+	
+	IDENTIFY_DOCUMEMTS_FROM_DB_TASK("IdentifyDocumentsFromDb"),
+
+	CHECK_SPACE_PROPERTIES_FOR_FORM_SETTING("CheckSpacePropertiesForFormSetting"),
+	
+    GET_SPACE_PROPERTIES_TASK("GetSpacePropertiesTask"),
+	
+	VERIFY_REQ_VARS_FOR_SPACE_PROPERTIES("VerifyRequiredVarsForSpaceProperties"),
+	
+	CALL_NEXT_PROCESS_BASED_ON_CRITERIA("CallNextProcessBasedOnCriteria"),
+	
+	OAUTH_MANAGER_LIST_TASK("OauthManagerList"),
+	
+	
+    SEND_DOCUMENT_TRANSACTION_EMAIL_TASK("SendDocumentTransactionEmail"),
+    EMAIL_SIMPLE(),
+	PROCESS_REQUIRED_FIELD_RULE_TASK("ProcessRequiredFieldRule"),
+	
+	DOCUMENT_EXPIRATION_EMAILS_TASK("DocumentExpirationEmails"),
+	
+	SECURE_MESSAGE_LIST_WITH_TEMPLATE_TASK("SecureMessageListWithTemplate"),
+	REQUIRED_VARS_FOR_MATCH_AND_MERGE_DOCUMENTS_FROM_DB("RequiredVarsForMatchAndMergeDocumentsFromDb"),
+	
+	UPDATE_DOCUMENT_WITH_HOOK_ELEMENTS("UpdateDocumentWithHookElements"),
+	
+	MATCH_AND_MERGE_DOCUMENTS_FROM_DB("MatchAndMergeDocumentsFromDB"),
+	
+     REQUIRED_VARS_FOR_EMAIL_PROCESSOR_TRANSACTION_METADATA("RequiredVarsForEmailProcessorTransactionMetadata"),
+     
+     IDENTIFY_PROCESSOR_TRANSACTION_METADATA_FROM_DB("IdentifyProcessorTransactionMetadataFromDb"),
+     
+     SET_PROCESSOR_TRANSACTION_METADATA_FOR_COSMOS_PRA("SetProcessorTransactionMetadataForCosmosPRA"),
+     
+     SEND_EMAIL_LIST("SendEmailList"),
+     
+     UPDATE_PROCESSOR_TRANSACTION_METADATA("UpdateProcessorTransactionMetadata"),
+     
+     CLEAN_INGEST_FILES("CleanIngestFiles"),
+     
+     ACCESS_TOKEN_DOCVAULT_TASK("AccessTokenDocvault"),
+     POST_DOCUMENT_DATA_DOCVAULT_TASK("PostDocumentDataDocvault"),
+     UPDATE_DOCUMENT_LIST_DOCVAULT_TASK("UpdateDocumentListDocvault"),
+     CHECK_FOR_DUPLICATE_TASK("CheckForDuplicate"),
+     SEND_EMAIL_REQUEST_TO_PEN ("SendEmailRequestToPEN"),
+     REQUIRED_VARS_FOR_PROVIDER_EMAIL_NOTIFICATION("RequiredVarsForProviderEmailNotification"),
+	
+	REQUIRED_VARS_APPEALS_RESPONSE_FILE_PROCESS("RequiredVarsAppealsResponseFileProcess"),
+
+    RETRIEVE_EMAIL_FROM_DIGITAL_SECURITY("RetrieveEmailFromDigiSec"),
+	TRANSFORM_JSON_AND_GENERATE_FILE("TransformJsonAndGenerateFile");
+	
+	private final String name;
+	
+	/*
+	 * Add an enum as all caps with underscore word separator
+	 * Do not use parens with String and this constructor
+	 * will create a String in camel case with the first letter as a cap
+	 * to use for the toString() method when creating task services
+	 * We are keeping previous entered Strings for backward compatability
+	 * Comma separated enum list, last entry closes with semicolon
+	 * Keep the name below 46 characters
+	 */
+	private OptumTaskEnum() {
+		name = CaseUtils.toCamelCase(this.name(), true, '_');
+	}
+	
+	/*
+	 * Enter a String when adding an enum
+	 * The toString() method will return the String you enter
+	 * By convention we are starting the Service names for tasks with a cap
+	 * Keep the name below 46 characters (example: with concat of TaskWrap:1.22676 want to keep below 64 for id_ column)
+	 */
+	private OptumTaskEnum(String value) {
+		this.name = value;		
+	}
+	
+	@Override
+	public String toString() {
+		return this.name;
+	}
+
+}
 
 
 
@@ -1296,381 +1379,774 @@ public class USPClaims extends ClientMetadata {
 =====
 
 
+/**
+ * Fields in interface are public static final by default.
+ */
+public final class Workflow {
 
-public class USPPRA extends ClientMetadata {
+    public static final String POD_NAME = "podName";
+    public static final String NUM_RETRIES = "numRetries";
+    public static final String TIME_TO_WAIT = "timeToWaitMS";
+    public static final String CASE_ID = "caseId";
+    public static final String NSG_ID = "ngsId";
+    public static final String ORIGINAL_ZIP_FILE_NAME = "originalZipFileName";
+    public static final String DATE_MODIFIED = "dateModified";
+    public static final String CREATED_DATE = "createdDate";
+    public static final String LETTER_GROUP_ID = "letterGroupId";
+    public static final String LETTER_TYPE = "letterType";
+    public static final String HISTORYID = "historyId";
+    public static final String NOTIFICATION_LETTER_ID = "NotificationLetterID";
+    public static final String UNIQUEFIELDTOGROUPDOCS = "UniqueFieldToGroupDocs";
+
+    /* Bounced provider email address workflow */
+    public static final String METADATA_PROVIDER_EMAIL_ID = "metadata.providerEmailId";
+    public static final String METADATA_MESSAGE_ID = "metadata.messageId";
+    public static final String METADATA_RESPONSE_FILE_NAME = "metadata.responseFileName";
+    public static final String METADATA_SHUTTERFLY_FILE_NAME = "metadata.shutterflyFileName";
+    public static final String METADATA_BOUNCED_EMAIL_FILE_NAME = "metadata.bouncedEmailFileName";
+    public static final String MESSAGE_ID = "message_id";
+    public static final String SPACE_ID = "spaceId";
+    public static final String SPACE__ID = "space_id";
+    public static final String APP_ID_V1 = "appIdentifier";
+    public static final String APP_ID = "appId";
+    public static final String APP_IDENTIFIER = "appIdentifier";
+    public static final String APP_SECRET = "appSecret";
+    public static final String CLIENT_IDENTIFIER = "clientIdentifier";
+    public static final String CLIENT_PASS = "clientSecret";
+    public static final String START_DATE_IN_DAYS = "startDateInDays";
+    public static final String MAX_DOCUMENTS_OCCURS = "maxDocumentsOccurs";
+    public static final String BATCH_SIZE = "batchSize";
+    public static final String DOCUMENT_STATUS_AVAILABLE = "AVAILABLE";
+    public static final String NO_OF_BUSINESS_DAYS = "noOfBusinessDays";
+    public static final String NO_OF_DAYS = "noOfDays";
+    public static final String EMAIL_TERMINATION_WINDOW = "emailTerminationWindow";
+    public static final String ATTESTATION_COMPLETED = "attestationCompleted";
+    public static final String MANUAL_OUTREACH = "MANUAL_OUTREACH";
+    public static final String ELECTRONIC_OUTREACH = "ELECTRONIC_OUTREACH";
+    public static final String INITIATE_OUTREACH = "INITIATE_OUTREACH";
+    public static final String VERIFIED = "VERIFIED";
+    public static final String TERMED = "TERMED";
+    public static final String STOP_SENDING_EMAIL = "stopSendingEmail";
+    public static final String DOCUMENTS_COLLECTION = "documents";
+    public static final String HOOK = "hook";
+    public static final String DEFAULT_FILE_SEPARATOR = "/";
+    public static final String ACTIVITI_PROCESS_DELEGATE = "CreateOneZipfilePrintServices";
+    public static final String PRINT_SERVICES_MANIFEST = "printServicesManifest";
+    public static final String COMPANION_ZIP_FILE_NAME_MESSAGE = "companion_zip_file_name_message";
+    public static final String METADATA_DOCSENTTO_FIELD = "docSentTo";
+    public static final String METADATA_DOCSENTTO_VALUE = "PrintServices";
+    public static final String METADATA_DOCSENTTO_DOCVAULT = "DocVault";
+    public static final String METADATA_DOCVAULT_API_RESPONSE = "docVaultAPIResponse";
+    public static final String METADATA_DOCVAULT_UPLOAD_DATE = "docVaultUploadDate";
+    public static final String METADATA_UPDATE_DOCLIB_API_RESPONSE = "updateDocLibAPIResponse";
+    public static final String METADATA_UPDATE_DOCLIB_UPLOAD_DATE = "updateDocLibUploadDate";
+    public static final String METADATA_SEND_PEN_API_REQUEST = "sendPENAPIRequest";
+    public static final String METADATA_SEND_PENAPI_REQUEST = "metadata.sendPENAPIRequest";
+
+    public static final String DOCVAULT_API_RESPONSE_SUCCESS_MESSAGE = "docvault_api_response_success_message";
+    public static final String DOCVAULT_API_RESPONSE_ERROR_MESSAGE = "docvault_api_response_error_message";
+    public static final String REPRNT_SENT_TO_SHUTTERFLY = "rprntSentToSF";
+    public static final String SKIP_SEND_TO_SHUTTERFLY = "skipSendToShutterfly";
+    
+    /* Manipulate PDF */
+    public static final String ERROR_MAP = "errorMap";
+    public static final String NEW_ERRORS = "newErrors";
+    public static final String DOCUMENT = "Document";
+    public static final String ATTACHMENT = "Attachment";
+    public static final String ATTACHMENTS = "Attachments";
+    public static final String LIST_DOCUMENT_METADATA = "listDocumentMetaData";
+    public static final String ZIP_FILE_PATH = "zipfile_path";
+    public static final String EXECUTION_ERROR_CODE = "executionErrorCode";
+    public static final String EXECUTION_ERROR_SOURCE_MODULE = "executionErrorSourceModule";
+    public static final String EXECUTION_ERROR_MSG = "executionErrorMsg";
+    public static final String DOCUMENT_ABSOLUTE_PATH = "absolutePath";
+    public static final String PROCESSOR_FILE_TASK_ID = "processorFileTaskId";
+    public static final String PROCESSOR_METADATA = "processorMetaData";
+    public static final String PROCESSOR = "processor";
+    public static final String ADDRESS_BLOCK_X = "addressBlockX";
+    public static final String ADDRESS_BLOCK_Y = "addressBlockY";
+    public static final String IDENTIFIER_FONT_SIZE = "identifierFontSize";
+    public static final String RECEIVER_IDENTIFIER = "receiverIdentifier";
+    public static final String SKIP_MANIPULATE_PDF_FILE = "skipManipulatePdfFile";
+    public static final String TURN_PEN = "turnPEN";
+    public static final String WRITE_ENCRYPTED_PDF = "writeEncryptedPDF";
+    public static final String MANIPULATE_PDF_FILE_MESSAGE = "manipulate_pdf_file_message";
+    public static final String VALIDATE_CORPORATE_MPIN = "validateCorprateMPIN";
+
+    /* Oauth vars. */
+    public static final String CLIENT_ID = "client_id";
+    public static final String CLIENT_SECRET = "client_secret";
+    public static final String CLOUD_CLIENT_ID = "cloud_client_id";
+    public static final String CLOUD_CLIENT_SECRET = "cloud_client_secret";
+    public static final String FDS_CLOUD_AUTH_URL = "fdsCloudAuthUrl";
+    public static final String GRANT_TYPE = "grant_type";
+    public static final String CLOUD_GRANT_TYPE = "cloud_grant_type";
+    public static final String SMAPI_CLIENT_ID = "smapi_client_id";
+    public static final String SMAPI_CLIENT_SECRET = "smapi_client_secret";
+    public static final String SMAPI_GRANT_TYPE = "smapi_grant_type";
+    public static final String SMAPI_OAUTH_URL = "sm_oauth_url";
+    public static final String SMAPI_OATH_ERROR_MESSAGE = "smapi_oauth_error_message";
+    public static final String FDS_CLOUD_GET_DOCUMENT_URL = "fdsCloudGetDocumentUrl";
+    public static final String FDS_CLOUD_GET_ATTACHMENT_URL = "fdsCloudGetAttachmentUrl";
+
+    /* SecureMessaging vars. */
+    public static final String SM_API_URL = "sm_api_url";
+    public static final String SUBJECT = "subject";
+    public static final String BODY = "body";
+    public static final String SENDER_MAILBOX_ID = "sender_mailbox_id";
+    public static final String RECIPIENT_EMAIL = "recipient_email";
+    public static final String RECIPIENT_SPACE_ID = "recipient_space_id";
+    public static final String SMAPI_OAUTH_TOKEN = "smapi_oauth_token";
+    public static final String TEMPLATE_ID = "template_id";
+    public static final String TEMPLATE_NAME = "template_name";
+    public static final String FILE_PATH = "filePath";
+    public static final String LOCATION =  "location";
+    public static final String PEN_TEMPLATE_ID = "pen_template_id";
+    public static final String SM_TEMPLATE_ID = "sm_template_id";
+    public static final String SM_TEMPLATE_CONTEXT = "sm_template_context";
+    public static final String DOCUMENT_RECIPIENT_EMAIL_PATH = "document_recipient_email_path";
+    public static final String RECIPIENT_MAILBOX_ID_PATH = "recipient_mailbox_id_path";
+    public static final String DOCUMENT_METADATA = "metadata";
+    public static final String SMAPI_EXCEPTION = "smapi_exception";
+
+    /* UpdateDocumentListWithApi vars. */
+    public static final String DOCUMENT_UPDATE_FLAG_PATH = "document_update_flag_path";
+    public static final String DOCUMENT_FORMAT_FIELD = "document_format_field";
+    public static final String UPDATE_DOCUMENT_WITH_API_SUCCESS_MESSAGE = "update_document_with_api_success_message";
+    public static final String IDENTIFY_DOCUMENTS_SUCCESS_MESSAGE = "identify_documents_success_message";
+    public static final String UPDATE_DOCUMENT_WITH_API_FAILURE_MESSAGE = "FDS PUT Document failed.";
+    public static final String PREPOSTENDED = "metadata.prepostEnded";
+    
+
+    /* TranformMerge vars. */
+    public static final String TRANSFORM_MERGE_SUCCESS_MESSAGE = "transform_merge_success_message";
+    public static final String TRANSFORM_MERGE_FAILURE_MESSAGE = "transform_merge_failure_message";
+    public static final String TRANSFORM_MERGE_FILES_NOT_FOUND_TO_MERGE = "Files not found to merge";
+    public static final String TRANSFORM_MERGE_INVALID_SPACE_ID = "Not a valid space Id";
+    public static final String TRANSFORM_MERGE_NO_MERGED_PDF_FOUND = "Merge PDF not found";
+    public static final String TRANSACTION_ID_IS_EMPTY = "transactionID can't be Empty!";
+    public static final String TRANSACTION_ID_IS_NULL = "transactionID can't be Null";
+    public static final String METADATA_TRANSACTION_ID = "transactionId";
+    public static final String REQUIRED_SECTIONS = "Required sections Document metadata OR FormData OR confirmation OR transactionID field missing";
+
+    /* CallRestApi vars */
+    public static final String CALL_REST_API_SUCCESS_MESSAGE = "call_rest_api_success_message";
+    public static final String UNSUPPORTED_METHOD = "UNSUPPORTED_METHOD";
+    public static final String INVALID_JOB_TYPE = "REST_API_JOB_REQUIRED";
+    public static final String REST_URI = "uri";
+    public static final String REST_METHOD = "method";
+    public static final String REST_REQUEST = "request";
+    public static final String REST_SOURCE_TYPE = "sourceType";
+    public static final String REST_SOURCE_ID = "sourceId";
+    public static final String REST_SERVER_TYPE = "serverType";
+    public static final String REST_SERVER_NAME = "serverName";
+    public static final String REST_JOB_TYPE = "jobType";
+    public static final String REST_JOB_ID = "jobId";
+    public static final String REST_CLIENT_ID = "clientId";
+    public static final String REST_CLIENT_SECRET = "clientSecret";
+    public static final String REST_APP_IDENTIFIER = "appIdentifier";
+    public static final String REST_CONFIG_SPACE_ID = "configSpaceId";
+    public static final String REST_RESPONSE = "response";
+    public static final String REST_TRX_ID = "transactionId";
+    public static final String REST_VERSION = "version";
+    public static final String REST_CSV_FILE_NAME = "csvFileName";
+    public static final String REST_JSON_FILE_NAME = "jsonFileName";
+    public static final String REST_TARGET_TYPE = "targetType";
+    public static final String REST_TARGET_ID = "targetId";
+    public static final String REST_STATUS = "status";
+    public static final String REST_API_JOB_ATTRS = "restApiJobAttrs";
+    public static final String REST_COMPLETE = "COMPLETE";
+    public static final String REST_COMPLETE_WITH_ERRORS = "COMPLETE_WITH_ERRORS";
+    public static final String REST_DB_STATUS_OBJ_ID = "dbStatusObjId";
+    public static final String REST_OAUTH_TOKEN = "oauthToken";
+    public static final String REST_ACCESS_TOKEN = "accessToken";
+    public static final String REST_CSV_PROCESSOR_ROW_TASK_RECORD_NOT_LOCATED = "CsvProcessorRowTask record could not be located";
+    public static final String REST_CSV_PROCESSOR_ROW_TASK_RECORD_NOT_UPDATED = "CsvProcessorRowTask record could not be updated";
+    public static final String REST_ERROR_MSG = "Error Executing CallRestApi";
+    public static final String REST_X_TRX_HEADER = "X-Transaction-Id";
+    public static final String REST_HTTP_REQUEST_EXECUTION_ERROR = "Error Executing Http Request";
+
+    public static final String REST_LAST_RECORD = "lastRecord";
+    public static final String REST_RECORD_NUMBER = "recordNumber";
+    public static final String REST_CSV_PROCESSOR_ROW_TASK = "csvProcessorRowTask";
+    /* PreprocessValidation vars. */
+    public static final String PREPROCESS_VALIDATION_SUCCESS_MESSAGE = "preprocess_validation_success_message";
+    public static final String PREPROCESS_VALIDATION_ERROR_MESSAGE = "preprocess_validation_error_message";
+    /* OptumPreprocessValidation vars. */
+    public static final String SOURCE = "source";
+    
+    public static final String USE_FDS_CLOUD = "useFDSCloud";
+
+    /* RabbitMq vars. */
+    public static final String NAME = "name";
+    public static final String HOST = "host";
+    public static final String VHOST = "vhost";
+    public static final String PORT = "port";
+    public static final String USER = "user";
+    public static final String PASS = "pass";
+    public static final String EXCHANGE = "exchange";
+    public static final String KEY = "key";
+    public static final String MAX_RETRIES = "maxRetries";
+    public static final String MAX_RETRIES_VALUE = "3";
+    public static final String RETRY_SLEEP_TIME = "retrySleepTime";
+    public static final String RETRY_SLEEP_TIME_VALUE = "2000";
+
+    public static final String RABBITMQ_SUCCESS_MESSAGE = "rabbitmq_success_message";
+    public static final String RABBITMQ_ERROR_MESSAGE = "rabbitmq_error_message";
+    public static final String RABBITMQ_POST_FAILED = "rabbitmq_post_failed";
+    public static final String RABBITMQ_READER_SUCCESS_MESSAGE = "rabbitmq_reader_success_message";
+    public static final String RABBITMQ_READER_ERROR_MESSAGE = "rabbitmq_reader_error_message";
+    public static final String SMAPI_SUCCESS_MESSAGE = "smapi_success_message";
+    public static final String SMAPI_ERROR_MESSAGE = "smapi_error_message";
+    public static final String MPIN_SUCCESS_MESSAGE = "mpin_success_message";
+    public static final String MPIN_ERROR_MESSAGE = "mpin_error_message";
+    public static final String RABBITMQ_READER_INGEST_FOLDER = "ingestFolder";
+    public static final String RABBITMQ_RECORD_INGEST_FOLDER = "recordingestfolder";
+    public static final String PROCESSOR_TRANSACTION_INGEST_FOLDER = "processorTransactionIngestFolder";
+    
+    public static final String ERROR_MESSAGE = "error_message";
+
+    /* Processor vars */
+    public static final String PROCESS_KEY = "process_key";
+    public static final String JOB = "job";
+    /* file unzip vars. */
+    public static final String UNZIP_ERROR_MESSAGE = "unzip_error_message";
+    public static final String UNZIP_SUCCESS_MESSAGE = "unzip_success_message";
+    /* Metadata file. */
+    public static final String METADATAFILE_ERROR_MESSAGE = "metadata_error_message";
+    public static final String METADATAFILE_SUCCESS_MESSAGE = "metadata_success_message";
+
+    /* Generic OATH vars */
+    public static final String OAUTH_ERROR_MESSAGE = "oauth_error_message";
+    public static final String OAUTH_URL = "fdsAuthUrl";
+    public static final String OAUTH_TOKEN = "oauth_token";
+    public static final String CORRELATION_IDS = "CorrelationID";
+    public static final String OAUTH_TOKEN_V1 = "oauthToken";
+    public static final String PES_OAUTH_URL = "pesAuthUrl";
+    public static final String PES_APP_ID = "pesAppId";
+    public static final String PES_APP_SECRET = "pesAppSecret";
+    public static final String PES_GRANT_TYPE = "pesGrantType";
+
+    /* PDO fields  */
+    public static final String TIN = "tin";
+    public static final String MPIN = "mpin";
+    public static final String FILE_NAME = "fileName";
+
+    public static final String FILE_TYPE = "fileType";
+    public static final String PROVIDER_EMAIL_ID = "providerEmailId";
+    public static final String PROVIDER_EMAIL_ID_LIST = "providerEmailIdList";
+    public static final String SUBSCRIBE_TO_EMAIL = "subscribeToEmail";
+    public static final String FREQUENCY = "frequency";
+    public static final String DELIVERY_METHOD = "deliveryMethod";
+    public static final String OK_TO_CHANGE_PDO_IND = "okToChangePDOInd";
+    public static final String AUTO_EDEL_UPDATE_IND = "autoEdelUpdateInd";
+
+    public static final String FDS_DOCUMENT_URL = "fdsDocumentUrl";
+    public static final String FDS_AUTH_URL = "fdsAuthUrl";
+    public static final String PROVIDER_EMAIL = "providerEmailId";
+    public static final String WEEK_DAY = "weekDay";
+    public static final String SUBCATEGORY = "subCategory";
+
+    /* Retrieve Corporate MPIN Provider Search */
+    public static final String ERROR_RETRIEVE_MPIN_V2 = "RetrieveCorporateMPIN_V2 error";
+    public static final String ERROR_SAVE_MPIN = "SaveCorporateMPIN error";
+    public static final String ERROR_NO_MPIN_EMAIL = "No MPIN Send Email error";
+
+    public static final String PROV_MPIN = "mpin";
+    public static final String PROV_CORP_MPIN = "corporateMpin";
+    public static final String PROV_APP_NAME = "appName";
+    public static final String PROV_PROCESS_KEY = "process_key";
+    public static final String PROV_AUTH_URL = "provAuthUrl";
+    public static final String PROV_SEARCH_URL = "provSearchUrl";
+    public static final String PROV_GRANT_TYPE = "grantType";
+    public static final String PROV_THROTTLE_COUNT_PER_TIME_PERIOD = "throttleCountPerTimePeriod";
+    public static final String PROV_THROTTLE_PERIOD_MILLISECONDS = "throttlePeriodMilliSeconds";
+
+    public static final String PROV_CLIENT_ID = "inpClientId";
+    public static final String PROV_CLIENT_SECRET = "inpClientSecret";
+    public static final String PROV_ACTOR = "actor";
+    public static final String PROV_SCOPE = "scope";
+    public static final String PROV_CORRELATION_ID = "correlationId";
+    public static final String PROV_ATTRIBUTE_SET = "attributeSet";
+    public static final String PROV_COUNT = "count";
+
+    /* Retrieve Corporate MPIN V2 Provider Timeout configurations */
+    public static final String RETRIEVE_CORPMPIN_RETRIES = "retrieveCorpMpinRetries";
+    public static final String RETRIEVE_CORPMPIN_RETRY_DEFAULT_CALL_INTERVAL = "retrieveCorpMpinRetryDefaultCallInterval";
+    public static final String CORPMPIN_RETRY_SLEEP_PERIOD_INTERVAL = "retrieveCorpMpinRetrySleepPeriodInterval";
+
+    /* Retrieve Corporate MPIN Send Email */
+    public static final String SMTP_HOST_NAME = "smtpHostName";
+    public static final String SMTP_PORT_NUMBER = "smtpPortNumber";
+    public static final String EMAIL_SENDER = "emailSender";
+    public static final String EMAIL_RECEIVER = "emailReceiver";
+    public static final String EMAIL_SUBJECT = "emailSubject";
+    public static final String EMAIL_SUBJECT_TIN_NUMBER = " - Tin Number: ";
+    public static final String EMAIL_MESSAGE = "emailMessage";
+    public static final String EMAIL_ALERT_REQUEST = "emailAlertReq";
+
+    /* Retrieve provider data V4 Provider  */
+    public static final String ST_CD = "st-cd";
+    public static final String ADR_TYPE_CD = "adr-typ-cd";
+
+    /* Bounced Provider Email */
+    public static final String BOUNCED_ZIP_FILE_NAME = "bouncedZipFileName";
+    public static final String HOOK_STATUS_ACTIVE = "ACTIVE";
+    public static final String HOOK_RECORD_TYPE_TRANSACTION = "hookTransaction";
+
+    /* Build OR Send Email */
+    public static final String ERROR_BUILD_EMAIL = "BuildEmail error";
+    public static final String ERROR_SEND_EMAIL = "SendEmail error";
+    public static final String DOCUMENTS_DIRECTORY = "documentsDirectory";
+    public static final String OUTPUT_FILE_DIR = "outputFileDir";
+    public static final String OUTPUT_FILE_DIR_SHUTTERFLY = "outputFileDirShutterfly";
+    public static final String OUTPUT_FILE_DIR_BOUNCE = "outputFileDirBounce";
+
+    /* noCorporateMPIN Or NoEmailAddress */
+    public static final String FDS_DOCUMENTS_URL = "fdsDocumentsUrl";
+    public static final String PROVIDER_PREFERENCE_SPACE_ID = "providerSpaceId";
+    public static final String PROVIDER_PREFERENCE_SPACE_ID_V2 = "providerSpaceIdV2";
+    public static final String TARGET_MANIFEST_DIR = "targetManifestDir";
+    public static final String ORIGINAL_PRINT_TRAIL = "originalPrintTrail";
+
+    /* CleverSafe Retry */
+    public static final String CLEVER_SAFE_RETRIES = "CLEVER_SAFE_RETRIES";
+    public static final String CLEVER_SAFE_RETRIES_VALUE = "3";
+    public static final String CLEVER_SAFE_RETRIES_SLEEP_TIME = "CLEVER_SAFE_RETRIES_SLEEP_TIME";
+    public static final String CLEVER_SAFE_RETRIES_SLEEP_TIME_VALUE = "2000";
+
+    public static final String ORS_REQUEST = "ORSRequest";
+    public static final String ORS_RESPONSE = "ORSResponse";
+    public static final String EXTERNAL_ID = "externalId";
+    public static final String EXTERNAL__ID = "external_id";
+
+    // Health Monitor
+    public static final String UNPLANNED_PROCESSOR_SHUTDOWN_PENDING_TIME = "UNPLANNED_PROCESSOR_SHUTDOWN_PENDING_TIME";
+    public static final String UNPLANNED_PROCESSOR_SHUTDOWN_PENDING_TIME_VALUE = "7200";
+    public static final String UNPLANNED_PROCESSOR_PENDING_TIME = "UNPLANNED_PROCESSOR_PENDING_TIME";
+    public static final String UNPLANNED_PROCESSOR_PENDING_TIME_VALUE = "7200";
+
+    public static final String RUN_HOOK_HEALTH_MONITOR = "RUN_HOOK_HEALTH_MONITOR";
+    public static final String HOOK_PENDING_JOB_TIME = "HOOK_PENDING_JOB_TIME";
+    public static final String HOOK_PENDING_JOB_TIME_VALUE = "7200";
+    // CleanUp
+    public static final String POLL_PROCESSOR_TRANSACTIONS_START_TIME_OFFSET_FOR_CLEANUP = "POLL_PROCESSOR_TRANSACTIONS_START_TIME_OFFSET_FOR_CLEANUP";
+    public static final String POLL_PROCESSOR_TRANSACTIONS_START_TIME_OFFSET_FOR_CLEANUP_VALUE = "7"; // 7 days
+    public static final String POLL_CSV_PROCESSOR_TRANSACTIONS_START_TIME_OFFSET_FOR_CLEANUP = "POLL_CSV_PROCESSOR_TRANSACTIONS_START_TIME_OFFSET_FOR_CLEANUP";
+    public static final String POLL_CSV_PROCESSOR_TRANSACTIONS_START_TIME_OFFSET_FOR_CLEANUP_VALUE = "7"; // 7 days
+
+    // Vars required for converting CSV to Json File
+    public static final String JSON_TEMPLATE = "template_definition";
+    public static final String CSVTOJSON_SUCCESS_MESSAGE = "csvToJson_success_message";
+    public static final String CSVTOJSON_ERROR_MESSAGE = "csvToJson_error_message";
+    public static final String JSONTOREST_SUCCESS_MESSAGE = "jsonToRest_success_message";
+    public static final String JSONTOREST_ERROR_MESSAGE = "jsonToRest_error_message";
+
+    // REST Common Vars
+    public static final String COMMON_BASE_URL = "baseUrl";
+    public static final String COMMON_PATH = "path";
+    public static final String COMMON_BODY = "body";
+    public static final String COMMON_MESSAGE_MAP = "message";
+
+    public static final String COMMON_CONNECT_TIMEOUT = "connectTimeout";
+    public static final String COMMON_ERRORS = "errors";
+    public static final String COMMON_ERROR_CODE = "code";
+    public static final String COMMON_ERROR_DESCRIPTION = "description";
+    public static final String COMMON_FORM_POST_CONFIG = "HttpUrlEncodedFormPostConfig";
+    public static final String COMMON_FORM_POST_RESULT = "HttpUrlEncodedFormPostResult";
+    public static final String COMMON_HEADERS = "requestHeaders";
+    public static final String COMMON_HTTP_POST_CONFIG = "HttpPostConfig";
+    public static final String COMMON_HTTP_POST_RESULT = "HttpPostResult";
+    public static final String COMMON_HTTP_GET_CONFIG = "HttpGetConfig";
+    public static final String COMMON_HTTP_GET_RESULT = "HttpGetResult";
+    public static final String COMMON_HTTP_GET_TASK_CONFIG = "HttpGetConfig";
+    public static final String COMMON_HTTP_GET_TASK_RESULT = "HttpGetResult";
+    public static final String COMMON_JSON_STRING = "jsonString";
+    public static final String COMMON_JSON_PARSER_CONFIG = "JsonParserConfig";
+    public static final String COMMON_JSON_PARSER_RESULT = "JsonParserResult";
+    public static final String COMMON_PARSED_TYPE = "parsedType";
+    public static final String COMMON_PARSED_LIST = "parsedList";
+    public static final String COMMON_PARSED_MAP = "parsedMap";
+    public static final String COMMON_QUERY_PARAM = "queryParams";
+
+    public static final String COMMON_RESULT_HEADERS = "headers";
+    public static final String COMMON_REQ_TYPE = "request_type";
+    public static final String COMMON_SOCKET_TIMEOUT = "socketTimeout";
+    public static final String COMMON_STATUS = "status";
+    public static final String COMMON_SUCCESS = "success";
+
+    // IRIS Wrapper constants in addition to the SMAPI constants defined above
+    public static final String SMAPI_MESSAGE_URL = "smapi_message_url";
+    public static final String SMAPI_MAILBOX_URL = "smapi_mailbox_url";
+
+    public static final String SMAPI_MESSAGE_TEMPLATE_ID = "smapi_message_template_id";
+    public static final String SMAPI_SPACE_ID = "smapi_space_id";
+    public static final String DOC_META_EXTERNAL_ID = "doc_meta_external_id";
+    public static final String DOC_META_EMAIL = "doc_meta_email";
+    public static final String IRIS_COPAY_HOLD_WRAPPER_RESULT = "IrisCopayHoldWrapperResult";
+
+    // Transform Process Constants
+    public static final String FDS_PROVISIONING_SPACE_URL = "fdsProvisioningSpaceUrl";
+    public static final String EXECUTE_TRANSFORM_MERGE_ATTACHMENTS_UPDATE_DOCUMENT_PPROCESS = "executeTransformMergeAttachmentsUpdateDocumentProcess";
+    public static final String GET_SPACE_PROPERTIES_TASK_ERROR_MESSAGE = "getSpacePropertiesTask_error_message";
+
+    public static final String FDS_ATTACHMENT_URL = "fdsAttachmentUrl";
+    public static final String FDS_TRANSFORM_URL = "fdsTransformUrl";
+    public static final String SFTP_OUTBOUND_SEND_EMAIL_NOTIFICATION_ERROR = "SFTP Outbound Send Email error";
+
+    // RetrieveProcessorTransaction
+    public static final String SEARCH_CRITERIA = "search_criteria";
+    public static final String SEARCH_WINDOW = "search_window";
+    public static final String SEARCH_WINDOW_TIMEWINDOW = "time_window";
+    public static final String SEARCH_WINDOW_FORMAT = "format";
+    public static final String SEARCH_WINDOW_START_DATE = "start_date";
+    public static final String SEARCH_WINDOW_START_DATE_OFFSET = "start_date_offset";
+    public static final String SEARCH_WINDOW_END_DATE = "end_date";
+    public static final String SEARCH_WINDOW_END_DATE_OFFSET = "end_date_offset";
+    public static final String PROCESSOR_DATE_CREATED = "dateCreated";
+    public static final String PROCESSOR_RECORD_TYPE = "processorRecordType";
+    public static final String PROCESSOR_COLLECTION_NAME = "processor";
+    public static final String INGEST_ROOT = "INGEST_ROOT";
+    public static final String ACK_STATUS_IN_PROCESS = "IN_PROCESS";
+    public static final String PROCESSOR_TRANSACTION_UPDATE = "PROCESSOR_TRANSACTION_UPDATE";
+    public static final String MONGO_ID = "_id";
+    public static final String ACK_STATUS = "ackStatus";
+    public static final String GMT_06_00 = "GMT-06:00";
+    public static final String PROCCESSOR_TRANSACTION = "processorTransaction";
+    public static final String DATE_FORMAT = "yyyy-MM-dd'T'HH:mm:ss.SSSXXX";
+    public static final String HOOK_EXECUTION_ID = "hookExecutionId";
+    public static final String HOOK_TRANSACTION_METADATA = "hookTransactionMetaData";
+    public static final String HOOK_TRANSACTION_METADATA_ID = "hookTransactionId";
+    public static final String HOOK_ID = "hookId";
+    public static final String CLIENTID = "clientId";
+    public static final String PROCESSOR_TRANSACTION_IDS_MESSAGE = "processor_transaction_ids_message";
+    public static final String OUTPUT_FILE_EXTENSION = "output_file_extension";
+    public static final String ZIP_OUTPUT_FILE = "zip_output_file";
+    public static final String DOC_UPDATE_FLAG_PATH = "document_update_flag_path";
+
+    public static final String DOC_UPDATE_FLAG_VALUE = "document_update_flag_value";
+
+    public static final String DOCUMENT_MISSING_FORMPDF = "Invalid document.metadata.formData.files.formPdf-  null or does not exist";
+    public static final String DOCUMENT_MISSING_ATTACHMENTIDS = "Invalid metadata.formData.files.attachments-  null or does not exist";
+    public static final String DOCUMENT_MISSING_FDS_ATTACHMENT_URL = "Invalid fdsAttachmentUrl null or does not exist";
+    public static final String INVALID_FORMPDF_ERROR = "Invalid formPdf Error";
+    public static final String INVALID_ATTACHMENTIDS_ERROR = "Invalid attachments Errror";
+    public static final String INVALID_FDS_ATTACHMENT_URL = "Invalid fdsAttachmentUrl Errror";
+    public static final String INVALID_OAUTH_TOKEN = "invalidOauth_token";
+    public static final String INVALID_OAUTH_TOKEN_ERROR = "Invalid oauth Token";
+    public static final String ATTACHMENT_RETRIEVAL_ERROR = "Error Retrieving FDS Attachment";
+    public static final String RETRIEVED_ATTACHMENTS = "retrievedAttachments";
+    public static final String MERGED_PDF_ATTACHMENT = "mergedPdfAttachment";
+    public static final String RETRIEVE_ATTACHMENTS_ERROR_MESSAGE = "retrieveAttachments_error_message";
+    public static final String MERGED_PDF_ATTACHMENTS_ERROR_MESSAGE = "mergedPdfAttachment_error_message";
+
+    public static final String SFTP_URL = "sftpUrl";
+    public static final String SFTP_USER = "sftpUser";
+    public static final String SFTP_PASS = "sftpPassword";
+    public static final String SFTP_ROOT = "sftpRoot";
+    public static final String INVALID_DATA_ERROR = "Error occurred while validating data {}";
+    public static final String INVALID_DATA_MSG = "Invalid data provided in the excecution bus";
+    public static final String RMO_STATUS = "rmoStatus";
+    public static final String SFTP_FAILED = "sftp_failed";
+    public static final String SFTP_SUCCESS = "sftp_success";
+    public static final String SENT = "sent";
+    public static final String Y = "Y";
+    public static final String N = "N";
+
+    public static final String ERROR_SFTP_TEMP_FOLDER = "Error occured while creating a temp folder";
+    public static final String ERROR_CREATING_FILE = "Error occured while creating file from byte array";
+    public static final String ERROR_SFTP_TRANSFER = "Error occured while transferring file to sftp";
+
+    public static final String INVALID_SFTP_ERROR = "Invalid Sftp error";
+    public static final String INVALID_SFTP_MSG = "Invalid or Missing Sftp details";
+    public static final String INVALID_FILE_NAME_ERROR = "Invalid file name error";
+    public static final String INVALID_FILE_NAME_MSG = "Invalid file name for merged pdf";
+    public static final String INVALID_FILE_ERROR = "Invalid file error";
+    public static final String INVALID_FILE_MSG = "Invalid data for merged pdf";
+    public static final String MERGED_PDF = "mergedPdf";
+
+    public static final String FILE_FORMAT = "file_format";
+    public static final String SFTP_DIRECTORY = "sftp_dir";
+    public static final String SFTP_FILENAME = "sftp_Filename";
+    public static final String SFTP_USERNAME = "sftp_username";
+    public static final String SFTP_USERNAME_ARC = "sftp_username_arc";
+    public static final String SFTP_PW_ARC = "sftp_pw_arc";
+    public static final String SFTP_PW = "sftp_pw";
+    public static final String SFTP_HOSTNAME = "sftp_hostname";
+    public static final String SFTP_FILE_LIST = "sftp_filelist";
+    public static final String SFTP_ARCHIVE_DIRECTORY = "sftp_archive_dir";
+    public static final String MAX_SFTP_TRIES = "maxSftpTries";
+    public static final String RETRY_TIME_SECS = "retryTimeSecs";
+
+    public static final String MERGED_FILE_NAME = "mergedFileName";
+    public static final String FSID = "fsId";
+
+    // TransformJsonFileWithTemplate
+    public static final String JSON_FILE = "jsonFile";
+    public static final String DOCUMENTS = "Documents";
+    public static final String DOCUMENT_IDS_MESSAGE = "document_ids_message";
+    public static final String RESPONSE_FILE_NAME_MESSAGE = "response_file_name_message";
+    public static final String ADD_ORIGINAL_ZIP_FILENAME = "addOriginalZipFileName";
+    public static final String METADATA_ADDED_TO_RESPONSE_FILE = "addedToResponseFile";
+
+    public static final String EXECUTE_NEXT_PROCESS = "executeNextProcess";
+    public static final String PROCESS_NAME = "processName";
+    public static final String ENVIRONMENT = "environment";
+    public static final String MISSING_FORMPDF_ATTACHMENTIDS_ERROR = "Missing formPdf and attachments Errror";
+    public static final String MISSING_FORMPDF_ATTACHMENTIDS_MSG = "Invalid metadata.formData.files -  Missing files.formPdf And files.attachments ";
+    public static final String ERROR_MSG_FOR_EMPTY_FORM_PDF = "There is No form pdf found ";
+    public static final String ERROR_MSG_FOR_EMPTY_ATTACHMENT_LIST = "No Attachment or Empty Attachment List";
+    public static final String ERROR_MSG_FOR_EMPTY_ZERO_BYTE_ARRAY_FILE = "There is zero byte or empty file uploaded";
+    public static final String KEY_FORM_PDF = "formPdf";
+    public static final String KEY_ATTACHMENT = "attachment";
+    public static final String KEY_ZERO_BYTE = "zeroByte";
+    public static final String EMPTY_ATTACHMENT_FILE_NAME = "emptyAttachment.txt";
+    public static final String CREDENTIAL_LIST = "credentialList";
+    public static final String TOKEN_LIST = "tokenList";
+    public static final String EMAIL_FROM = "emailFrom";
+    public static final String EMAIL_RECIPIENT = "emailRecipient";
+    public static final String EMAIL_DETAILS = "emailDetails";
+    public static final String EMAIL_BODY = "emailBody";
+    public static final String DOCUMENT_ATTACHMENTS = "documentAttachments";
+    public static final String TOKEN_LIST_MESSAGE = "token_list_message";
+    public static final String OUTPUT_FILE_DIR_MESSAGE = "output_file_directory_message";
+    // cleanupFilesCreateACKProcess
+    public static final String CLEANUP_PROCESS_KEY = "processCleanupFilesCreateACK";
+    public static final String PROCESSOR_TRANSACTION_ID = "processorTransactionId";
+    public static final String PROCESSOR_TRANSACTION = "processorTransaction";
+    public static final String CSV_PROCESSOR_TRANSACTION = "csvProcessorTransaction";
+    public static final String HOST_NAME_DESTINATION = "host_name_destination";
+    public static final String USER_NAME_DESTINATION = "username_destination";
+    public static final String USER_CREDENTIALS_DESTINATION = "pw_destination";
+    public static final String FTP_ROOT_DIR = "ftp_rootdir";
+    public static final String FTP_ACK_DIR = "ftp_ackdir";
+    public static final String FTP_ARCHIVE_DIR = "ftp_archivedir";
+    public static final String SFTP_ROOT_DIRECTORY = "sftp_root_dir";
+    public static final String SFTP_ACK_DIRECTORY = "sftp_ack_dir";
+    public static final String ACK_FLAG = "ack_flag";
+    public static final String ACK_ZIP_FILE_EXTENSION = "_ack.zip";
+    public static final String ACK_SUMMARY_FILE_EXTENSION = "_ack.summary";
+    public static final String ACK_FILE = "ack_file";
+    public static final String OUTCOME_KEY = "outcome";
+    public static final String ERROR_KEY = "error";
+    public static final String CLEANUP_FLAG = "cleanup_flag";
+    public static final String E_DELIVERY_ERROR = "eDeliveryError";
+    public static final String EFT_IND = "EFT_Ind";
+    public static final String IND_835 = "Ind_835";
+    public static final String SKIP_EFT_IND = "skipEFTIndFlag";
+    public static final String BOUNCE_EMAIL_CHECK_EFT_IND = "bounceEmailCheckEFTIND";
+    public static final String GENERATE_SINGLE_ACK_SUMMARY_FILE_FLAG = "generateSingleAckSummaryFile";
+    public static final String ACK_WITH_ERRORS_ONLY = "ackWithErrorsOnlyFile";
+    // Required Field Process
+    public static final String RULES = "rules";
+    public static final String SEND_TO_DOCVAULT = "sendToDocVault";
+    public static final String SEND_TO_SHUTTERFLY = "sendToShutterfly";
+    public static final String SEND_TO_DOCVAULT_MESSAGE = "send_to_docvault_message";
+    public static final String SEND_TO_SHUTTERFLY_MESSAGE = "send_to_shutterfly_message";
+    public static final String CRITERIA = "criteria";
+    public static final String REQUIRED_FIELDS = "requiredFields";
+    public static final String TRUE = "true";
+    public static final String FALSE = "false";
+    public static final String DOCVAULT_OAUTH_URL = "docvaultOauthUrl";
+
+    //PostDocument to DocLib
+    public static final String DOCLIB_OAUTH_URL = "docLibOauthUrl";
+    public static final String DOCLIB_TEMPLATE_NAME = "docLibTemplateName";
+    public static final String DOCLIB_CLIENT_ID = "docLibClientId";
+    public static final String DOCLIB_CLIENT_SECRET = "docLibClientSecret";
+    public static final String DOCLIB_REST_URL = "docLibRestUrl";
+    public static final String DOCLIB_PUT_URL = "docLibPutUrl";
+    public static final String METADATA_DOCLIB_API_RESPONSE = "docLibAPIResponse";
+    public static final String METADATA_DOCLIB_UPLOAD_DATE = "docLibUploadDate";
+    public static final String METADATA_DOCSENTTO_DOCLIB = "DocLib";
+    public static final String DOCLIB_API_RESPONSE_SUCCESS_MESSAGE = "doclib_api_response_success_message";
+    public static final String DOCLIB_API_RESPONSE_ERROR_MESSAGE = "doclib_api_response_error_message";
+    public static final String SLA_TIME = "slaTime";
+
+    public static final String PROCESSOR_TRANSACTION_LIST_ID = "processorTransactionListId";
+    //Sftp process
+    public static final String SFTP_PROCESS_KEY = "sftpProcess";
+    
+    public static final String SFTP_ZIP_FILE_PROCESS_KEY = "sftpUnzipProcess";
+    //Unzip file process
+    public static final String UNZIP_FILE_PROCESS_KEY = "processFileUnzip";
+    
+    public static final String DOCID = "docId";
+    public static final String DOCUMENT_ID = "documentId";
+    public static final String DOCUMENT_IDS = "documentIds";
+    public static final String DOCLIB_PUT_DOCUMENT_IDS = "docLibPutDocumentIds";
+
+    // SendDocumentTransactionEmail
+    public static final String EMAIL_METADATA_FORM_NAME = "name";
+    public static final String EMAIL_METADATA_TRANSACTION_ID = "transactionID";
+    public static final String EMAIL_BODY_CONTENT = "Hello, \n\n We have received below transaction in the FDS/form center-";
+    public static final String EMAIL_BODY_CONTENT_TRANSACTION_ID = "Transaction ID";
+    public static final String SEND_DOCUMENT_TRANSACTION_EMAIL_MESSAGE = "send_document_transaction_email_message";
+    public static final String SEND_DOCUMENT_TRANSACTION_EMAIL_FAILURE_MESSAGE = "Required Fields Transaction ID OR form name missing for document ID: ";
+
+    public static final String MATCH_CRITERIA = "match_criteria";
+    public static final String COMPANION_TEMPLATE_ID = "companion_template_id";
+    public static final String DOCUMENT_UPDATE_FLAG_VALUE = "document_update_flag_value";
+    public static final String RESOLVE_IN_COMPLETION_PROCESSOR_TRANSACTION_INTERVAL = "resolveIncompleteProcessorTransactionInterval";
+    public static final String TOTAL_RECORDS_TO_FETCH = "totalRecords";
+    // Companion file updates
+    public static final String CREATE_ORIGINAL_COMPANION_FILE = "createOriginalCompanionFile";
+    public static final String ORIGINAL_COMPANION_FILENAME = "originalCompanionFileName";
+    public static final String DOCUMENT_UPDATE_ELEMENT_PATH = "document_update_element_path";
+    // Email Alert Workflow
+    public static final String PROCESSOR_TRANSACTION_METADATA_FLAG_PATH = "processor_transaction_metadata_flag_path";
+    public static final String PROCESSOR_TRANSACTION_METADATA_FLAG_VALUE = "processor_transaction_metadata_flag_value";
+    public static final String PROCESSOR_TRANSACTIONS = "ProcessorTransactions";
+    // Attachment retry
+    public static final String ATTACHMENT_RETRIES = "3";
+    public static final String ATTACHMENT_RETRIES_SLEEP_TIME = "ATTACHMENT_RETRIES_SLEEP_TIME";
+    public static final String ATTACHMENT_RETRIES_SLEEP_TIME_VALUE = "1000";
+    public static final String ATTACHMENT_EXECUTED_SUCCESSFULLY = "Attachment retrieved successfully after retrying";
+    public static final String ATTACHMENT_FAILED = "Attachment retrieval failed after: %s retry/retries ";
+    public static final String ATTACHMENT_RETRYING = "Attachment retrival retrying: %s";
+    // Post Card Indicator
+    public static final String POST_CARD_IND = "postCardInd";
+    // Post Card Indicator
+    public static final String IS_POST_CARD = "isPostCard";
+    // Shutterfly Documents fileName
+    public static final String FDS_NO_RPRNT_APPLICATION_NAME = "FDS_NO_RPRNT";
+    public static final String FDS_RPRNT_APPLICATION_NAME = "FDS_RPRNT";
+    // PEN
+    public static final String PEN_API_URL = "PENAPIUrl";
+    public static final String CATEGORY = "category";
+    public static final String PEN_API_MULTI_CLOUD_URL = "PENAPIMultiCloudUrl";
+    public static final String PEN_OAUTH_URL = "PENOauthUrl";
+    public static final String PEN_APP_ID = "PENAppId";
+    public static final String PEN_APP_SECRET= "PENAppSecret";
+    public static final String PEN_GRANT_TYPE = "PENGrantType";
+    public static final String PEN_SCOPE = "PENScope";
+    
+    //Appeal
+    public static final String NGSID = "ngsId";
+    public static final String CHECK_DOCUMENT_CRITERIA = "search_criteria_flag";
+    public static final String PRINT_SERVICES_MANIFEST_GROUPED_MULTIMAP = "printServicesManifestGroupedList";
+    /* Bounced provider email address workflow */
+    public static final String DATE_EMAIL_SENT = "dateEmailSent";
+    public static final String METADATA_DATE_EMAIL_SENT = "metadata.dateEmailSent";
+    public static final String LAST_DATE_EMAIL_SENT_LIST = "lastDateEmailSentList";
+
+    public static final String SEND_EMAIL_NOTIFICATIONS = "sendEmailNotifications";
+    public static final String METADATA_SEND_EMAIL_NOTIFICATIONS = "metadata.sendEmailNotifications";
+
+    public static final String STOP_PROCESSING_KEY = "stop";
+    public static final String TAG_LINE = "tagLine";
+    public static final String TXT_FINAL_EXTENSION = ".txt";
+    public static final String CMP_FINAL_EXTENSION = ".cmp";
+    public static final String ZIP_FINAL_EXTENSION = ".zip";
+    public static final String XML_FINAL_EXTENSION = ".xml";
+
+    public static final String PATIENT_FIRST_NAME = "patientFirstName";
+    public static final String PATIENT_LAST_NAME = "patientLastName";
+    public static final String PATIENT_DATE_OF_BIRTH = "patientDateOfBirth";
+    public static final String PROVIDER_NAME = "providerName";
+    public static final String PHYSICIAN_NAME = "physicianName";
+    public static final String PROVIDER_FULL_NAME = "ProviderFullName";
+    public static final String PROVIDER_FIRST_NAME = "ProviderFirstName";
+    public static final String PROVIDER_LAST_NAME = "ProviderLastName";
+    public static final String PROVIDER_CITY = "ProviderCity";
+    public static final String PROVIDER_STATE = "ProviderState";
+    public static final String PROVIDER_ZIP = "ProviderZip";
+    public static final String PROVIDER_ZIP4 = "ProviderZip4";
+    public static final String PROVIDER_COUNTY = "ProviderCounty";
+    public static final String PROVIDER_ADDRESS_LINE_1 = "ProviderAddressLine1";
+    public static final String PROVIDER_ADDRESS_LINE_2 = "ProviderAddressLine2";
+    public static final String GROUP_NAME = "GroupName";
+    public static final String PROVIDER_DATA = "ProviderData";
+    public static final String UNIQUE_ID = "UniqueID";
+    public static final String PROVIDER_TYPE = "providerType";
+
+
+    public static final String PASS_THRU_DATA = "PassThruData";
+    public static final String LETTER_HISTORY_ID = "LetterHistoryID";
+    public static final String HISTORY_ID = "HISTORYID";
+    public static final String CHECK_AMT = "CheckAmt";
+    public static final String CHECK_TRACE_NUMBER = "CheckTraceNumber";
+    public static final String MAIL_TO_ADDRESSONE = "MailToAddress1";
+    public static final String MAIL_TO_ADDRESSTWO = "MailToAddress2";
+    public static final String MAIL_TO_ADDRESSTHREE = "MailToAddress3";
+    public static final String MAIL_TO_ADDRESSFOUR = "MailToAddress4";
+    public static final String MAIL_TO_ADDRESSFIVE = "MailToAddress5";
+    public static final String MAIL_TO_ADDRESSSIX = "MailToAddress6";
+    public static final String CONFIGKEY = "CONFIGKEY";
+    public static final String CREATE_APPLICATION = "createApplication";
+    public static final String EDELIVERY_ERROR = "eDeliveryError";
+    public static final String EMAIL_ADDRESS = "EmailAddress";
+    public static final String RECORD_TERMINATOR_CHAR = "\r\n";
+    public static final String INGEST_PATH_PROPERTY_NAME = "INGEST_ROOT";
+    public static final String DELIVERY_METHOD_EMAIL = "E";
+    public static final String ORIGNIAL_COMPANION_FILE_RECORDS = "originalCompanionFileRecords";
+	public static final Object BARCODE = "BARCODE";
+	public static final Object DIV = "DIV";
+	public static final Object MEMBER_NUMBER = "MEMBER NUMBER";
+	public static final Object MEMBER_NAME = "MEMBER NAME";
+	public static final Object CLAIM_NUMBER = "CLAIM NUMBER";
+	public static final Object MEDIA_TYPE = "MEDIA TYPE";
+	public static final Object CLAIM_SYSTEM = "CLAIM SYSTEM";
+	public static final Object MEMBER_NUMBER_CAMEL = "memberNumber";
+	public static final Object MEMBER_NAME_CAMEL = "memberName";
+	public static final Object CLAIM_NUMBER_CAMEL = "claimNumber";
+	public static final Object MEDIA_TYPE_CAMEL = "mediaType";
+	public static final Object CLAIM_SYSTEM_CAMEL = "claimSystem";
+	public static final Object SEND_COMPANION_FILE_UNREADABLE_EMAIL="sendCompanionFileUnreadableEmail";
+	public static final Object SEND_COMPANION_FILE_MISSING_EMAIL="sendCompanionFileMissingEmail";
+	public static final Object COMPANION_FILE_DATE_RECEIVED="companionFileDateReceived";
+	public static final String PROCESSOR_TRANSACTIONS_METADATA = "processorTransactionMetadata";
+	public static final String RETRIEVE_CORPORATE_MPIN = "retrieveCorporateMPINv2Process";
+	
+	//USP Claims Response File Api Notify 
+	
+	public static final String USPCLAIMS_REST_URL="USPClaimsRestUrl";
+	public static final String NOTIFY_API_OAUTH_URL="notifyApiOauthUrl";
+	public static final String NOTIFY_API_CLIENT_ID="notifyApiClientId";
+	public static final String NOTIFY_API_CLIENT_SECRET="notifyApiClientSecret";
+
+    //Trackit Response
+    public static final String PROVIDER_TIN = "providerTin";
+    public static final String CORPORATE_MPIN = "corporateMpin";
+    public static final String NOTIFICATION_STATUS = "notificationStatus";
+    public static final String RECON_COUNT = "reconCount";
+    public static final String PAAN_COUNT = "paanCount";
+    public static final String APPEAL_COUNT = "appealCount";
+    //SSBCI
+    public static final String TYPE = "type"; // CSNP or SSBCI
+    public static final String HOUSEHOLD_ID = "householdId";
+    public static final String INSURED_PLAN_ID = "insuredPlanId";
+    public static final String EFFECTIVE_DATE = "effectiveDate";
+    public static final String END_DATE = "endDate";
+    public static final String EVENT_TYPE = "eventType";
+    public static final String PROVIDER_NPI = "providerNPI";
 	
 	
-	private static final long serialVersionUID = 2458995411009671654L;
+	public static final String CLIENT_NAME="clientName";
 	
-	@JsonProperty("tin")
-	@JsonAlias("ProviderTAXID")
-	private String tin;
 	
-	@JsonProperty("mpin")
-	@JsonAlias("IndivProviderMPIN")
-	private String mpin="";
+	//CreateMetadataFiles
 	
-	@JsonProperty("emailAlertReq")
-	@JsonAlias("IsPrintSuppressed")
-	private String emailAlertReq="Y";
-	
-	@JsonProperty("EFT_Ind")
-	private String EFT_Ind;
+	public static final String PROVIDERCOUNTRY = "ProviderCountry";
+	public static final String PROVIDERPROVINCE = "ProviderProvince";
+	public static final String HOST_NAME_SOURCE = "host_name_source";
+	public static final String USERNAME_SOURCE = "username_source";
+	public static final String PW_SOURCE = "pw_source";
+	public static final String PW_DESTINATION = "pw_destination";
 
-	@JsonProperty("835_Ind")
-	private String Ind_835;
+    //Kafka constants
+    public static final String CONFIG_SECURITY_PROTOCOL     		    = "security.protocol";
+    public static final String CONFIG_SSL_TRUSTSTORE_LOCATION     		= "ssl.truststore.location";
+    public static final String CONFIG_SSL_KEYSTORE_LOCATION     		= "ssl.keystore.location";
+    public static final String CONFIG_SSL_TRUSTSTORE_PASSWORD     		= "ssl.truststore.password";
+    public static final String CONFIG_SSL_KEYSTORE_PASSWORD     		= "ssl.keystore.password";
+    public static final String SSL                                      = "SSL";
+	public static final String PROCCESSOR_TRANSACTIONS = "ProcessorTransactions";
+    public static final String SKIP_DOCUMENT_GROUPING = "skipDocumentGrouping";
 
-	@JsonProperty("physicianName")
-	@JsonAlias("PHYSICIANNAME")
-	private String physicianName;
-	
-	@JsonProperty("CheckTraceNumber")
-	private String CheckTraceNumber;
-	
-	@JsonProperty("multClaimNumber")
-	@JsonAlias("ICNNUMBER")
-	private String multClaimNumber;
-	
-	@JsonProperty("multMemberId")
-	@JsonAlias("MemberID")
-	private String multMemberId;  // added newly
-	
-	@JsonProperty("DefaultUsed")
-	private String DefaultUsed;
-	
-	@JsonProperty("CheckAmt")
-	private String CheckAmt;
-	
-	@JsonProperty("CONFIGKEY")
-	private String CONFIGKEY;
-	
-	@JsonProperty("originalPrintTrail")
-	private String originalPrintTrail;
-	
-	@JsonProperty("PassThruData")
-	private String PassThruData;
-	
-	@JsonProperty("MailToAddress1") 
-	private String MailToAddress1;
-	
-	@JsonProperty("paymentNumber")
-	@JsonAlias("vendor_pay_id")
-	private String paymentNumber;
 
-	public String getMultMemberId() {
-		return multMemberId;
-	}
-
-	public void setMultMemberId(String multMemberId) {
-		this.multMemberId = multMemberId;
-	}
-
-	@JsonProperty("MailToAddress2") 
-	private String MailToAddress2;
-	
-	@JsonProperty("MailToAddress3") 
-	private String MailToAddress3;
-	
-	@JsonProperty("MailToAddress4") 
-	private String MailToAddress4;
-	
-	@JsonProperty("MailToAddress5") 
-	private String MailToAddress5;
-	
-	@JsonProperty("MailToAddress6") 
-	private String MailToAddress6;
-	
-	@JsonProperty("LETTERTYPE")
-	protected String subCategory;
-	
-	public USPPRA() {
-		this.category = "Payment Document";
-		this.fileType = "Letter";
-		this.tenant = "Link";
-		this.fileDescription = "Provider Remittance Advice";
-		this.createApplication = "USP-COM-PRS";
-		this.docSentTo = "";
-		this.sendToDocVault = false;
-		this.sendToShutterfly = false;
-		this.providerEmailId = "";
-		this.postCardInd = true;
-		this.dateEmailSent = null;
-		this.sendEmailNotifications = false;
-		this.sendPENAPIRequest = false;
-		this.privilege = "Claim Status";
-		this.subCategory = "PR";
-		Subcategory subCat = Subcategory.valueOf(this.subCategory);
-		this.setFilePath(subCat.getFilePath());
-	}
-	
-	public String getTin() {
-		return tin;
-	}
-
-	public void setTin(String tin) {
-		this.tin = tin;
-	}
-
-	public String getMpin() {
-		return mpin;
-	}
-
-	public void setMpin(String mpin) {
-		if (mpin != null){
-			this.mpin = mpin;
-		}
-	}
-
-	public String getEmailAlertReq() {
-		return emailAlertReq;
-	}
-
-	public void setEmailAlertReq(String emailAlertReq) {
-		if (emailAlertReq != null && !emailAlertReq.isEmpty()){
-			this.emailAlertReq = emailAlertReq;
-		}
-	}
-
-	public String getEFT_Ind() {
-		return EFT_Ind;
-	}
-
-	public void setEFT_Ind(String eFT_Ind) {
-		EFT_Ind = eFT_Ind;
-	}
-
-	public String getPhysicianName() {
-		return physicianName;
-	}
-
-	public void setPhysicianName(String physicianName) {
-		this.physicianName = physicianName;
-	}
-
-	public String getCheckTraceNumber() {
-		return CheckTraceNumber;
-	}
-
-	public void setCheckTraceNumber(String checkTraceNumber) {
-		CheckTraceNumber = checkTraceNumber;
-	}
-
-	public String getMultClaimNumber() {
-		return multClaimNumber;
-	}
-
-	public void setMultClaimNumber(String multClaimNumber) {
-		this.multClaimNumber = multClaimNumber;
-	}
-
-	public String getMemberId() {
-		return multMemberId;
-	}
-
-	public void setMemberId(String memberId) {
-		this.multMemberId = memberId;
-	}
-
-	public String getDefaultUsed() {
-		return DefaultUsed;
-	}
-
-	public void setDefaultUsed(String defaultUsed) {
-		DefaultUsed = defaultUsed;
-	}
-
-	public String getCheckAmt() {
-		return CheckAmt;
-	}
-
-	public void setCheckAmt(String checkAmt) {
-		CheckAmt = checkAmt;
-	}
-
-	public String getCONFIGKEY() {
-		return CONFIGKEY;
-	}
-
-	public void setCONFIGKEY(String cONFIGKEY) {
-		CONFIGKEY = cONFIGKEY;
-	}
-
-	public String getOriginalPrintTrail() {
-		return originalPrintTrail;
-	}
-
-	public void setOriginalPrintTrail(String originalPrintTrail) {
-		this.originalPrintTrail = originalPrintTrail;
-	}
-
-	public String getPassThruData() {
-		return PassThruData;
-	}
-
-	public void setPassThruData(String passThruData) {
-		PassThruData = passThruData;
-	}
-
-	public String getMailToAddress1() {
-		return MailToAddress1;
-	}
-
-	public void setMailToAddress1(String mailToAddress1) {
-		MailToAddress1 = mailToAddress1;
-	}
-
-	public String getMailToAddress2() {
-		return MailToAddress2;
-	}
-
-	public void setMailToAddress2(String mailToAddress2) {
-		MailToAddress2 = mailToAddress2;
-	}
-
-	public String getMailToAddress3() {
-		return MailToAddress3;
-	}
-
-	public void setMailToAddress3(String mailToAddress3) {
-		MailToAddress3 = mailToAddress3;
-	}
-
-	public String getMailToAddress4() {
-		return MailToAddress4;
-	}
-
-	public void setMailToAddress4(String mailToAddress4) {
-		MailToAddress4 = mailToAddress4;
-	}
-
-	public String getMailToAddress5() {
-		return MailToAddress5;
-	}
-
-	public void setMailToAddress5(String mailToAddress5) {
-		MailToAddress5 = mailToAddress5;
-	}
-
-	public String getMailToAddress6() {
-		return MailToAddress6;
-	}
-
-	public void setMailToAddress6(String mailToAddress6) {
-		MailToAddress6 = mailToAddress6;
-	}
-	
-	public String getInd_835() {
-		return Ind_835;
-	}
-
-	public void setInd_835(String ind_835) {
-		Ind_835 = ind_835;
-	}
-	
-	public String getSubCategory() {
-		return subCategory;
-	}
-	
-	public void setSubCategory(String subCategory) {
-		if(subCategory == null || subCategory.isEmpty()){
-			this.subCategory = "PR";
-			this.setFilePath(Subcategory.PR.getFilePath());
-		} else {
-			this.subCategory = subCategory;
-			Subcategory subCat = null;
-			try {
-				subCat = Subcategory.valueOf(this.subCategory);
-			} catch (Exception e) {
-				subCat = Subcategory.PR;
-			}
-			this.setFilePath(subCat.getFilePath());
-		}
-		
-		if (this.getExpiryDate() != null && this.getExpiryDate().length() == 7) {
-			this.setExpiryDate(this.vcpExpiryDateFormat(this.getExpiryDate(), this.subCategory));
-		}
-	}
-	
-	public String getPaymentNumber() {
-		return paymentNumber;
-	}
-	
-	public void setPaymentNumber(String paymentNumber) {
-		this.paymentNumber = paymentNumber;
-	}
-	
-	public enum ErrorMsg implements ErrorMessage {
-		EFT_Ind (22, "Missing or invalid data: EFT_IND(SEVERE)"),
-		CheckTraceNumber (12, "Missing or invalid data: CheckTraceNumber"),
-		ProviderTAXID_22 (22, "Missing or invalid data: TIN (SEVERE)"),
-		ProviderTAXID_12 (12, "Missing or invalid data: Provider TIN"),
-		IndivProviderMPIN (12, "Missing or invalid data: IndivProviderMPIN"), 
-		LETTERTYPE (12, "Missing or invalid data: LETTERTYPE"),
-		isPrintSuppressed (12,"Missing or invalid data: isPrintSuppressed"),
-		PROCESSDATE (12, "Missing or invalid data: PROCESSDATE"),
-		
-		CONFIGKEY (22, "Missing or invalid data: CONFIGKEY(SEVERE)"),
-		originalPrintTrail (22, "Missing or invalid data: originalPrintTrail(SEVERE)"),
-		PassThruData (22, "Missing or invalid data: PassThruData(SEVERE)"),
-
-		MailToAddress1 (22, "Missing or invalid data: MailToAddress1(SEVERE)"), 
-		MailToAddress2 (22, "Missing or invalid data: MailToAddress2(SEVERE)"),
-		MailToAddress3 (22, "Missing or invalid data: MailToAddress3(SEVERE)"), 
-		
-		ICNNUMBER (12, "Missing or invalid data: claimNumber");
-		
-		
-		private int errorCode;
-	    private String errorMessage;
-
-	    ErrorMsg(int code, String message) {
-	        this.errorCode = code;
-	        this.errorMessage = message;
-	    }
-
-	    public int getErrorCode() {
-	        return errorCode;
-	    }
-	    public String getErrorMessage() {
-	        return errorMessage;
-	    }
-
-	}
-	
-	public enum Subcategory {
-		
-		P1 ("P1", "Commercial/Detailed PRAs"),
-		P2 ("P2", "Commercial/Virtual Card Payments and Info Only PRAs"),
-		P3 ("P3", "Medicare/Detail PRAs"),
-		P4 ("P4", "Medicare/Virtual Card Payments & Info Only"),
-		P5 ("P5", "UHC West Payment Packages/Detailed Pmt Docs"),
-		P6 ("P6", "Community Plan/PRAs"),
-		P7 ("P7", "Community Plan/Virtual Card Payments"),
-		P8 ("P8", "Commercial/Zero-Dollar PRAs"),
-		P9 ("P9", "Medicare/Zero-Dollar PRAs"),
-		P0 ("P0", "Community Plan/Zero-Dollar PRAs"),
-		E1 ("E1", "Other/Zero-Dollar PRAs"),
-		E2 ("E2", "Student Resources/Detailed PRAs"),
-        E3 ("E3", "Student Resources/Virtual Card Payments"),
-        E4 ("E4", "Student Resources/Zero Dollar PRAs"),
-		PR ("PR", "Other PRAs/Other");
-		
-		private String subCat;
-		private String filePath;
-		
-		Subcategory(String subCat, String filePath){
-			this.subCat = subCat;
-			this.filePath = filePath;
-		}
-		public String getSubCat() {
-	        return subCat;
-	    }
-		
-		public String getFilePath() {
-			return filePath;
-		}
-	}
-
-	
+    private Workflow() {
+        throw new AssertionError("cannot instantiate");
+    }
 }
 
