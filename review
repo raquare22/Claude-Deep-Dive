@@ -1,527 +1,94 @@
 
-import java.util.Date;
 
-public class PriorAuthCCSManual extends ClientMetadata {
+public class DocumentResponseService {
+
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(DocumentResponseService.class);
+
+    public DocumentResponse prepareFullDocumentResponse(DocumentMetaData documentMetaData, List<AttachmentMetaData> attmtsMetaDataList) {
+        LOGGER.debug("Entering prepareFullDocumentResponse");
+
+        DocumentResponse response = new DocumentResponse();
+
+        if (attmtsMetaDataList != null && !attmtsMetaDataList.isEmpty()) {
+        	    List<Attachment> attachmentResponseList = prepareAttachmentResponse(attmtsMetaDataList);
+            response.setAttachments((attachmentResponseList.toArray(new Attachment[attachmentResponseList.size()])));
+        }
+                       
+        response.setSpaceId(Integer.valueOf(documentMetaData.getSpaceId()));
+        if(documentMetaData.getStatus() != null) {
+            response.setStatus(documentMetaData.getStatus().toString());
+        }
+        response.setId(documentMetaData.getId());
+        response.setExternalId(documentMetaData.getExternalId());
+        if (documentMetaData.getMetadata() != null) {
+        	Document metadataBasicObj = documentMetaData.getMetadata();
+            response.setMetadata(metadataBasicObj);
+        }
+        if (documentMetaData.getDateCreated() != null)
+            response.setDateCreated(documentMetaData.getDateCreated().toString());
+        if (documentMetaData.getRevisions() != null)
+            response.setRevisions(documentMetaData.getRevisions());
+
+        LOGGER.debug("Leaving prepareFullDocumentResponse");
+        return response;
+    }
+
+    public static void  logInfoWithTransactionId(Logger logger, String info, String transactionId){
+        StringBuilder sb = new StringBuilder();
+        sb.append(info).append(" for transaction_id:").append(transactionId);
+        String transIdStr = sb.toString();
+        logger.debug("for transaction_id: {}", transIdStr);
+    }
+
+    public String buildDocumentResponseInJson(DocumentMetaData documentMetaData, List<AttachmentMetaData> attmtsMetaDataList) throws IOException, ParseException {
+
+        String transactionId = documentMetaData.getTransactionId();
+        logInfoWithTransactionId(LOGGER, "Entered DocumentUtilService.buildDocumentResponseInJson", transactionId);
+
+        DocumentResponse response = prepareFullDocumentResponse(documentMetaData, attmtsMetaDataList);
+
+        logInfoWithTransactionId(LOGGER, "Exited DocumentUtilService.buildDocumentResponseInJson", transactionId);
+
+        String result = Parser.toJson(response, "yyyy-MM-dd'T'HH:mm:ss.SSSZ");
+        Response.ResponseBuilder respBldr = Response.ok(result);
+        String test = (String) respBldr.build().getEntity();
+        System.out.println(test);
+        return test;
+    }
+
+    public List<Attachment> prepareAttachmentResponse(List<AttachmentMetaData> amds) {
+        LOGGER.debug("Entering prepareAttachmentResponse");
+        List<Attachment> attachments = new ArrayList<>();
+        int counter = 0;
+        for (AttachmentMetaData amd : amds) {
+            counter++;
+            Attachment atmt = createAttachment(amd);
+            atmt.setIndex(counter);
+            attachments.add(atmt);
+        }
+        LOGGER.debug("Attachments Size {}", attachments.size());
+        LOGGER.debug("Leaving prepareAttachmentResponse");
+        return attachments;
+    }
+
+    private Attachment createAttachment(AttachmentMetaData amd) {
+        LOGGER.debug("Entering createAttachment");
+        Attachment atmt = new Attachment();
+        atmt.setExpires(amd.getExpires());
+        atmt.setFileName(amd.getFileName());
+        atmt.setFileSize(amd.getFileSize());
+        atmt.setId(amd.getFsId());
+        atmt.setStatus(amd.getStatus().toString());
+        atmt.setSpaceId(amd.getSpaceId());
+        atmt.setContentType(amd.getContentType());
+        atmt.setDateCreated(amd.getDateCreated());
+        atmt.setExternalId(amd.getExternalId());
+        LOGGER.debug("Leaving createAttachment with Id: {}", atmt.getId());
+        return atmt;
+    }
 
-	private static final long serialVersionUID = 4741974049593963400L;
-
-	@JsonProperty("ServiceReferenceNum")
-	@JsonAlias("notificationNumber")
-	private String notificationNumber;
-
-	@JsonProperty("LetterCategory")
-	@JsonAlias("subCategory")
-	private String subCategory;
-
-	@JsonProperty("ProvTIN")
-	@JsonAlias("tin")
-	private String tin;
-
-	@JsonProperty("ProvMPIN")
-	@JsonAlias("mpin")
-	private String mpin="";
-
-	@JsonProperty("ProvName")
-	@JsonAlias("providerName")
-	private String providerName;
-
-	@JsonProperty("MembAltID")
-	@JsonAlias("memberId")
-	private String memberId;
-
-	@JsonProperty("PatFullNme")
-	@JsonAlias("memberName")
-	private String memberName;
-
-	@JsonProperty("ExpectedServiceStartDte")
-	@JsonAlias("dateOfService")
-	@JsonDeserialize(using = CustomizeDateDeserializer.class)
-	@CustomDateFormat(dateFormat = "MM/dd/yyyy")
-	private Date dateOfService;
-
-	@JsonProperty("IsPrintSuppressed")
-	@JsonAlias("emailAlertReq")
-	private String emailAlertReq="Y";
-
-	@JsonProperty("HISTORYID")
-	@JsonAlias("LetterHistoryID")
-	private String LetterHistoryID;
-
-	@JsonProperty("PassThruData")
-	private String PassThruData;
-
-	@JsonProperty("OriginPrintTrail")
-	@JsonAlias("originalPrintTrail")
-	private String originalPrintTrail;
-
-	@JsonProperty("CONFIGKEY")
-	private String CONFIGKEY;
-
-	@JsonProperty("DMSecurityClass")
-	private String DMSecurityClass;
-
-	@JsonProperty("RelatedID")
-	private String RelatedID;
-
-	@JsonProperty("MemberAltID")
-	private String MemberAltID;
-
-	@JsonProperty("ELGSLETTERGENID")
-	private String ELGSLETTERGENID;
-
-	@JsonProperty("ProviderDEC")
-	private String ProviderDEC;
-
-	@JsonProperty("NotificationLetterID")
-	private String NotificationLetterID;
-
-	@JsonProperty("ELGSREQUESTID")
-	private String ELGSREQUESTID;
-
-	@JsonProperty("GenerationType")
-	private String GenerationType;
-
-	@JsonProperty("WORKGROUP_NME")
-	private String WORKGROUP_NME;
-
-	@JsonProperty("LetterPriority")
-	private String LetterPriority;
-
-	@JsonProperty("BusinessSegment")
-	private String BusinessSegment;
-
-	@JsonProperty("DefaultUsed")
-	private String DefaultUsed;
-
-	@JsonProperty("HHKey")
-	private String HHKey;
-
-	@JsonProperty("LegacyEntity")
-	private String LegacyEntity;
-
-	@JsonProperty("RequesterID")
-	private String RequesterID;
-
-	@JsonProperty("Policy")
-	@JsonAlias("policyNumber")
-	private String policyNumber;
-
-	@JsonProperty("DUPLEXSIMPLEX")
-	private String DUPLEXSIMPLEX;
-
-	@JsonProperty("MailToAddress1")
-	private String MailToAddress1;
-
-	@JsonProperty("MailToAddress2")
-	private String MailToAddress2;
-
-	@JsonProperty("MailToAddress3")
-	private String MailToAddress3;
-
-	@JsonProperty("MailToAddress4")
-	private String MailToAddress4;
-
-	@JsonProperty("MailToAddress5")
-	private String MailToAddress5;
-
-	@JsonProperty("MailToAddress6")
-	private String MailToAddress6;
-
-	public PriorAuthCCSManual(){
-		this.category = "Prior Auth Notification";
-		this.fileType = "Letter";
-		this.tenant = "Link";
-		this.createApplication = "CCSManual";
-		this.docSentTo = "";
-		this.sendToDocVault = false;
-		this.sendToShutterfly = false;
-		this.providerEmailId = "";
-		this.postCardInd = true;
-		this.dateEmailSent = null;
-		this.sendEmailNotifications = false;
-		this.sendPENAPIRequest = false;
-		this.privilege = "Notification/Prior Authorization Status Inquiry/Update";
-		this.subCategory = "ZZ";
-		Subcategory subCat = Subcategory.valueOf(this.subCategory);
-		this.setFilePath(subCat.getFilePath());
-	}
-
-	public String getNotificationNumber() {
-		return notificationNumber;
-	}
-
-	public void setNotificationNumber(String notificationNumber) {
-		this.notificationNumber = notificationNumber;
-	}
-
-	public String getSubCategory() {
-		return subCategory;
-	}
-
-	public void setSubCategory(String subCategory) {
-		if(subCategory == null || subCategory.isEmpty()){
-			this.subCategory = "ZZ";
-			this.setFilePath(Subcategory.ZZ.getFilePath());
-		} else {
-			this.subCategory = subCategory;
-			Subcategory subCat = null;
-			try {
-				subCat = Subcategory.valueOf(this.subCategory);
-			} catch (Exception e) {
-				subCat = Subcategory.ZZ;
-			}
-			this.setFilePath(subCat.getFilePath());
-		}
-	}
-
-	public String getTin() {
-		return tin;
-	}
-
-	public void setTin(String tin) {
-		this.tin = tin;
-	}
-
-	public String getMpin() {
-		return mpin;
-	}
-
-	public void setMpin(String mpin) {
-		if (mpin != null){
-			this.mpin = mpin;
-		}
-	}
-
-	public String getProviderName() {
-		return providerName;
-	}
-
-	public void setProviderName(String providerName) {
-		this.providerName = providerName;
-	}
-
-	public String getMemberId() {
-		return memberId;
-	}
-
-	public void setMemberId(String memberId) {
-		this.memberId = memberId;
-	}
-
-	public String getMemberName() {
-		return memberName;
-	}
-
-	public void setMemberName(String memberName) {
-		this.memberName = memberName;
-	}
-
-	public Date getDateOfService() {
-		return dateOfService;
-	}
-
-	public void setDateOfService(Date dateOfService) {
-		this.dateOfService = dateOfService;
-	}
-
-	public String getEmailAlertReq() {
-		return emailAlertReq;
-	}
-
-	public void setEmailAlertReq(String emailAlertReq) {
-		if (emailAlertReq != null && !emailAlertReq.isEmpty()){
-			this.emailAlertReq = emailAlertReq;
-		}
-	}
-
-	public String getLetterHistoryID() {
-		return LetterHistoryID;
-	}
-
-	public void setLetterHistoryID(String letterHistoryID) {
-		LetterHistoryID = letterHistoryID;
-	}
-
-	public String getPassThruData() {
-		return PassThruData;
-	}
-
-	public void setPassThruData(String passThruData) {
-		PassThruData = passThruData;
-	}
-
-	public String getOriginalPrintTrail() {
-		return originalPrintTrail;
-	}
-
-	public void setOriginalPrintTrail(String originalPrintTrail) {
-		this.originalPrintTrail = originalPrintTrail;
-	}
-
-	public String getCONFIGKEY() {
-		return CONFIGKEY;
-	}
-
-	public void setCONFIGKEY(String CONFIGKEY) {
-		this.CONFIGKEY = CONFIGKEY;
-	}
-
-	public String getDMSecurityClass() {
-		return DMSecurityClass;
-	}
-
-	public void setDMSecurityClass(String DMSecurityClass) {
-		this.DMSecurityClass = DMSecurityClass;
-	}
-
-	public String getRelatedID() {
-		return RelatedID;
-	}
-
-	public void setRelatedID(String relatedID) {
-		RelatedID = relatedID;
-	}
-
-	public String getMemberAltID() {
-		return MemberAltID;
-	}
-
-	public void setMemberAltID(String memberAltID) {
-		MemberAltID = memberAltID;
-	}
-
-	public String getELGSLETTERGENID() {
-		return ELGSLETTERGENID;
-	}
-
-	public void setELGSLETTERGENID(String ELGSLETTERGENID) {
-		this.ELGSLETTERGENID = ELGSLETTERGENID;
-	}
-
-	public String getProviderDEC() {
-		return ProviderDEC;
-	}
-
-	public void setProviderDEC(String providerDEC) {
-		ProviderDEC = providerDEC;
-	}
-
-	public String getNotificationLetterID() {
-		return NotificationLetterID;
-	}
-
-	public void setNotificationLetterID(String notificationLetterID) {
-		NotificationLetterID = notificationLetterID;
-	}
-
-	public String getELGSREQUESTID() {
-		return ELGSREQUESTID;
-	}
-
-	public void setELGSREQUESTID(String ELGSREQUESTID) {
-		this.ELGSREQUESTID = ELGSREQUESTID;
-	}
-
-	public String getGenerationType() {
-		return GenerationType;
-	}
-
-	public void setGenerationType(String generationType) {
-		GenerationType = generationType;
-	}
-
-	public String getWORKGROUP_NME() {
-		return WORKGROUP_NME;
-	}
-
-	public void setWORKGROUP_NME(String WORKGROUP_NME) {
-		this.WORKGROUP_NME = WORKGROUP_NME;
-	}
-
-	public String getLetterPriority() {
-		return LetterPriority;
-	}
-
-	public void setLetterPriority(String letterPriority) {
-		LetterPriority = letterPriority;
-	}
-
-	public String getBusinessSegment() {
-		return BusinessSegment;
-	}
-
-	public void setBusinessSegment(String businessSegment) {
-		BusinessSegment = businessSegment;
-	}
-
-	public String getDefaultUsed() {
-		return DefaultUsed;
-	}
-
-	public void setDefaultUsed(String defaultUsed) {
-		DefaultUsed = defaultUsed;
-	}
-
-	public String getHHKey() {
-		return HHKey;
-	}
-
-	public void setHHKey(String HHKey) {
-		this.HHKey = HHKey;
-	}
-
-	public String getLegacyEntity() {
-		return LegacyEntity;
-	}
-
-	public void setLegacyEntity(String legacyEntity) {
-		LegacyEntity = legacyEntity;
-	}
-
-	public String getRequesterID() {
-		return RequesterID;
-	}
-
-	public void setRequesterID(String requesterID) {
-		RequesterID = requesterID;
-	}
-
-	public String getPolicyNumber() {
-		return policyNumber;
-	}
-
-	public void setPolicyNumber(String policyNumber) {
-		this.policyNumber = policyNumber;
-	}
-
-	public String getDUPLEXSIMPLEX() {
-		return DUPLEXSIMPLEX;
-	}
-
-	public void setDUPLEXSIMPLEX(String DUPLEXSIMPLEX) {
-		this.DUPLEXSIMPLEX = DUPLEXSIMPLEX;
-	}
-
-	public String getMailToAddress1() {
-		return MailToAddress1;
-	}
-
-	public void setMailToAddress1(String mailToAddress1) {
-		MailToAddress1 = mailToAddress1;
-	}
-
-	public String getMailToAddress2() {
-		return MailToAddress2;
-	}
-
-	public void setMailToAddress2(String mailToAddress2) {
-		MailToAddress2 = mailToAddress2;
-	}
-
-	public String getMailToAddress3() {
-		return MailToAddress3;
-	}
-
-	public void setMailToAddress3(String mailToAddress3) {
-		MailToAddress3 = mailToAddress3;
-	}
-
-	public String getMailToAddress4() {
-		return MailToAddress4;
-	}
-
-	public void setMailToAddress4(String mailToAddress4) {
-		MailToAddress4 = mailToAddress4;
-	}
-
-	public String getMailToAddress5() {
-		return MailToAddress5;
-	}
-
-	public void setMailToAddress5(String mailToAddress5) {
-		MailToAddress5 = mailToAddress5;
-	}
-
-	public String getMailToAddress6() {
-		return MailToAddress6;
-	}
-
-	public void setMailToAddress6(String mailToAddress6) {
-		MailToAddress6 = mailToAddress6;
-	}
-
-	public enum ErrorMsg implements ErrorMessage {
-		Process (12, "Missing or invalid data: Process"),
-		ServiceReferenceNum (12, "Missing or invalid data: ServiceReferenceNum"),
-		LetterCategory (12, "Missing or invalid data: LetterCategory"),
-		ProvTIN (12,"Missing or invalid data: ProvTIN"),
-		ProvMPIN (12, "Missing or invalid data: ProvMPIN"), //"emailAlertReq!=\"N\""
-		IsPrintSuppressed (12, "Missing or invalid data: IsPrintSuppressed"),
-
-		HISTORYID (22, "Missing or invalid data: HISTORYID(SEVERE)"), //"emailAlertReq!=\"N\""
-		PassThruData (22, "Missing or invalid data: PassThruData(SEVERE)"), //"emailAlertReq!=\"N\""
-		OriginPrintTrail (22, "Missing or invalid data: OriginPrintTrail(SEVERE)"), //"emailAlertReq!=\"N\""
-		CONFIGKEY (22, "Missing or invalid data: CONFIGKEY(SEVERE)"), //"emailAlertReq!=\"N\""
-		MailToAddress1 (22, "Missing or invalid data: MailToAddress1(SEVERE)"), //"emailAlertReq!=\"N\""
-		MailToAddress2 (22, "Missing or invalid data: MailToAddress2(SEVERE)"),//"emailAlertReq!=\"N\""
-		MailToAddress4 (22, "Missing or invalid data: MailToAddress4(SEVERE)"),//"emailAlertReq!=\"N\""
-		MailToAddress5 (22, "Missing or invalid data: MailToAddress5(SEVERE)"),//"emailAlertReq!=\"N\""
-		MailToAddress6 (22, "Missing or invalid data: MailToAddress6(SEVERE)");//"emailAlertReq!=\"N\""
-
-		private int errorCode;
-		private String errorMessage;
-
-		ErrorMsg(int code, String message) {
-			this.errorCode = code;
-			this.errorMessage = message;
-		}
-
-		public int getErrorCode() {
-			return errorCode;
-		}
-		public String getErrorMessage() {
-			return errorMessage;
-		}
-
-	}
-
-	public enum Subcategory {
-
-		// PriorAuthCCSManual
-		A1 ("A1", "Commercial Prior Auth/Approved"),
-		A2 ("A2", "Commercial Prior Auth/Denied"),
-		A3 ("A3", "Commercial Prior Auth/Lack of Information"),
-		A4 ("A4", "Medicare Prior Auth/Approved"),
-		A5 ("A5", "Medicare Prior Auth/Denied"),
-		A6 ("A6", "Medicare Prior Auth/Lack of Information"),
-		A7 ("A7", "UHC West Prior Auth/Approved"),
-		A8 ("A8", "UHC West Prior Auth/Denied"),
-		A9 ("A9", "UHC West Prior Auth/Lack of Information"),
-		N1 ("N1", "Community Plan Prior Auth/Approved"),
-		N2 ("N2", "Community Plan Prior Auth/Denied"),
-		N3 ("N3", "Community Plan Prior Auth/Lack of Information"),
-		ZZ ("ZZ", "Misc. Prior Auth/Other");
-
-		private String subCat;
-		private String filePath;
-
-		Subcategory(String subCat, String filePath){
-			this.subCat = subCat;
-			this.filePath = filePath;
-		}
-		public String getSubCat() {
-			return subCat;
-		}
-
-		public String getFilePath() {
-			return filePath;
-		}
-	}
 }
-
-
-
-
 
 
 
@@ -552,524 +119,87 @@ public class PriorAuthCCSManual extends ClientMetadata {
 ====
 
 
-
-import java.util.Date;
-
-public class PriorAuthNextGen extends ClientMetadata {
-
-	private static final long serialVersionUID = -8112581189246463961L;
-
-	@JsonProperty("NotificationNumber")
-	@JsonAlias("notificationNumber")
-	private String notificationNumber;
-
-	@JsonProperty("LetterCategory")
-	@JsonAlias("subCategory")
-	private String subCategory;
-
-	@JsonProperty("ProviderTaxID")
-	@JsonAlias("tin")
-	private String tin;
-
-	@JsonProperty("ProviderMPIN")
-	@JsonAlias("mpin")
-	private String mpin="";
-
-	@JsonProperty("ProviderName")
-	@JsonAlias("providerName")
-	private String providerName;
-
-	@JsonProperty("MemberID")
-	@JsonAlias("memberId")
-	private String memberId;
-
-	@JsonProperty("MemberName")
-	@JsonAlias("memberName")
-	private String memberName;
-
-	@JsonProperty("GroupNumber")
-	@JsonAlias("policyNumber")
-	private String policyNumber;
-
-	@JsonProperty("ServiceStartDate")
-	@JsonAlias("dateOfService")
-	@JsonDeserialize(using = CustomizeDateDeserializer.class)
-	@CustomDateFormat(dateFormat = "MM/dd/yyyy")
-	private Date dateOfService;
-
-	@JsonProperty("IsPrintSuppressed")
-	@JsonAlias("emailAlertReq")
-	private String emailAlertReq="Y";
-
-	@JsonProperty("LetterHistoryID")
-	private String LetterHistoryID;
-
-	@JsonProperty("PassThruData")
-	private String PassThruData;
-
-	@JsonProperty("OriginPrintTrail")
-	@JsonAlias("originalPrintTrail")
-	private String originalPrintTrail;
-
-	@JsonProperty("CONFIGKEY")
-	private String CONFIGKEY;
-
-	@JsonProperty("DMSecurityClass")
-	private String DMSecurityClass;
-
-	@JsonProperty("RelatedID")
-	private String RelatedID;
-
-	@JsonProperty("MemberAltID")
-	private String MemberAltID;
-
-	@JsonProperty("ELGSLETTERGENID")
-	private String ELGSLETTERGENID;
-
-	@JsonProperty("ProviderDEC")
-	private String ProviderDEC;
-
-	@JsonProperty("NotificationLetterID")
-	private String NotificationLetterID;
-
-	@JsonProperty("ELGSREQUESTID")
-	private String ELGSREQUESTID;
-
-	@JsonProperty("GenerationType")
-	private String GenerationType;
-
-	@JsonProperty("WORKGROUP_NME")
-	private String WORKGROUP_NME;
-
-	@JsonProperty("LetterPriority")
-	private String LetterPriority;
-
-	@JsonProperty("LegacyEntity")
-	private String LegacyEntity;
-
-	@JsonProperty("BusinessSegment")
-	private String BusinessSegment;
-
-	@JsonProperty("DefaultUsed")
-	private String DefaultUsed;
-
-	@JsonProperty("HHKey")
-	private String HHKey;
-
-	@JsonProperty("DUPLEXSIMPLEX")
-	private String DUPLEXSIMPLEX;
-
-	@JsonProperty("RequesterID")
-	private String RequesterID;
-
-	@JsonProperty("MailToAddress1")
-	private String MailToAddress1;
-
-	@JsonProperty("MailToAddress2")
-	private String MailToAddress2;
-
-	@JsonProperty("MailToAddress3")
-	private String MailToAddress3;
-
-	@JsonProperty("MailToAddress4")
-	private String MailToAddress4;
-
-	@JsonProperty("MailToAddress5")
-	private String MailToAddress5;
-
-	@JsonProperty("MailToAddress6")
-	private String MailToAddress6;
-
-	public PriorAuthNextGen(){
-		this.category = "Prior Auth Notification";
-		this.fileType = "Letter";
-		this.tenant = "Link";
-		this.createApplication = "NextGen";
-		this.docSentTo = "";
-		this.sendToDocVault = false;
-		this.sendToShutterfly = false;
-		this.providerEmailId = "";
-		this.postCardInd = true;
-		this.dateEmailSent = null;
-		this.sendEmailNotifications = false;
-		this.sendPENAPIRequest = false;
-		this.privilege = "Notification/Prior Authorization Status Inquiry/Update";
-		this.subCategory = "ZZ";
-		Subcategory subCat = Subcategory.valueOf(this.subCategory);
-		this.setFilePath(subCat.getFilePath());
-	}
-
-	public String getNotificationNumber() {
-		return notificationNumber;
-	}
-
-	public void setNotificationNumber(String notificationNumber) {
-		this.notificationNumber = notificationNumber;
-	}
-
-	public String getSubCategory() {
-		return subCategory;
-	}
-
-	public void setSubCategory(String subCategory) {
-		if(subCategory == null || subCategory.isEmpty()){
-			this.subCategory = "ZZ";
-			this.setFilePath(Subcategory.ZZ.getFilePath());
-		} else {
-			this.subCategory = subCategory;
-			Subcategory subCat = null;
-			try {
-				subCat = Subcategory.valueOf(this.subCategory);
-			} catch (Exception e) {
-				subCat = Subcategory.ZZ;
-			}
-			this.setFilePath(subCat.getFilePath());
-		}
-	}
-
-	public String getTin() {
-		return tin;
-	}
-
-	public void setTin(String tin) {
-		this.tin = tin;
-	}
-
-	public String getMpin() {
-		return mpin;
-	}
-
-	public void setMpin(String mpin) {
-		if (mpin != null){
-			this.mpin = mpin;
-		}
-	}
-
-	public String getProviderName() {
-		return providerName;
-	}
-
-	public void setProviderName(String providerName) {
-		this.providerName = providerName;
-	}
-
-	public String getMemberId() {
-		return memberId;
-	}
-
-	public void setMemberId(String memberId) {
-		this.memberId = memberId;
-	}
-
-	public String getMemberName() {
-		return memberName;
-	}
-
-	public void setMemberName(String memberName) {
-		this.memberName = memberName;
-	}
-
-	public String getPolicyNumber() {
-		return policyNumber;
-	}
-
-	public void setPolicyNumber(String policyNumber) {
-		this.policyNumber = policyNumber;
-	}
-
-	public Date getDateOfService() {
-		return dateOfService;
-	}
-
-	public void setDateOfService(Date dateOfService) {
-		this.dateOfService = dateOfService;
-	}
-
-	public String getEmailAlertReq() {
-		return emailAlertReq;
-	}
-
-	public void setEmailAlertReq(String emailAlertReq) {
-		if (emailAlertReq != null && !emailAlertReq.isEmpty()){
-			this.emailAlertReq = emailAlertReq;
-		}
-	}
-
-	public String getLetterHistoryID() {
-		return LetterHistoryID;
-	}
-
-	public void setLetterHistoryID(String letterHistoryID) {
-		LetterHistoryID = letterHistoryID;
-	}
-
-	public String getPassThruData() {
-		return PassThruData;
-	}
-
-	public void setPassThruData(String passThruData) {
-		PassThruData = passThruData;
-	}
-
-	public String getOriginalPrintTrail() {
-		return originalPrintTrail;
-	}
-
-	public void setOriginalPrintTrail(String originalPrintTrail) {
-		this.originalPrintTrail = originalPrintTrail;
-	}
-
-	public String getCONFIGKEY() {
-		return CONFIGKEY;
-	}
-
-	public void setCONFIGKEY(String CONFIGKEY) {
-		this.CONFIGKEY = CONFIGKEY;
-	}
-
-	public String getDMSecurityClass() {
-		return DMSecurityClass;
-	}
-
-	public void setDMSecurityClass(String DMSecurityClass) {
-		this.DMSecurityClass = DMSecurityClass;
-	}
-
-	public String getRelatedID() {
-		return RelatedID;
-	}
-
-	public void setRelatedID(String relatedID) {
-		RelatedID = relatedID;
-	}
-
-	public String getMemberAltID() {
-		return MemberAltID;
-	}
-
-	public void setMemberAltID(String memberAltID) {
-		MemberAltID = memberAltID;
-	}
-
-	public String getELGSLETTERGENID() {
-		return ELGSLETTERGENID;
-	}
-
-	public void setELGSLETTERGENID(String ELGSLETTERGENID) {
-		this.ELGSLETTERGENID = ELGSLETTERGENID;
-	}
-
-	public String getProviderDEC() {
-		return ProviderDEC;
-	}
-
-	public void setProviderDEC(String providerDEC) {
-		ProviderDEC = providerDEC;
-	}
-
-	public String getNotificationLetterID() {
-		return NotificationLetterID;
-	}
-
-	public void setNotificationLetterID(String notificationLetterID) {
-		NotificationLetterID = notificationLetterID;
-	}
-
-	public String getELGSREQUESTID() {
-		return ELGSREQUESTID;
-	}
-
-	public void setELGSREQUESTID(String ELGSREQUESTID) {
-		this.ELGSREQUESTID = ELGSREQUESTID;
-	}
-
-	public String getGenerationType() {
-		return GenerationType;
-	}
-
-	public void setGenerationType(String generationType) {
-		GenerationType = generationType;
-	}
-
-	public String getWORKGROUP_NME() {
-		return WORKGROUP_NME;
-	}
-
-	public void setWORKGROUP_NME(String WORKGROUP_NME) {
-		this.WORKGROUP_NME = WORKGROUP_NME;
-	}
-
-	public String getLetterPriority() {
-		return LetterPriority;
-	}
-
-	public void setLetterPriority(String letterPriority) {
-		LetterPriority = letterPriority;
-	}
-
-	public String getLegacyEntity() {
-		return LegacyEntity;
-	}
-
-	public void setLegacyEntity(String legacyEntity) {
-		LegacyEntity = legacyEntity;
-	}
-
-	public String getBusinessSegment() {
-		return BusinessSegment;
-	}
-
-	public void setBusinessSegment(String businessSegment) {
-		BusinessSegment = businessSegment;
-	}
-
-	public String getDefaultUsed() {
-		return DefaultUsed;
-	}
-
-	public void setDefaultUsed(String defaultUsed) {
-		DefaultUsed = defaultUsed;
-	}
-
-	public String getHHKey() {
-		return HHKey;
-	}
-
-	public void setHHKey(String HHKey) {
-		this.HHKey = HHKey;
-	}
-
-	public String getDUPLEXSIMPLEX() {
-		return DUPLEXSIMPLEX;
-	}
-
-	public void setDUPLEXSIMPLEX(String DUPLEXSIMPLEX) {
-		this.DUPLEXSIMPLEX = DUPLEXSIMPLEX;
-	}
-
-	public String getRequesterID() {
-		return RequesterID;
-	}
-
-	public void setRequesterID(String requesterID) {
-		RequesterID = requesterID;
-	}
-
-	public String getMailToAddress1() {
-		return MailToAddress1;
-	}
-
-	public void setMailToAddress1(String mailToAddress1) {
-		MailToAddress1 = mailToAddress1;
-	}
-
-	public String getMailToAddress2() {
-		return MailToAddress2;
-	}
-
-	public void setMailToAddress2(String mailToAddress2) {
-		MailToAddress2 = mailToAddress2;
-	}
-
-	public String getMailToAddress3() {
-		return MailToAddress3;
-	}
-
-	public void setMailToAddress3(String mailToAddress3) {
-		MailToAddress3 = mailToAddress3;
-	}
-
-	public String getMailToAddress4() {
-		return MailToAddress4;
-	}
-
-	public void setMailToAddress4(String mailToAddress4) {
-		MailToAddress4 = mailToAddress4;
-	}
-
-	public String getMailToAddress5() {
-		return MailToAddress5;
-	}
-
-	public void setMailToAddress5(String mailToAddress5) {
-		MailToAddress5 = mailToAddress5;
-	}
-
-	public String getMailToAddress6() {
-		return MailToAddress6;
-	}
-
-	public void setMailToAddress6(String mailToAddress6) {
-		MailToAddress6 = mailToAddress6;
-	}
-
-	public enum ErrorMsg implements ErrorMessage {
-		LetterGenerationDate (12, "Missing or invalid data: LetterGenerationDate"),
-		NotificationNumber (12, "Missing or invalid data: NotificationNumber"),
-		LetterCategory (12, "Missing or invalid data: LetterCategory"),
-		ProviderTaxID (12,"Missing or invalid data: ProviderTaxID"),
-		ProviderMPIN (12, "Missing or invalid data: ProviderMPIN"), //"emailAlertReq!=\"N\""
-		IsPrintSuppressed (12, "Missing or invalid data: IsPrintSuppressed"),
-
-		LetterHistoryID (22, "Missing or invalid data: LetterHistoryID(SEVERE)"), //"emailAlertReq!=\"N\""
-		PassThruData (22, "Missing or invalid data: PassThruData(SEVERE)"), //"emailAlertReq!=\"N\""
-		OriginPrintTrail (22, "Missing or invalid data: OriginPrintTrail(SEVERE)"), //"emailAlertReq!=\"N\""
-		CONFIGKEY (22, "Missing or invalid data: CONFIGKEY(SEVERE)"), //"emailAlertReq!=\"N\""
-		MailToAddress1 (22, "Missing or invalid data: MailToAddress1(SEVERE)"), //"emailAlertReq!=\"N\""
-		MailToAddress2 (22, "Missing or invalid data: MailToAddress2(SEVERE)"), //"emailAlertReq!=\"N\""
-		MailToAddress4 (22, "Missing or invalid data: MailToAddress4(SEVERE)"), //"emailAlertReq!=\"N\""
-		MailToAddress5 (22, "Missing or invalid data: MailToAddress5(SEVERE)"), //"emailAlertReq!=\"N\""
-		MailToAddress6 (22, "Missing or invalid data: MailToAddress6(SEVERE)"); //"emailAlertReq!=\"N\""
-
-		private int errorCode;
-		private String errorMessage;
-
-		ErrorMsg(int code, String message) {
-			this.errorCode = code;
-			this.errorMessage = message;
-		}
-
-		public int getErrorCode() {
-			return errorCode;
-		}
-		public String getErrorMessage() {
-			return errorMessage;
-		}
-
-	}
-
-	public enum Subcategory {
-
-		// PriorAuthNextGen
-		A1 ("A1", "Commercial Prior Auth/Approved"),
-		A2 ("A2", "Commercial Prior Auth/Denied"),
-		A3 ("A3", "Commercial Prior Auth/Lack of Information"),
-		A4 ("A4", "Medicare Prior Auth/Approved"),
-		A5 ("A5", "Medicare Prior Auth/Denied"),
-		A6 ("A6", "Medicare Prior Auth/Lack of Information"),
-		A7 ("A7", "UHC West Prior Auth/Approved"),
-		A8 ("A8", "UHC West Prior Auth/Denied"),
-		A9 ("A9", "UHC West Prior Auth/Lack of Information"),
-		N1 ("N1", "Community Plan Prior Auth/Approved"),
-		N2 ("N2", "Community Plan Prior Auth/Denied"),
-		N3 ("N3", "Community Plan Prior Auth/Lack of Information"),
-		ZZ ("ZZ", "Misc. Prior Auth/Other");
-
-		private String subCat;
-		private String filePath;
-
-		Subcategory(String subCat, String filePath){
-			this.subCat = subCat;
-			this.filePath = filePath;
-		}
-		public String getSubCat() {
-			return subCat;
-		}
-
-		public String getFilePath() {
-			return filePath;
-		}
-	}
+public class DocumentResponseUtil {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(DocumentResponseUtil.class);
+
+    private DocumentResponseUtil() {
+        throw new AssertionError("cannot instantiate");
+    }
+
+    static DocumentResponse prepareFullDocumentResponse(DocumentMetaData documentMetaData,
+                                                        List<AttachmentMetaData> attmtsMetaDataList) {
+        LOGGER.debug("Entering prepareFullDocumentResponse");
+
+        var response = new DocumentResponse();
+
+        String cloudSpaceId = "";
+        if (CollectionUtils.isNotEmpty(attmtsMetaDataList)) {
+            var attachmentResponseList = prepareAttachmentResponse(attmtsMetaDataList);
+            response.setAttachments((attachmentResponseList.toArray(new Attachment[0])));
+            cloudSpaceId = attmtsMetaDataList.get(0).getCloudSpaceId();
+        }
+
+        response.setSpaceId(documentMetaData.getSpaceId());
+        if (documentMetaData.getStatus() != null) {
+            response.setStatus(documentMetaData.getStatus().toString());
+        }
+        response.setCloudSpaceId(cloudSpaceId);
+        response.setFdsDocumentId(documentMetaData.getFdsDocumentId());
+        response.setId(documentMetaData.getId());
+        response.setExternalId(documentMetaData.getExternalId());
+        response.setMetadata(documentMetaData.getMetadata());
+        if (documentMetaData.getDateCreated() != null) {	
+        	SimpleDateFormat sdf = new SimpleDateFormat("EEE MMM dd HH:mm:ss zZ yyyy");
+        	sdf.setTimeZone(TimeZone.getTimeZone("GMT"));
+        	response.setDateCreated(sdf.format(documentMetaData.getDateCreated()));
+        }
+        LOGGER.debug("Leaving prepareFullDocumentResponse");
+        return response;
+    }
+
+    public static void logInfoWithTransactionId(Logger logger, String info, String transactionId) {
+        var sb = new StringBuilder();
+        sb.append(info).append(" for transaction_id:").append(transactionId);
+        logger.debug("for transaction_id: {}", sb);
+    }
+
+    public static String buildDocumentResponseInJson(DocumentMetaData documentMetaData,
+                                                     List<AttachmentMetaData> attmtsMetaDataList) throws IOException {
+
+        String transactionId = documentMetaData.getTransactionId();
+        logInfoWithTransactionId(LOGGER, "Entered DocumentUtilService.buildDocumentResponseInJson", transactionId);
+
+        var response = prepareFullDocumentResponse(documentMetaData, attmtsMetaDataList);
+
+        logInfoWithTransactionId(LOGGER, "Exited DocumentUtilService.buildDocumentResponseInJson", transactionId);
+
+        return Parser.toJson(response, "yyyy-MM-dd'T'HH:mm:ss.SSSZ");
+    }
+
+    static List<Attachment> prepareAttachmentResponse(List<AttachmentMetaData> amds) {
+        LOGGER.debug("Entering prepareAttachmentResponse");
+        List<Attachment> attachments = new ArrayList<>();
+        var counter = 0;
+        for (AttachmentMetaData amd : amds) {
+            counter++;
+            var atmt = createAttachment(amd);
+            atmt.setIndex(counter);
+            attachments.add(atmt);
+        }
+        LOGGER.debug("Attachments Size {}", attachments.size());
+        LOGGER.debug("Leaving prepareAttachmentResponse");
+        return attachments;
+    }
+
+    static Attachment createAttachment(AttachmentMetaData amd) {
+        LOGGER.debug("Entering createAttachment");
+        var atmt = new Attachment();
+    	LOGGER.debug("Entering createAttachment");
+		atmt = Attachment.createDocLibAttachment(amd);
+		LOGGER.debug("Leaving createAttachment with Id: {}", atmt.getId());
+		return atmt;
+    }
 }
 
 
@@ -1097,267 +227,653 @@ public class PriorAuthNextGen extends ClientMetadata {
 
 
 
+====
 
 
-
-
-===
-
-
-
-import java.util.Date;
-
-public class TXGC extends ClientMetadata {
-
+@JsonIgnoreProperties(ignoreUnknown = true)
+@JsonInclude(JsonInclude.Include.NON_NULL)
+public class Attachment implements Serializable {
     private static final long serialVersionUID = 1L;
 
-    @JsonProperty("u_tmplt_nm")
-    @JsonAlias("templateName")
-    private String templateName;
+    @JsonProperty(value = "id")
+    private String id;
+
+    @JsonProperty(value = "index")
+    private Integer index;
+
+    @JsonProperty(value = "status")
+    private String status;
+
+    @JsonProperty(value = "external_id")
+    private String externalId;
+
+    @JsonProperty(value = "space_id")
+    private Integer spaceIdUnder;
+
+    @JsonProperty(value = "expires")
+    private Date expires;
+
+    @JsonProperty(value = "file_name")
+    private String fileNameUnder;
+
+    @JsonProperty(value = "file_size")
+    private Long fileSizeUnder;
+
+    @JsonProperty(value = "content_type")
+    private String contentTypeUnder;
+
+    @JsonProperty(value = "date_created")
+    private Date dateCreated;
+
+    @JsonProperty(value = "source_system_name")
+    private String sourceSystemName;
+
+    @JsonProperty(value = "source_system_date_created")
+    private Date sourceSystemDateCreated;
+
+    @JsonProperty(value = "revisions")
+    private List<AttachmentRevision> revisions;
+
+    // DocLibrary fields
+    @JsonProperty(value = "fileId")
+    private String fileId;
+
+    @JsonProperty(value = "fileDescription")
+    private String fileDescription;
+
+    @JsonProperty(value = "fileCreatedDate")
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss.SSSZ")
+    private Date fileCreatedDate;
+
+    @JsonProperty(value = "spaceId")
+    private String spaceId;
+
+    @JsonProperty(value = "fileName")
+    private String fileName;
+
+    @JsonProperty(value = "fileSize")
+    private String fileSize;
+
+    @JsonProperty(value = "contentType")
+    private String contentType;
+
+	public static long getSerialVersionUID() {
+		return serialVersionUID;
+	}
+
+	public static Attachment createDocLibAttachment(AttachmentMetaData amd) {
+		Attachment atmt = new Attachment();
+		atmt.setFileId(amd.getAttachmentId());
+		atmt.setFileCreatedDate(amd.getDateCreated());
+		atmt.setSpaceId(amd.getSpaceId());
+		atmt.setFileName(amd.getFileName());
+		atmt.setFileSize(amd.getFileSize());
+		atmt.setContentType(amd.getContentType());
+		return atmt;
+	}
+
+	public static Attachment createDocVaultAttachment(AttachmentMetaData amd) {
+		Attachment atmt = new Attachment();
+		atmt.setExpires(amd.getExpires());
+		atmt.setFileNameUnder(amd.getFileName());
+		atmt.setFileSizeUnder(amd.getFileSize());
+		atmt.setId(amd.getFsId());
+		atmt.setStatus(amd.getStatus().toString());
+		atmt.setSpaceIdUnder(amd.getSpaceId());
+		atmt.setContentTypeUnder(amd.getContentType());
+		atmt.setDateCreated(amd.getDateCreated());
+		atmt.setExternalId(amd.getExternalId());
+		return atmt;
+	}
+	
+	
+
+	public void setIndex(Integer index) {
+		this.index = index;
+	}
+
+	public void setSpaceIdUnder(Integer spaceIdUnder) {
+		this.spaceIdUnder = spaceIdUnder;
+	}
+
+	public void setFileSizeUnder(Long fileSizeUnder) {
+		this.fileSizeUnder = fileSizeUnder;
+	}
+
+	public String getFileId() {
+		return fileId;
+	}
+
+	public void setFileId(String fileId) {
+		this.fileId = fileId;
+	}
+
+	public String getFileDescription() {
+		return fileDescription;
+	}
+
+	public void setFileDescription(String fileDescription) {
+		this.fileDescription = fileDescription;
+	}
+
+	public Date getFileCreatedDate() {
+		return fileCreatedDate;
+	}
+
+	public void setFileCreatedDate(Date fileCreatedDate) {
+		this.fileCreatedDate = fileCreatedDate;
+	}
+
+	public String getSpaceId() {
+		return spaceId;
+	}
+
+	public void setSpaceId(String spaceId) {
+		this.spaceId = spaceId;
+	}
+
+	public void setSpaceId(int spaceId) {
+		this.setSpaceId(String.valueOf(spaceId));
+	}
+
+	public String getFileName() {
+		return fileName;
+	}
+
+	public void setFileName(String fileName) {
+		this.fileName = fileName;
+	}
+
+	public String getFileSize() {
+		return fileSize;
+	}
+
+	public void setFileSize(String fileSize) {
+		this.fileSize = fileSize;
+	}
+
+	public String getContentType() {
+		return contentType;
+	}
+
+	public void setContentType(String contentType) {
+		this.contentType = contentType;
+	}
+
+	public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+    }
+
+    public String getId() {
+        return id;
+    }
+
+    public void setId(String id) {
+        this.id = id;
+    }
+
+    public Integer getSpaceIdUnder() {
+        return spaceIdUnder;
+    }
+
+    public void setSpaceIdUnder(int spaceIdUnder) {
+        this.spaceIdUnder = spaceIdUnder;
+    }
+
+    public Date getExpires() {
+        return expires == null ? null : (Date) expires.clone();
+    }
+
+    public void setExpires(Date expires) {
+        this.expires = expires == null ? null : (Date) expires.clone();
+    }
+
+    public String getFileNameUnder() {
+        return fileNameUnder;
+    }
+
+    public void setFileNameUnder(String fileNameUnder) {
+        this.fileNameUnder = fileNameUnder;
+    }
+
+    public Long getFileSizeUnder() {
+        return fileSizeUnder;
+    }
+
+    public void setFileSizeUnder(long fileSizeUnder) {
+        this.fileSizeUnder = fileSizeUnder;
+    }
+
+    public String getContentTypeUnder() {
+        return contentTypeUnder;
+    }
+
+    public void setContentTypeUnder(String contentTypeUnder) {
+        this.contentTypeUnder = contentTypeUnder;
+    }
+
+    public Date getDateCreated() {
+        return dateCreated == null ? null : (Date) dateCreated.clone();
+    }
+
+    public void setDateCreated(Date dateCreated) {
+        this.dateCreated = dateCreated == null ? null : (Date) dateCreated.clone();
+    }
+
+    public String getExternalId() {
+        return externalId;
+    }
+
+    public void setExternalId(String externalId) {
+        this.externalId = externalId;
+    }
+
+    public Integer getIndex() {
+        return index;
+    }
+
+    public void setIndex(int index) {
+        this.index = index;
+    }
+
+    public String getSourceSystemName() {
+        return sourceSystemName;
+    }
+
+    public void setSourceSystemName(String sourceSystemName) {
+        this.sourceSystemName = sourceSystemName;
+    }
+
+    public Date getSourceSystemDateCreated() {
+        return sourceSystemDateCreated == null ? null : (Date) sourceSystemDateCreated.clone();
+    }
+
+    public void setSourceSystemDateCreated(Date sourceSystemDateCreated) {
+        this.sourceSystemDateCreated = sourceSystemDateCreated == null ? null : (Date) sourceSystemDateCreated.clone();
+    }
+
+    public List<AttachmentRevision> getRevisions() {
+        return revisions == null ? null : new ArrayList<>(revisions);
+    }
+
+    public void setRevisions(List<AttachmentRevision> revisions) {
+        this.revisions = revisions == null ? null : new ArrayList<>(revisions);
+    }
+
+	public void setFileSize(long fileSize) {
+		this.fileSize = String.valueOf(fileSize);
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+=====
+
+
+
+
+@JsonInclude(JsonInclude.Include.NON_NULL)
+public class DocumentResponse implements Serializable {
+    private static final long serialVersionUID = 1L;
+
+    private String id;
+    private String fdsDocumentId;
+    private String parentId;
+    private String externalId;
+    private Integer spaceId;
+    private String cloudSpaceId;
+    private String status;
+    private String version;
+    private String expires;
+    private String dateCreated;
+    private String dateModified;
+    private Rules rules;
+    private String storeInputFiles;
+    private String errorMessage;
+    private Attachment[] attachments;
+
+    private Document metadata;
+
+    private List<DocumentRevision> revisions;
     
-    @JsonAlias("subCategory")
-    private String subCategory;
-
-    @JsonProperty("u_tin")
-    @JsonAlias("tin")
-    private String tin;
-    
-    @JsonProperty("u_author")
-    @JsonAlias("author")
-    private String author;
-    
-    @JsonProperty("u_provider_npi")
-    @JsonAlias("providerNpi")
-    private String providerNpi;
-
-    @JsonProperty("u_prov_grp_nm")
-    @JsonAlias("providerGroupName")
-    private String providerGroupName;
-
-    @JsonProperty("isPrintSuppressed")
-    @JsonAlias("emailAlertReq")
-    private String emailAlertReq="N";
-
-    @JsonProperty("u_sub_nm")
-    @JsonAlias("providerName")
-    private String providerName;
-    
-
-    @JsonProperty("u_mpin")
-    @JsonAlias("mpin")
-    private String mpin="";
-
-
-    @JsonProperty("u_tracking_nbr")
-    @JsonAlias("txgcUniqueId")
-    private String txgcUniqueId;
-
-    @JsonProperty("object_name")
-    private String PassThruData;
-    
-    @JsonProperty("u_st")
-    @JsonAlias("providerSt")
-    private String providerState;
-
-
-    public TXGC(){
-
-    	
-        this.fileType = "Letter";
-        this.tenant = "Link";
-        this.createApplication = "TXGC";
-        this.docSentTo = "";
-        this.sendToDocVault = false;
-        this.sendToShutterfly = false;
-        this.providerEmailId = "";
-        this.postCardInd = true;
-        this.dateEmailSent = null;
-        this.sendEmailNotifications = false;
-        this.sendPENAPIRequest = false;
-        this.privilege = "Notification/Prior Authorization Status Inquiry/Update";
-        this.category= "TX Gold Card";
-        this.subCategory = "NN";
-        TXGC.Subcategory subCat = TXGC.Subcategory.valueOf(this.subCategory);
-        this.setFilePath(subCat.getFilePath());
-    }
-    
-    public String getTemplateName() {
-		return templateName;
+    public String getFdsDocumentId() {
+		return fdsDocumentId;
 	}
 
-	public void setTemplateName(String templateName) {
-		this.templateName = templateName;
-		
-		String subCategory = "";
-		if (templateName.equals("TXGC001")) {
-    		subCategory = "N4";
-    	} else if (templateName.equals("TXGC002")) {
-    		subCategory = "N5";
-    	}
-		
-		setSubCategory(subCategory);
+	public void setFdsDocumentId(String fdsDocumentId) {
+		this.fdsDocumentId = fdsDocumentId;
 	}
 
-    public String getSubCategory() {
-        return subCategory;
+	public String getCloudSpaceId() {
+		return cloudSpaceId;
+	}
+
+	public void setCloudSpaceId(String cloudSpaceId) {
+		this.cloudSpaceId = cloudSpaceId;
+	}
+
+	public Integer getSpaceId() {
+        return spaceId;
     }
 
-    public void setSubCategory(String subCategory) {
-    	// TXGC001 and TXGC002 for N4 and N5
-
-        if(subCategory == null || subCategory.isEmpty()){
-            this.subCategory = "NN";
-            this.setFilePath(TXGC.Subcategory.NN.getFilePath());
-        } else {
-            this.subCategory = subCategory;
-            TXGC.Subcategory subCat = null;
-            try {
-                subCat = TXGC.Subcategory.valueOf(this.subCategory);
-            } catch (Exception e) {
-                subCat = TXGC.Subcategory.NN;
-            }
-            this.setFilePath(subCat.getFilePath());
-        }
+    public void setSpaceId(Integer spaceId) {
+        this.spaceId = spaceId;
     }
 
-    public String getTin() {
-        return tin;
+    public String getId() {
+        return id;
+    }
+
+    public void setId(String id) {
+        this.id = id;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+    }
+
+    public String getVersion() {
+        return version;
+    }
+
+    public void setVersion(String version) {
+        this.version = version;
+    }
+
+    public String getExpires() {
+        return expires;
+    }
+
+    public void setExpires(String expires) {
+        this.expires = expires;
+    }
+
+    public String getParentId() {
+        return parentId;
+    }
+
+    public void setParentId(String parentId) {
+        this.parentId = parentId;
+    }
+
+    public Attachment[] getAttachments() {
+        return attachments == null ? null : attachments.clone();
+    }
+
+    public void setAttachments(Attachment[] attachments) {
+        this.attachments = attachments == null ? null : attachments.clone();
+    }
+
+    public Rules getRules() {
+        return rules;
+    }
+
+    public void setRules(Rules rules) {
+        this.rules = rules;
+    }
+
+    public String getExternalId() {
+        return externalId;
+    }
+
+    public void setExternalId(String externalId) {
+        this.externalId = externalId;
+    }
+
+    public String getStoreInputFiles() {
+        return storeInputFiles;
+    }
+
+    public void setStoreInputFiles(String storeInputFiles) {
+        this.storeInputFiles = storeInputFiles;
+    }
+
+    public String getErrorMessage() {
+        return errorMessage;
+    }
+
+    public void setErrorMessage(String errorMessage) {
+        this.errorMessage = errorMessage;
     }
 
 
-    public String getEmailAlertReq() {
-        return emailAlertReq;
+    public Document getMetadata() {
+        return metadata;
     }
 
-    public void setEmailAlertReq(String emailAlertReq) {
-        if (emailAlertReq != null && !emailAlertReq.isEmpty()){
-            this.emailAlertReq = emailAlertReq;
-        }
+    public void setMetadata(Document metadata) {
+        this.metadata = metadata;
     }
 
-    public String getProviderName() {
-        return providerName;
+    public String getDateCreated() {
+        return dateCreated;
     }
 
-    public void setProviderName(String providerName) {
-        this.providerName = providerName;
+    public void setDateCreated(String dateCreated) {
+        this.dateCreated = dateCreated;
     }
 
-
-    public String getMpin() {
-        return mpin;
+    /**
+     * @return the dateModified
+     */
+    public String getDateModified() {
+        return dateModified;
     }
 
-    public void setMpin(String mpin) {
-        if (mpin != null && !mpin.isEmpty()) {
-            String paddedMpin = StringUtils.leftPad(mpin, 9, '0');
-            this.mpin = paddedMpin;
-        }
-    }
-    
-    public String getPassThruData() {
-        return PassThruData;
+    /**
+     * @param dateModified the dateModified to set
+     */
+    public void setDateModified(String dateModified) {
+        this.dateModified = dateModified;
     }
 
-    public void setPassThruData(String passThruData) {
-        PassThruData = passThruData;
+    public List<DocumentRevision> getRevisions() {
+        return revisions == null ? null : new ArrayList<>(revisions);
     }
 
-	public String getAuthor() {
-		return author;
-	}
-
-	public void setAuthor(String author) {
-		this.author = author;
-	}
-
-	public String getProviderNpi() {
-		return providerNpi;
-	}
-
-	public void setProviderNpi(String providerNpi) {
-		this.providerNpi = providerNpi;
-	}
-
-	public String getProviderGroupName() {
-		return providerGroupName;
-	}
-
-	public void setProviderGroupName(String providerGroupName) {
-		this.providerGroupName = providerGroupName;
-	}
-
-	public String getTxgcUniqueId() {
-		return txgcUniqueId;
-	}
-
-	public void setTxgcUniqueId(String txgcUniqueId) {
-		this.txgcUniqueId = txgcUniqueId;
-	}
-
-	public String getProviderState() {
-		return providerState;
-	}
-
-	public void setProviderState(String providerState) {
-		this.providerState = providerState;
-	}
-
-	public void setTin(String tin) {
-		this.tin = tin;
-	}
-
-
-
-	public enum ErrorMsg implements ErrorMessage {
-    	u_tin (12, "Missing or invalid data: u_tin"),
-    	u_tmplt_nm (12, "Missing or invalid data: u_tmplt_nm"),
-    	isPrintSuppressed (12, "Missing or invalid data: isPrintSuppressed");
-
-
-        private int errorCode;
-        private String errorMessage;
-
-        ErrorMsg(int code, String message) {
-            this.errorCode = code;
-            this.errorMessage = message;
-        }
-
-        public int getErrorCode() {
-            return errorCode;
-        }
-        public String getErrorMessage() {
-            return errorMessage;
-        }
-
+    public void setRevisions(List<DocumentRevision> revisions) {
+        this.revisions = revisions == null ? null : new ArrayList<>(revisions);
     }
 
-    public enum Subcategory {
-
-        // TXGC (ELGS)
-        N4 ("N4", "Texas Gold Card/Approved"),
-        N5 ("N5", "Texas Gold Card/Denied"),
-        NN ("NN", "Texas Gold Card/Other");
-
-        private String subCat;
-        private String filePath;
-
-        Subcategory(String subCat, String filePath){
-            this.subCat = subCat;
-            this.filePath = filePath;
-
-        }
-        public String getSubCat() {
-            return subCat;
-        }
-
-        public String getFilePath() {
-            return filePath;
-        }
-
+    @Override
+    public String toString() {
+        return "DocumentResponse [id=" + id + ", parent_id=" + parentId + ", external_id=" + externalId + ", space_id="
+                + spaceId + ", status=" + status + ", version=" + version + ", expires=" + expires + ", rules=" + rules
+                + ", store_input_files=" + storeInputFiles + "]";
     }
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+====
+====
+
+
+
+public class AttachmentRevision extends Revision {
+    private static final long serialVersionUID = 1L;
+
+    private String adapterId;
+    private String adapterTypeId;
+    private String adapterName;
+    private String contentType;
+    private Date dateAttachmentUpdated;
+    private Date expires;
+    private String externalId;
+    private String filename;
+    private long fileSize;
+    private String fsId;
+    boolean isAsync = false;
+    private Date originalStorageDate;
+    private String sourceSystemName;
+    private Date sourceSystemDateCreated;
+    private String stAdapterDocId;
+
+    public String getAdapterId() {
+        return adapterId;
+    }
+
+    public void setAdapterId(String adapterId) {
+        this.adapterId = adapterId;
+    }
+
+    public String getAdapterName() {
+        return adapterName;
+    }
+
+    public void setAdapterName(String adapterName) {
+        this.adapterName = adapterName;
+    }
+
+    public String getAdapterTypeId() {
+        return adapterTypeId;
+    }
+
+    public void setAdapterTypeId(String adapterTypeId) {
+        this.adapterTypeId = adapterTypeId;
+    }
+
+    public String getContentType() {
+        return contentType;
+    }
+
+    public void setContentType(String contentType) {
+        this.contentType = contentType;
+    }
+
+    public Date getDateAttachmentUpdated() {
+    	return dateAttachmentUpdated==null?null:(Date)dateAttachmentUpdated.clone();
+        
+    }
+
+    public void setDateAttachmentUpdated(Date dateAttachmentUpdated) {
+    	this.dateAttachmentUpdated = dateAttachmentUpdated==null?null:(Date)dateAttachmentUpdated.clone();
+        
+    }
+
+    public Date getExpires() {
+    	return expires==null?null:(Date)expires.clone();
+        }
+
+    public void setExpires(Date expires) {
+    	this.expires = expires==null?null:(Date)expires.clone();
+        }
+
+    public String getExternalId() {
+        return externalId;
+    }
+
+    public void setExternalId(String externalId) {
+        this.externalId = externalId;
+    }
+
+    public String getFilename() {
+        return filename;
+    }
+
+    public void setFilename(String fileName) {
+        this.filename = fileName;
+    }
+
+    public long getFileSize() {
+        return fileSize;
+    }
+
+    public void setFileSize(long fileSize) {
+        this.fileSize = fileSize;
+    }
+
+    public String getFsId() {
+        return fsId;
+    }
+
+    public void setFsId(String fsId) {
+        this.fsId = fsId;
+    }
+
+    public Date getOriginalStorageDate() {
+    	return originalStorageDate==null?null:(Date)originalStorageDate.clone();
+       }
+
+    public void setOriginalStorageDate(Date originalStorageDate) {
+    	this.originalStorageDate = originalStorageDate==null?null:(Date)originalStorageDate.clone();
+        }
+
+    public Date getSourceSystemDateCreated() {
+    	return sourceSystemDateCreated==null?null:(Date)sourceSystemDateCreated.clone();
+        }
+
+    public void setSourceSystemDateCreated(Date sourceSystemDateCreated) {
+    	this.sourceSystemDateCreated = sourceSystemDateCreated==null?null:(Date)sourceSystemDateCreated.clone();
+        }
+
+    public String getSourceSystemName() {
+        return sourceSystemName;
+    }
+
+    public void setSourceSystemName(String sourceSystemName) {
+        this.sourceSystemName = sourceSystemName;
+    }
+
+    public String getStAdapterDocId() {
+        return stAdapterDocId;
+    }
+
+    public void setStAdapterDocId(String stAdapterDocId) {
+        this.stAdapterDocId = stAdapterDocId;
+    }
+}
 
 
 
@@ -1389,316 +905,283 @@ public class TXGC extends ClientMetadata {
 
 
 
-public class UHCWest extends ClientMetadata {
-	
-	private static final long serialVersionUID = 7172914485321420066L;
-	
-	@JsonProperty("tin")
-	private String tin;
-	
-	@JsonProperty("mpin")
-	private String mpin="";
-	
-	@JsonProperty("emailAlertReq")
-	@JsonAlias("isPrintSuppressed")
-	private String emailAlertReq="N";
-	
-	@JsonProperty("EFT_Ind")
-	private String EFT_Ind;
-	
-	@JsonProperty("physicianName")
-	@JsonAlias("ProviderName")
-	private String physicianName;
-	
-	@JsonProperty("CheckTraceNumber")
-	private String CheckTraceNumber;
-	
-	@JsonProperty("DefaultUsed")
-	private String DefaultUsed;
-	
-	@JsonAlias("CheckAmt")
-	@JsonProperty("CheckAmount")
-	private String CheckAmt;
-	
-	@JsonProperty("CONFIGKEY")
-	private String CONFIGKEY;
+@JsonIgnoreProperties(ignoreUnknown = true)
+@JsonInclude(JsonInclude.Include.NON_NULL)
+public class Attachment implements Serializable {
+    private static final long serialVersionUID = 1L;
 
-	@JsonProperty("originalPrintTrail")
-	private String originalPrintTrail;
-	
-	@JsonProperty("PassThruData")
-	private String PassThruData;
-	
-	@JsonProperty("MailToAddress1") 
-	private String MailToAddress1;
-	
-	@JsonProperty("MailToAddress2") 
-	private String MailToAddress2;
-	
-	@JsonProperty("MailToAddress3") 
-	private String MailToAddress3;
-	
-	@JsonProperty("MailToAddress4") 
-	private String MailToAddress4;
-	
-	@JsonProperty("MailToAddress5") 
-	private String MailToAddress5;
-	
-	@JsonProperty("MailToAddress6") 
-	private String MailToAddress6;
-	
-	@JsonProperty("subCategory")
-	protected String subCategory;
-	
-	@JsonProperty("paymentNumber")
-	@JsonAlias("vendor_pay_id")
-	private String paymentNumber;
-	
-	public UHCWest() {
-		this.category = "Payment Document";
-		this.fileType = "Letter";
-		this.tenant = "Link";
-		this.fileDescription = "Payment Package";
-		this.createApplication = "PmntEng";
-		this.docSentTo = "";
-		this.sendToDocVault = false;
-		this.sendToShutterfly = false;
-		this.providerEmailId = "";
-		this.postCardInd = true;
-		this.dateEmailSent = null;
-		this.sendEmailNotifications = false;
-		this.sendPENAPIRequest = false;
-		this.privilege = "Claim Status";
-		this.subCategory = "P5";
-		Subcategory subCat = Subcategory.valueOf(this.subCategory);
-		this.setFilePath(subCat.getFilePath());
+    @JsonProperty(value = "id")
+    private String id;
+
+    @JsonProperty(value = "index")
+    private Integer index;
+
+    @JsonProperty(value = "status")
+    private String status;
+
+    @JsonProperty(value = "external_id")
+    private String externalId;
+
+    @JsonProperty(value = "space_id")
+    private Integer spaceIdUnder;
+
+    @JsonProperty(value = "expires")
+    private Date expires;
+
+    @JsonProperty(value = "file_name")
+    private String fileNameUnder;
+
+    @JsonProperty(value = "file_size")
+    private Long fileSizeUnder;
+
+    @JsonProperty(value = "content_type")
+    private String contentTypeUnder;
+
+    @JsonProperty(value = "date_created")
+    private Date dateCreated;
+
+    @JsonProperty(value = "source_system_name")
+    private String sourceSystemName;
+
+    @JsonProperty(value = "source_system_date_created")
+    private Date sourceSystemDateCreated;
+
+    @JsonProperty(value = "revisions")
+    private List<AttachmentRevision> revisions;
+
+    // DocLibrary fields
+    @JsonProperty(value = "fileId")
+    private String fileId;
+
+    @JsonProperty(value = "fileDescription")
+    private String fileDescription;
+
+    @JsonProperty(value = "fileCreatedDate")
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss.SSSZ")
+    private Date fileCreatedDate;
+
+    @JsonProperty(value = "spaceId")
+    private String spaceId;
+
+    @JsonProperty(value = "fileName")
+    private String fileName;
+
+    @JsonProperty(value = "fileSize")
+    private String fileSize;
+
+    @JsonProperty(value = "contentType")
+    private String contentType;
+
+	public static long getSerialVersionUID() {
+		return serialVersionUID;
 	}
 
-	public String getTin() {
-		return tin;
+	public static Attachment createDocLibAttachment(AttachmentMetaData amd) {
+		Attachment atmt = new Attachment();
+		atmt.setFileId(amd.getAttachmentId());
+		atmt.setFileCreatedDate(amd.getDateCreated());
+		atmt.setSpaceId(amd.getSpaceId());
+		atmt.setFileName(amd.getFileName());
+		atmt.setFileSize(amd.getFileSize());
+		atmt.setContentType(amd.getContentType());
+		return atmt;
 	}
 
-	public void setTin(String tin) {
-		this.tin = tin;
-	}
-
-	public String getMpin() {
-		return mpin;
-	}
-
-	public void setMpin(String mpin) {
-		if (mpin != null){
-			this.mpin = mpin;
-		}
-	}
-
-	public String getEmailAlertReq() {
-		return emailAlertReq;
-	}
-
-	public void setEmailAlertReq(String emailAlertReq) {
-		if (emailAlertReq != null && !emailAlertReq.isEmpty()){
-			this.emailAlertReq = emailAlertReq;
-		}
-	}
-
-	public String getEFT_Ind() {
-		return EFT_Ind;
-	}
-
-	public void setEFT_Ind(String eFT_Ind) {
-		EFT_Ind = eFT_Ind;
-	}
-
-	public String getPhysicianName() {
-		return physicianName;
-	}
-
-	public void setPhysicianName(String physicianName) {
-		this.physicianName = physicianName;
-	}
-
-	public String getCheckTraceNumber() {
-		return CheckTraceNumber;
-	}
-
-	public void setCheckTraceNumber(String checkTraceNumber) {
-		CheckTraceNumber = checkTraceNumber;
-	}
-
-	public String getDefaultUsed() {
-		return DefaultUsed;
-	}
-
-	public void setDefaultUsed(String defaultUsed) {
-		DefaultUsed = defaultUsed;
-	}
-
-	public String getCheckAmt() {
-		return CheckAmt;
-	}
-
-	public void setCheckAmt(String checkAmt) {
-		CheckAmt = checkAmt;
-	}
-
-	public String getCONFIGKEY() {
-		return CONFIGKEY;
-	}
-
-	public void setCONFIGKEY(String cONFIGKEY) {
-		CONFIGKEY = cONFIGKEY;
-	}
-
-	public String getOriginalPrintTrail() {
-		return originalPrintTrail;
-	}
-
-	public void setOriginalPrintTrail(String originalPrintTrail) {
-		this.originalPrintTrail = originalPrintTrail;
-	}
-
-	public String getPassThruData() {
-		return PassThruData;
-	}
-
-	public void setPassThruData(String passThruData) {
-		PassThruData = passThruData;
-	}
-
-	public String getMailToAddress1() {
-		return MailToAddress1;
-	}
-
-	public void setMailToAddress1(String mailToAddress1) {
-		MailToAddress1 = mailToAddress1;
-	}
-
-	public String getMailToAddress2() {
-		return MailToAddress2;
-	}
-
-	public void setMailToAddress2(String mailToAddress2) {
-		MailToAddress2 = mailToAddress2;
-	}
-
-	public String getMailToAddress3() {
-		return MailToAddress3;
-	}
-
-	public void setMailToAddress3(String mailToAddress3) {
-		MailToAddress3 = mailToAddress3;
-	}
-
-	public String getMailToAddress4() {
-		return MailToAddress4;
-	}
-
-	public void setMailToAddress4(String mailToAddress4) {
-		MailToAddress4 = mailToAddress4;
-	}
-
-	public String getMailToAddress5() {
-		return MailToAddress5;
-	}
-
-	public void setMailToAddress5(String mailToAddress5) {
-		MailToAddress5 = mailToAddress5;
-	}
-
-	public String getMailToAddress6() {
-		return MailToAddress6;
-	}
-
-	public void setMailToAddress6(String mailToAddress6) {
-		MailToAddress6 = mailToAddress6;
-	}
-	
-	public String getSubCategory() {
-		return subCategory;
-	}
-	
-	public void setSubCategory(String subCategory) {
-		if(subCategory == null || subCategory.isEmpty()){
-			this.subCategory = "PR";
-			this.setFilePath(Subcategory.PR.getFilePath());
-		} else {
-			this.subCategory = subCategory;
-			Subcategory subCat = null;
-			try {
-				subCat = Subcategory.valueOf(this.subCategory);
-			} catch (Exception e) {
-				subCat = Subcategory.PR;
-			}
-			this.setFilePath(subCat.getFilePath());
-		}
-	}
-	
-	public String getPaymentNumber() {
-		return paymentNumber;
-	}
-	
-	public void setPaymentNumber(String paymentNumber) {
-		this.paymentNumber = paymentNumber;
-	}
-	
-	public enum ErrorMsg implements ErrorMessage {
-		tin (22, "Missing or invalid data: tin(SEVERE)"), //"EFT_Ind==\"Y\" && emailAlertReq!=\"N\"" - verify
-		mpin (22, "Missing or invalid data: mpin(SEVERE)"), //"emailAlertReq!=\"N\"" - verify
-		subCategory (12, "Missing or invalid data: subCategory"),
-		isPrintSuppressed (12,"Missing or invalid data: isPrintSuppressed"),//verify
-		createdDate (12, "Missing or invalid data: createdDate"),
-		
-		CONFIGKEY (22, "Missing or invalid data: CONFIGKEY(SEVERE)"), //"emailAlertReq!=\"N\""
-		originalPrintTrail (22, "Missing or invalid data: originalPrintTrail(SEVERE)"), //"emailAlertReq!=\"N\"" //verify
-		PassThruData (22, "Missing or invalid data: PassThruData(SEVERE)"), //"emailAlertReq!=\"N\""
-
-		MailToAddress1 (22, "Missing or invalid data: MailToAddress1(SEVERE)"), //"emailAlertReq!=\"N\""
-		MailToAddress2 (22, "Missing or invalid data: MailToAddress2(SEVERE)"), //"emailAlertReq!=\"N\""
-
-		CheckTraceNumber (12, "Missing or invalid data: CheckTraceNumber"), //verify
-		EFT_Ind (22, "Missing or invalid data: EFT_Ind(SEVERE)");
-		
-		
-		private int errorCode;
-	    private String errorMessage;
-
-	    ErrorMsg(int code, String message) {
-	        this.errorCode = code;
-	        this.errorMessage = message;
-	    }
-
-	    public int getErrorCode() {
-	        return errorCode;
-	    }
-	    public String getErrorMessage() {
-	        return errorMessage;
-	    }
-
-	}
-	
-	public enum Subcategory {
-		
-		P5 ("P5", "UHC West Payment Packages/Detailed Pmt Docs"),
-		PR ("PR", "Other PRAs/Other");
-		
-		private String subCat;
-		private String filePath;
-		
-		Subcategory(String subCat, String filePath){
-			this.subCat = subCat;
-			this.filePath = filePath;
-		}
-		public String getSubCat() {
-	        return subCat;
-	    }
-		
-		public String getFilePath() {
-			return filePath;
-		}
+	public static Attachment createDocVaultAttachment(AttachmentMetaData amd) {
+		Attachment atmt = new Attachment();
+		atmt.setExpires(amd.getExpires());
+		atmt.setFileNameUnder(amd.getFileName());
+		atmt.setFileSizeUnder(amd.getFileSize());
+		atmt.setId(amd.getFsId());
+		atmt.setStatus(amd.getStatus().toString());
+		atmt.setSpaceIdUnder(amd.getSpaceId());
+		atmt.setContentTypeUnder(amd.getContentType());
+		atmt.setDateCreated(amd.getDateCreated());
+		atmt.setExternalId(amd.getExternalId());
+		return atmt;
 	}
 	
 	
+
+	public void setIndex(Integer index) {
+		this.index = index;
+	}
+
+	public void setSpaceIdUnder(Integer spaceIdUnder) {
+		this.spaceIdUnder = spaceIdUnder;
+	}
+
+	public void setFileSizeUnder(Long fileSizeUnder) {
+		this.fileSizeUnder = fileSizeUnder;
+	}
+
+	public String getFileId() {
+		return fileId;
+	}
+
+	public void setFileId(String fileId) {
+		this.fileId = fileId;
+	}
+
+	public String getFileDescription() {
+		return fileDescription;
+	}
+
+	public void setFileDescription(String fileDescription) {
+		this.fileDescription = fileDescription;
+	}
+
+	public Date getFileCreatedDate() {
+		return fileCreatedDate;
+	}
+
+	public void setFileCreatedDate(Date fileCreatedDate) {
+		this.fileCreatedDate = fileCreatedDate;
+	}
+
+	public String getSpaceId() {
+		return spaceId;
+	}
+
+	public void setSpaceId(String spaceId) {
+		this.spaceId = spaceId;
+	}
+
+	public void setSpaceId(int spaceId) {
+		this.setSpaceId(String.valueOf(spaceId));
+	}
+
+	public String getFileName() {
+		return fileName;
+	}
+
+	public void setFileName(String fileName) {
+		this.fileName = fileName;
+	}
+
+	public String getFileSize() {
+		return fileSize;
+	}
+
+	public void setFileSize(String fileSize) {
+		this.fileSize = fileSize;
+	}
+
+	public String getContentType() {
+		return contentType;
+	}
+
+	public void setContentType(String contentType) {
+		this.contentType = contentType;
+	}
+
+	public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+    }
+
+    public String getId() {
+        return id;
+    }
+
+    public void setId(String id) {
+        this.id = id;
+    }
+
+    public Integer getSpaceIdUnder() {
+        return spaceIdUnder;
+    }
+
+    public void setSpaceIdUnder(int spaceIdUnder) {
+        this.spaceIdUnder = spaceIdUnder;
+    }
+
+    public Date getExpires() {
+        return expires == null ? null : (Date) expires.clone();
+    }
+
+    public void setExpires(Date expires) {
+        this.expires = expires == null ? null : (Date) expires.clone();
+    }
+
+    public String getFileNameUnder() {
+        return fileNameUnder;
+    }
+
+    public void setFileNameUnder(String fileNameUnder) {
+        this.fileNameUnder = fileNameUnder;
+    }
+
+    public Long getFileSizeUnder() {
+        return fileSizeUnder;
+    }
+
+    public void setFileSizeUnder(long fileSizeUnder) {
+        this.fileSizeUnder = fileSizeUnder;
+    }
+
+    public String getContentTypeUnder() {
+        return contentTypeUnder;
+    }
+
+    public void setContentTypeUnder(String contentTypeUnder) {
+        this.contentTypeUnder = contentTypeUnder;
+    }
+
+    public Date getDateCreated() {
+        return dateCreated == null ? null : (Date) dateCreated.clone();
+    }
+
+    public void setDateCreated(Date dateCreated) {
+        this.dateCreated = dateCreated == null ? null : (Date) dateCreated.clone();
+    }
+
+    public String getExternalId() {
+        return externalId;
+    }
+
+    public void setExternalId(String externalId) {
+        this.externalId = externalId;
+    }
+
+    public Integer getIndex() {
+        return index;
+    }
+
+    public void setIndex(int index) {
+        this.index = index;
+    }
+
+    public String getSourceSystemName() {
+        return sourceSystemName;
+    }
+
+    public void setSourceSystemName(String sourceSystemName) {
+        this.sourceSystemName = sourceSystemName;
+    }
+
+    public Date getSourceSystemDateCreated() {
+        return sourceSystemDateCreated == null ? null : (Date) sourceSystemDateCreated.clone();
+    }
+
+    public void setSourceSystemDateCreated(Date sourceSystemDateCreated) {
+        this.sourceSystemDateCreated = sourceSystemDateCreated == null ? null : (Date) sourceSystemDateCreated.clone();
+    }
+
+    public List<AttachmentRevision> getRevisions() {
+        return revisions == null ? null : new ArrayList<>(revisions);
+    }
+
+    public void setRevisions(List<AttachmentRevision> revisions) {
+        this.revisions = revisions == null ? null : new ArrayList<>(revisions);
+    }
+
+	public void setFileSize(long fileSize) {
+		this.fileSize = String.valueOf(fileSize);
+	}
 }
 
 
@@ -1728,475 +1211,347 @@ public class UHCWest extends ClientMetadata {
 
 
 
+==
+
+import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.List;
 
 
+@JsonInclude(JsonInclude.Include.NON_NULL)
+public class DocumentResponse implements Serializable {
+    private static final long serialVersionUID = 1L;
 
+    private String id;
+    private String fdsDocumentId;
+    private String parentId;
+    private String externalId;
+    private Integer spaceId;
+    private String cloudSpaceId;
+    private String status;
+    private String version;
+    private String expires;
+    private String dateCreated;
+    private String dateModified;
+    private Rules rules;
+    private String storeInputFiles;
+    private String errorMessage;
+    private Attachment[] attachments;
 
+    private Document metadata;
 
-======
-
-
-
-public class UNET extends ClientMetadata {
-
-	private static final long serialVersionUID = -2745167202889686149L;
-
-	@JsonProperty("ICNNUMBER")
-	@JsonAlias("claimNumber")
-	private String claimNumber;
-
-	@JsonProperty("LETTERTYPE")
-	@JsonAlias("subCategory")
-	private String subCategory;
-
-	@JsonProperty("PROVIDERTAXID")
-	@JsonAlias("tin")
-	private String tin;
-
-	@JsonProperty("tinSuff")
-	private String tinSuff;
-
-	@JsonProperty("EmplAltId")
-	@JsonAlias("MemberAltID")
-	private String MemberAltID;
-
-	@JsonProperty("isPrintSuppressed")
-	@JsonAlias("emailAlertReq")
-	private String emailAlertReq="Y";
-
-	@JsonProperty("PHYSICIANNAME")
-	@JsonAlias("providerName")
-	private String providerName;
-
-	@JsonProperty("POLICYNBR")
-	@JsonAlias("policyNumber")
-	private String policyNumber;
-
-	@JsonProperty("EMPLOYEENAME")
-	@JsonAlias("memberName")
-	private String memberName;
-
-	@JsonProperty("DATEOFSERVICE")
-	@JsonAlias("dateOfService")
-	@JsonDeserialize(using = CustomizeDateDeserializer.class)
-	@CustomDateFormat(dateFormat = "MM/dd/yyyy")
-	private Date dateOfService;
-
-	@JsonProperty("PATIENTNAME")
-	@JsonAlias("PatientName")
-	private String PatientName;
-
-	@JsonProperty("PATDOB")
-	@JsonAlias("patientDOB")
-	private String patientDOB;
-	
-	@JsonProperty("PatNbr")
-	@JsonAlias("patientAccountNumber")
-	private String patientAccountNumber;
-
-	@JsonProperty("ProvNPI")
-	@JsonAlias("npi")
-	private String npi;
-
-	@JsonProperty("IndivProvMPIN")
-	@JsonAlias("mpin")
-	private String mpin="";
-
-	@JsonProperty("EMPLOYEEID")
-	@JsonAlias("memberId")
-	private String memberId;
-
-	@JsonProperty("ELGSLETTERGENID")
-	private String ELGSLETTERGENID;
-
-	@JsonProperty("DefaultUsed")
-	private String DefaultUsed;
-
-	@JsonProperty("PassThruData")
-	private String PassThruData;
-
-	@JsonProperty("HistoryID")
-	@JsonAlias("LetterHistoryID")
-	private String LetterHistoryID;
-
-	@JsonProperty("OriginPrintTrail")
-	@JsonAlias("originalPrintTrail")
-	private String originalPrintTrail;
-
-	@JsonProperty("ConfigKey")
-	@JsonAlias("CONFIGKEY")
-	private String CONFIGKEY;
-
-	@JsonProperty("MailToAddress1")
-	private String MailToAddress1;
-
-	@JsonProperty("MailToAddress2")
-	private String MailToAddress2;
-
-	@JsonProperty("MailToAddress3")
-	private String MailToAddress3;
-
-	@JsonProperty("MailToAddress4")
-	private String MailToAddress4;
-
-	@JsonProperty("MailToAddress5")
-	private String MailToAddress5;
-
-	@JsonProperty("MailToAddress6")
-	private String MailToAddress6;
-
-	@JsonProperty("providerId")
-	private String providerId;
-
-	public UNET(){
-		
-		
-		this.fileType = "Letter";
-		this.tenant = "Link";
-		this.createApplication = "ELGS";
-		this.docSentTo = "";
-		this.sendToDocVault = false;
-		this.sendToShutterfly = false;
-		this.providerEmailId = "";
-		this.postCardInd = true;
-		this.dateEmailSent = null;
-		this.sendEmailNotifications = false;
-		this.sendPENAPIRequest = false;
-		this.privilege = "Claim Status";
-		this.providerId = "ELGS";
-		this.subCategory = "CC";
-		Subcategory subCat = Subcategory.valueOf(this.subCategory);
-		this.setFilePath(subCat.getFilePath());
+    private List<DocumentRevision> revisions;
+    
+    public String getFdsDocumentId() {
+		return fdsDocumentId;
 	}
 
-	public String getTinSuff() {
-		return tinSuff;
+	public void setFdsDocumentId(String fdsDocumentId) {
+		this.fdsDocumentId = fdsDocumentId;
 	}
 
-	public void setTinSuff(String tinSuff) {
-		this.tinSuff = tinSuff;
+	public String getCloudSpaceId() {
+		return cloudSpaceId;
 	}
 
-	public String getClaimNumber() {
-		return claimNumber;
+	public void setCloudSpaceId(String cloudSpaceId) {
+		this.cloudSpaceId = cloudSpaceId;
 	}
 
-	public void setClaimNumber(String claimNumber) {
-		this.claimNumber = claimNumber;
-	}
-
-	public String getSubCategory() {
-		return subCategory;
-	}
-
-	public void setSubCategory(String subCategory) {
-		if(subCategory == null || subCategory.isEmpty()){
-			this.subCategory = "CC";
-			this.setFilePath(Subcategory.CC.getFilePath());
-			this.setCategory("Claim");
-		} else {
-			this.subCategory = subCategory;
-			Subcategory subCat = null;
-			try {
-				subCat = Subcategory.valueOf(this.subCategory);
-			} catch (Exception e) {
-				subCat = Subcategory.CC;
-			}
-			if(subCategory.equalsIgnoreCase("C5"))
-			{
-				this.setCategory("Overpayment Documents");
-			}
-			else
-				this.setCategory("Claim");
-
-			
-			this.setFilePath(subCat.getFilePath());
-		}
-	}
-
-	public String getTin() {
-		return tin;
-	}
-
-	public void setTin(String tin) {
-		if (tin.length() > 9) {
-			this.tin = tin.substring(0, 9);
-			this.tinSuff = tin.substring(9);
-		} else {
-			this.tin = tin;
-		}
-	}
-
-	public String getMemberAltID() {
-		return MemberAltID;
-	}
-
-	public void setMemberAltID(String memberAltID) {
-		MemberAltID = memberAltID;
-	}
-
-	public String getEmailAlertReq() {
-		return emailAlertReq;
-	}
-
-	public void setEmailAlertReq(String emailAlertReq) {
-		if (emailAlertReq != null && !emailAlertReq.isEmpty()){
-			this.emailAlertReq = emailAlertReq;
-		}
-	}
-
-	public String getProviderName() {
-		return providerName;
-	}
-
-	public void setProviderName(String providerName) {
-		this.providerName = providerName;
-	}
-
-	public String getPolicyNumber() {
-		return policyNumber;
-	}
-
-	public void setPolicyNumber(String policyNumber) {
-		this.policyNumber = policyNumber;
-	}
-
-	public String getMemberName() {
-		return memberName;
-	}
-
-	public void setMemberName(String memberName) {
-		this.memberName = memberName;
-	}
-
-	public Date getDateOfService() {
-		return dateOfService;
-	}
-
-	public void setDateOfService(Date dateOfService) {
-		this.dateOfService = dateOfService;
-	}
-
-	public String getPatientName() {
-		return PatientName;
-	}
-
-	public void setPatientName(String patientName) {
-		PatientName = patientName;
-	}
-
-	public String getPatientDOB() {
-		return patientDOB;
-	}
-
-	public void setPatientDOB(String patientDOB) {
-		this.patientDOB = patientDOB;
-	}
-	
-	private String getPatientAccountNumber() {
-		return patientAccountNumber;
-	}
-
-	private void setPatientAccountNumber(String patientAccountNumber) {
-		this.patientAccountNumber = patientAccountNumber;
-	}
-
-	public String getNpi() {
-		return npi;
-	}
-	
-	public void setNpi(String npi) {
-		this.npi = npi;
-	}
-
-	public String getMpin() {
-		return mpin;
-	}
-
-	public void setMpin(String mpin) {
-		if (mpin != null && !mpin.isEmpty()) {
-			String paddedMpin = StringUtils.leftPad(mpin, 9, '0');
-			this.mpin = paddedMpin;
-		}
-	}
-
-	public String getMemberId() {
-		return memberId;
-	}
-
-	public void setMemberId(String memberId) {
-		this.memberId = memberId;
-	}
-
-	public String getELGSLETTERGENID() {
-		return ELGSLETTERGENID;
-	}
-
-	public void setELGSLETTERGENID(String ELGSLETTERGENID) {
-		this.ELGSLETTERGENID = ELGSLETTERGENID;
-	}
-
-	public String getDefaultUsed() {
-		return DefaultUsed;
-	}
-
-	public void setDefaultUsed(String defaultUsed) {
-		DefaultUsed = defaultUsed;
-	}
-
-	public String getPassThruData() {
-		return PassThruData;
-	}
-
-	public void setPassThruData(String passThruData) {
-		PassThruData = passThruData;
-	}
-
-	public String getLetterHistoryID() {
-		return LetterHistoryID;
-	}
-
-	public void setLetterHistoryID(String letterHistoryID) {
-		LetterHistoryID = letterHistoryID;
-	}
-
-	public String getOriginalPrintTrail() {
-		return originalPrintTrail;
-	}
-
-	public void setOriginalPrintTrail(String originalPrintTrail) {
-		this.originalPrintTrail = originalPrintTrail;
-	}
-
-	public String getCONFIGKEY() {
-		return CONFIGKEY;
-	}
-
-	public void setCONFIGKEY(String CONFIGKEY) {
-		this.CONFIGKEY = CONFIGKEY;
-	}
-
-	public String getMailToAddress1() {
-		return MailToAddress1;
-	}
-
-	public void setMailToAddress1(String mailToAddress1) {
-		MailToAddress1 = mailToAddress1;
-	}
-
-	public String getMailToAddress2() {
-		return MailToAddress2;
-	}
-
-	public void setMailToAddress2(String mailToAddress2) {
-		MailToAddress2 = mailToAddress2;
-	}
-
-	public String getMailToAddress3() {
-		return MailToAddress3;
-	}
-
-	public void setMailToAddress3(String mailToAddress3) {
-		MailToAddress3 = mailToAddress3;
-	}
-
-	public String getMailToAddress4() {
-		return MailToAddress4;
-	}
-
-	public void setMailToAddress4(String mailToAddress4) {
-		MailToAddress4 = mailToAddress4;
-	}
-
-	public String getMailToAddress5() {
-		return MailToAddress5;
-	}
-
-	public void setMailToAddress5(String mailToAddress5) {
-		MailToAddress5 = mailToAddress5;
-	}
-
-	public String getMailToAddress6() {
-		return MailToAddress6;
-	}
-
-	public void setMailToAddress6(String mailToAddress6) {
-		MailToAddress6 = mailToAddress6;
-	}
-
-	public String getProviderId() {
-		return providerId;
-	}
-
-	public void setProviderId(String providerId) {
-		this.providerId = providerId;
-	}
-
-	public enum ErrorMsg implements ErrorMessage {
-		SUBJECT (12, "Missing or invalid data: SUBJECT"),
-		PROCESSDATE (12, "Missing or invalid data: PROCESSDATE"),
-		ICNNUMBER (12, "Missing or invalid data: ICNNUMBER"),
-		LETTERTYPE (12,"Missing or invalid data: LETTERTYPE"),
-		PROVIDERTAXID (12, "Missing or invalid data: PROVIDERTAXID"),
-		isPrintSuppressed (12, "Missing or invalid data: isPrintSuppressed"),
-		DATEOFSERVICE (12, "Missing or invalid data: DATEOFSERVICE"),
-		IndivProvMPIN (12, "Missing or invalid data: IndivProvMPIN"), // "emailAlertReq!=\"N\""
-
-		PassThruData (22, "Missing or invalid data: PassThruData(SEVERE)"), // "emailAlertReq!=\"N\""
-		HistoryID (22, "Missing or invalid data: HistoryID(SEVERE)"), //  "emailAlertReq!=\"N\""
-		OriginPrintTrail (22, "Missing or invalid data: OriginPrintTrail(SEVERE)"), // "emailAlertReq!=\"N\""
-		MailToAddress1 (22, "Missing or invalid data: MailToAddress1(SEVERE)"), // "emailAlertReq!=\"N\""
-		MailToAddress2 (22, "Missing or invalid data: MailToAddress2(SEVERE)"), // "emailAlertReq!=\"N\""
-		MailToAddress4 (22, "Missing or invalid data: MailToAddress4(SEVERE)"), // "emailAlertReq!=\"N\""
-		MailToAddress5 (22, "Missing or invalid data: MailToAddress5(SEVERE)"), // "emailAlertReq!=\"N\""
-		MailToAddress6 (22, "Missing or invalid data: MailToAddress6(SEVERE)"); // "emailAlertReq!=\"N\""
-
-		private int errorCode;
-		private String errorMessage;
-
-		ErrorMsg(int code, String message) {
-			this.errorCode = code;
-			this.errorMessage = message;
-		}
-
-		public int getErrorCode() {
-			return errorCode;
-		}
-		public String getErrorMessage() {
-			return errorMessage;
-		}
-
-	}
-
-	public enum Subcategory {
-
-		// UNET (ELGS)
-		C1 ("C1", "Commercial/Action Required"),
-		C2 ("C2", "Commercial/Claim Receipt Acknowledgement"),
-		C3 ("C3", "Commercial/Denials"),
-		C4 ("C4", "Commercial/Please Review (FYI)"),
-		C5 ("C5", "Commercial Overpayment Letters/Overpayment Identified"),
-		C6 ("C6", "Commercial/Claim Reconsideration"),
-		C7 ("C7", "Commercial/Approvals"),
-		C8 ("C8", "Commercial/Copy of Member Letters"),
-		CC ("CC", "Commercial/Other");
-
-		private String subCat;
-		private String filePath;
-
-		Subcategory(String subCat, String filePath){
-			this.subCat = subCat;
-			this.filePath = filePath;
-			
-		}
-		public String getSubCat() {
-			return subCat;
-		}
-
-		public String getFilePath() {
-			return filePath;
-		}
-		
-	}
+	public Integer getSpaceId() {
+        return spaceId;
+    }
+
+    public void setSpaceId(Integer spaceId) {
+        this.spaceId = spaceId;
+    }
+
+    public String getId() {
+        return id;
+    }
+
+    public void setId(String id) {
+        this.id = id;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+    }
+
+    public String getVersion() {
+        return version;
+    }
+
+    public void setVersion(String version) {
+        this.version = version;
+    }
+
+    public String getExpires() {
+        return expires;
+    }
+
+    public void setExpires(String expires) {
+        this.expires = expires;
+    }
+
+    public String getParentId() {
+        return parentId;
+    }
+
+    public void setParentId(String parentId) {
+        this.parentId = parentId;
+    }
+
+    public Attachment[] getAttachments() {
+        return attachments == null ? null : attachments.clone();
+    }
+
+    public void setAttachments(Attachment[] attachments) {
+        this.attachments = attachments == null ? null : attachments.clone();
+    }
+
+    public Rules getRules() {
+        return rules;
+    }
+
+    public void setRules(Rules rules) {
+        this.rules = rules;
+    }
+
+    public String getExternalId() {
+        return externalId;
+    }
+
+    public void setExternalId(String externalId) {
+        this.externalId = externalId;
+    }
+
+    public String getStoreInputFiles() {
+        return storeInputFiles;
+    }
+
+    public void setStoreInputFiles(String storeInputFiles) {
+        this.storeInputFiles = storeInputFiles;
+    }
+
+    public String getErrorMessage() {
+        return errorMessage;
+    }
+
+    public void setErrorMessage(String errorMessage) {
+        this.errorMessage = errorMessage;
+    }
+
+
+    public Document getMetadata() {
+        return metadata;
+    }
+
+    public void setMetadata(Document metadata) {
+        this.metadata = metadata;
+    }
+
+    public String getDateCreated() {
+        return dateCreated;
+    }
+
+    public void setDateCreated(String dateCreated) {
+        this.dateCreated = dateCreated;
+    }
+
+    /**
+     * @return the dateModified
+     */
+    public String getDateModified() {
+        return dateModified;
+    }
+
+    /**
+     * @param dateModified the dateModified to set
+     */
+    public void setDateModified(String dateModified) {
+        this.dateModified = dateModified;
+    }
+
+    public List<DocumentRevision> getRevisions() {
+        return revisions == null ? null : new ArrayList<>(revisions);
+    }
+
+    public void setRevisions(List<DocumentRevision> revisions) {
+        this.revisions = revisions == null ? null : new ArrayList<>(revisions);
+    }
+
+    @Override
+    public String toString() {
+        return "DocumentResponse [id=" + id + ", parent_id=" + parentId + ", external_id=" + externalId + ", space_id="
+                + spaceId + ", status=" + status + ", version=" + version + ", expires=" + expires + ", rules=" + rules
+                + ", store_input_files=" + storeInputFiles + "]";
+    }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+==
+
+public class AttachmentRevision extends Revision {
+    private static final long serialVersionUID = 1L;
+
+    private String adapterId;
+    private String adapterTypeId;
+    private String adapterName;
+    private String contentType;
+    private Date dateAttachmentUpdated;
+    private Date expires;
+    private String externalId;
+    private String filename;
+    private long fileSize;
+    private String fsId;
+    boolean isAsync = false;
+    private Date originalStorageDate;
+    private String sourceSystemName;
+    private Date sourceSystemDateCreated;
+    private String stAdapterDocId;
+
+    public String getAdapterId() {
+        return adapterId;
+    }
+
+    public void setAdapterId(String adapterId) {
+        this.adapterId = adapterId;
+    }
+
+    public String getAdapterName() {
+        return adapterName;
+    }
+
+    public void setAdapterName(String adapterName) {
+        this.adapterName = adapterName;
+    }
+
+    public String getAdapterTypeId() {
+        return adapterTypeId;
+    }
+
+    public void setAdapterTypeId(String adapterTypeId) {
+        this.adapterTypeId = adapterTypeId;
+    }
+
+    public String getContentType() {
+        return contentType;
+    }
+
+    public void setContentType(String contentType) {
+        this.contentType = contentType;
+    }
+
+    public Date getDateAttachmentUpdated() {
+    	return dateAttachmentUpdated==null?null:(Date)dateAttachmentUpdated.clone();
+        
+    }
+
+    public void setDateAttachmentUpdated(Date dateAttachmentUpdated) {
+    	this.dateAttachmentUpdated = dateAttachmentUpdated==null?null:(Date)dateAttachmentUpdated.clone();
+        
+    }
+
+    public Date getExpires() {
+    	return expires==null?null:(Date)expires.clone();
+        }
+
+    public void setExpires(Date expires) {
+    	this.expires = expires==null?null:(Date)expires.clone();
+        }
+
+    public String getExternalId() {
+        return externalId;
+    }
+
+    public void setExternalId(String externalId) {
+        this.externalId = externalId;
+    }
+
+    public String getFilename() {
+        return filename;
+    }
+
+    public void setFilename(String fileName) {
+        this.filename = fileName;
+    }
+
+    public long getFileSize() {
+        return fileSize;
+    }
+
+    public void setFileSize(long fileSize) {
+        this.fileSize = fileSize;
+    }
+
+    public String getFsId() {
+        return fsId;
+    }
+
+    public void setFsId(String fsId) {
+        this.fsId = fsId;
+    }
+
+    public Date getOriginalStorageDate() {
+    	return originalStorageDate==null?null:(Date)originalStorageDate.clone();
+       }
+
+    public void setOriginalStorageDate(Date originalStorageDate) {
+    	this.originalStorageDate = originalStorageDate==null?null:(Date)originalStorageDate.clone();
+        }
+
+    public Date getSourceSystemDateCreated() {
+    	return sourceSystemDateCreated==null?null:(Date)sourceSystemDateCreated.clone();
+        }
+
+    public void setSourceSystemDateCreated(Date sourceSystemDateCreated) {
+    	this.sourceSystemDateCreated = sourceSystemDateCreated==null?null:(Date)sourceSystemDateCreated.clone();
+        }
+
+    public String getSourceSystemName() {
+        return sourceSystemName;
+    }
+
+    public void setSourceSystemName(String sourceSystemName) {
+        this.sourceSystemName = sourceSystemName;
+    }
+
+    public String getStAdapterDocId() {
+        return stAdapterDocId;
+    }
+
+    public void setStAdapterDocId(String stAdapterDocId) {
+        this.stAdapterDocId = stAdapterDocId;
+    }
+}
+
 
