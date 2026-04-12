@@ -1,129 +1,281 @@
 
 
+@Service("ManipulateStorageErrorPdfFile")
+public class ManipulateStorageErrorPdfFile extends OptumJavaDelegateBase {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(ManipulateStorageErrorPdfFile.class);
 
-public class CustomDateDeserializer extends StdDeserializer<Date> {
+    private static final SecureRandom random = new SecureRandom();
+    private static final List<String> REQ_VARS = List.of(
+            LIST_DOCUMENT_METADATA,
+            SKIP_MANIPULATE_PDF_FILE,
+            ADDRESS_BLOCK_X,
+            ADDRESS_BLOCK_Y,
+            IDENTIFIER_FONT_SIZE,
+            RECEIVER_IDENTIFIER
+    );
+    private static final DateTimeFormatter format = DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS");
+    private String correlationIDsString;
+    private Map<String, String> correlationIDs;
+    private DelegateExecution execution;
 
-	private static final long serialVersionUID = -1026166191652831116L;
-
-	private static final Logger LOGGER = LogManager.getLogger(CustomDateDeserializer.class);
-
-	// 12/31/2021 5:45:22 PM
-
-	private DateTimeFormatter dateTimeFormatter = new DateTimeFormatterBuilder()
-            .appendPattern("[MM/dd/yyyy H:mm:ss]")
-            .appendPattern("[MMddyyyy]")
-            .appendPattern("[MM/dd/yyyy]")
-            .appendPattern("[MM/dd/yy]")
-            .appendPattern("[M/dd/yyyy]")
-            .appendPattern("[MM-dd-yyyy]")
-            .parseDefaulting(ChronoField.MONTH_OF_YEAR, 01)
-            .parseDefaulting(ChronoField.DAY_OF_MONTH, 01)
-            .parseDefaulting(ChronoField.HOUR_OF_DAY, 0)
-            .parseDefaulting(ChronoField.MINUTE_OF_HOUR, 00)
-            .parseDefaulting(ChronoField.SECOND_OF_MINUTE, 00)
-            .parseDefaulting(ChronoField.MILLI_OF_SECOND, 000)
-            .toFormatter()
-            .withLocale(Locale.US)
-            .withZone(ZoneId.of("UTC"));
-
-	private DateTimeFormatter dateTimeFormatter1 = new DateTimeFormatterBuilder()
-            .appendPattern("[MM/dd/yyy hh:mm:ss a]")
-            .appendPattern("[MM/dd/yyyy h:mm:ss a]")
-            .appendPattern("[MM/d/yyyy h:mm:ss a]")
-            .appendPattern("[M/dd/yyyy h:mm:ss a]")
-            .appendPattern("[M/d/yyyy h:mm:ss a]")
-            .appendPattern("[d/MM/yyyy h:mm:ss a]")
-            .appendPattern("[dd/M/yyyy h:mm:ss a]")
-            .appendPattern("[dd/MM/yyyy h:mm:ss a]")
-            .appendPattern("[d/M/yyyy h:mm:ss a]")
-            .appendPattern("[dd/MM/yyyy HH:mm:ss]")
-            .parseDefaulting(ChronoField.MONTH_OF_YEAR, 01)
-            .parseDefaulting(ChronoField.DAY_OF_MONTH, 01)
-            .parseDefaulting(ChronoField.MINUTE_OF_HOUR, 00)
-            .parseDefaulting(ChronoField.SECOND_OF_MINUTE, 00)
-            .parseDefaulting(ChronoField.MILLI_OF_SECOND, 000)
-            .toFormatter()
-            .withLocale(Locale.US)
-            .withZone(ZoneId.of("UTC"));
-
-	private DateTimeFormatter dateTimeFormatter2 = new DateTimeFormatterBuilder()
-            .appendPattern("[yyyy-MM-dd HH:mm:ss.SSS]")
-            .parseDefaulting(ChronoField.MONTH_OF_YEAR, 01)
-            .parseDefaulting(ChronoField.DAY_OF_MONTH, 01)
-            .parseDefaulting(ChronoField.MINUTE_OF_HOUR, 00)
-            .parseDefaulting(ChronoField.SECOND_OF_MINUTE, 00)
-            .toFormatter()
-            .withLocale(Locale.US)
-            .withZone(ZoneId.of("UTC"));
-
-    private DateTimeFormatter dateFormatter3 = DateTimeFormatter.ofPattern("MMMM dd, yyyy", Locale.US);
-
-    private DateTimeFormatter dateFormatter4 = DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.US);
-
-    private DateTimeFormatter outputFormat = DateTimeFormatter.ofPattern("[yyyy-MM-dd'T'HH:mm:ss.SSS'Z']");
-
-    private static final ThreadLocal<SimpleDateFormat> formatter = ThreadLocal.withInitial(() -> new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"));
-
-	public CustomDateDeserializer() {
-        this(null);
+    public ManipulateStorageErrorPdfFile() {
+        super(REQ_VARS);
     }
 
-    public CustomDateDeserializer(Class<?> vc) {
-        super(vc);
-    }
-
-	@Override
-    public Date deserialize(JsonParser jsonparser, DeserializationContext context) throws IOException, JsonProcessingException {
-        ZonedDateTime zdt;
-        String convertedDate;
-        String date = jsonparser.getText();
+    @SuppressWarnings("unchecked")
+    @Override
+    public void doExecute(DelegateExecution delegateExecution) {
+        execution = delegateExecution;
+        LOGGER.debug("ManipulatePdfFile-->ENTER");
         try {
-            if (date == null || date.isEmpty()) {
+            correlationIDs = (Map<String, String>) execution.getVariable(CORRELATION_IDS);
+            correlationIDsString = Optional.ofNullable((Map<String, String>) execution.getVariable(CORRELATION_IDS))
+                    .map(o -> o.values().toString()).orElse("EMPTY");
+            var skipManipulatePdfFile = Boolean.parseBoolean(String.valueOf(execution.getVariable(SKIP_MANIPULATE_PDF_FILE)));
+            if (skipManipulatePdfFile) {
+                LOGGER.info("ManipulatePdfFile-->Manipulation of PDF files not required for CorrelationIDs {} as skipManipulatePdfFile is {}", correlationIDsString, true);
+                execution.setTransientVariable(MANIPULATE_PDF_FILE_MESSAGE, String.format("Manipulation of PDF files not required for CorrelationIDs %s as skipManipulatePdfFile is %s",
+                        correlationIDsString, true));
+                return;
+            }
+
+            var addressBlockX = (double) execution.getVariable(ADDRESS_BLOCK_X);
+            var addressBlockY = (double) execution.getVariable(ADDRESS_BLOCK_Y);
+            var fontSize = (double) execution.getVariable(IDENTIFIER_FONT_SIZE);
+            var receiverIdentifier = execution.getVariable(RECEIVER_IDENTIFIER, String.class);
+            var pdfUtilBuilder = new PdfUtil.PdfUtilBuilder()
+                    .setxCoordinate(addressBlockX)
+                    .setyCoordinate(addressBlockY)
+                    .setFontSize((float)fontSize)
+                    .setReceiverAddressIdentifier(receiverIdentifier);
+
+            var listDocumentMetaData = (List<DocumentMetaData>) execution.getVariable(LIST_DOCUMENT_METADATA);
+            if (writeToPDF(pdfUtilBuilder, listDocumentMetaData)) {
+                return;
+            }
+            execution.setTransientVariable(LIST_DOCUMENT_METADATA, listDocumentMetaData);
+            LOGGER.debug("ManipulatePdfFile-->PDF files manipulated for CorrelationIDs {} as skipManipulatePdfFile is {}", correlationIDsString, false);
+            execution.setTransientVariable(MANIPULATE_PDF_FILE_MESSAGE, String.format(
+                    "PDF files manipulated for CorrelationIDs %s as skipManipulatePdfFile is %s", correlationIDsString, false));
+        } catch (Exception e) {
+            LOGGER.error("doExecute Exception while executing ManipulatePdfFile task {}={} {}",
+                    "delegateExecutionId", execution != null ? execution.getId() : "NULL",
+                    ExceptionUtils.getStackTrace(e));
+            addErrorMsg("ManipulatePdfFile-->doExecute-->Exception while executing ManipulatePdfFile task", e.getMessage());
+            return;
+        }
+        LOGGER.debug("ManipulatePdfFile-->doExecute-->END");
+    }
+
+    private boolean writeToPDF(PdfUtil.PdfUtilBuilder pdfUtilBuilder, List<DocumentMetaData> listDocumentMetaData) {
+        var writeEncryptedPDF = Boolean.parseBoolean(String.valueOf(execution.getVariable(WRITE_ENCRYPTED_PDF)));
+        var receiverIdentifier = pdfUtilBuilder.getReceiverAddressIdentifier();
+
+        for (var documentMetaData : listDocumentMetaData) {
+            var metaData = documentMetaData.getMetadata();
+            var targetWorkingDir = metaData.getString(DOCUMENT_ABSOLUTE_PATH);
+            
+            // skipping pdf manipulation for those which don't have pdf
+            if (metaData.getBoolean(SKIP_MANIPULATE_PDF_FILE, false)) {
+                continue;
+            }
+            var clone = targetWorkingDir + "new" + DEFAULT_FILE_SEPARATOR;
+            var tagLine = generateTagLine();
+
+            var pdfReceiverIdentifier = receiverIdentifier + StringUtils.SPACE + tagLine;
+            var isException = false;
+            
+            var fileName = documentMetaData.getFileName();
+            // setting PdfBuilder for current pdf
+            pdfUtilBuilder.setReceiverAddressIdentifier(pdfReceiverIdentifier)
+                    .setPdfFile(targetWorkingDir + fileName)
+                    .setOutputPdf(clone + fileName);
+            try {
+                createDirectoryAndWriteToPDF(writeEncryptedPDF, pdfUtilBuilder, clone);
+                metaData.append(TAG_LINE, tagLine)
+                .append(DOCUMENT_ABSOLUTE_PATH, clone);
+            } catch (Exception e) {
+                var documentId = documentMetaData.getId();
+                LOGGER.error("doExecute Failed to append receiver identifier on the pdf file {}={}, {}={} {}",
+                        "delegateExecutionId", execution.getId(),
+                        "documentId", documentId,
+                        ExceptionUtils.getStackTrace(e));
+                LOGGER.error("ManipulatePdfFile-->doExecute-->Failed to append receiver identifier on the pdf file for CorrelationID {} and error:{}",
+                        Optional.ofNullable(correlationIDs).map(o -> o.get(documentId)).orElse(StringUtils.EMPTY), e.getMessage());
+                addErrorMsg("ManipulatePdfFile-->doExecute-->Failed to append receiver identifier on the pdf file", e.getMessage());
+                isException = true;
+            }
+            LOGGER.debug("ManipulatePdfFile added tagLine to the DocumentMetaData list for CorrelationID {}", correlationIDsString);
+
+            if (isException) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void createDirectoryAndWriteToPDF(boolean writeEncryptedPDF, PdfUtil.PdfUtilBuilder pdfUtilBuilder, String clone)
+            throws IOException {
+        Utilities.createWorkingDirectory(clone);
+        var pdfUtil = pdfUtilBuilder.build();
+        if (writeEncryptedPDF) {
+            pdfUtil.writeOnEncryptedPdf();
+        } else {
+            pdfUtil.writeOnPdf();
+        }
+    }
+
+    private String generateTagLine() {
+        return LocalDateTime.now().format(format) + getSecureRandomNumber();
+    }
+
+    private String getSecureRandomNumber() {
+        return String.format("%06d", random.nextInt(999999));
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+==
+
+
+
+
+@Service("MatchAndMerge")
+public class MatchAndMerge extends OptumJavaDelegateBase {
+	
+	private static final Logger LOGGER = LoggerFactory.getLogger(MatchAndMerge.class);
+	
+	private static final List<String> REQ_VARS = List.of(
+            Workflow.MATCH_CRITERIA,
+            Workflow.SEARCH_WINDOW,
+            Workflow.DOCUMENT_IDS
+    );
+	
+	@Autowired
+    DocumentMetaDataService documentMetaDataService;
+    
+    DelegateExecution tempExecution;
+    
+    public MatchAndMerge() {
+        super(REQ_VARS);
+    }
+    
+    @Override
+    protected void doExecute(DelegateExecution execution) {
+    	tempExecution = execution;
+    	String matchCriteria = execution.getVariable(Workflow.MATCH_CRITERIA, String.class);
+        String searchWindow = execution.getVariable(Workflow.SEARCH_WINDOW, String.class);
+    	List<String> matchDocumentIds = execution.getVariable(Workflow.DOCUMENT_IDS, List.class);
+    	
+    	try {
+        	List<DocumentMetaData> matchDocumentMetaDataList = documentMetaDataService.getDocumentMetaDataList(matchDocumentIds);
+        	if (matchDocumentMetaDataList.isEmpty()) {
+        		LOGGER.debug("MatchAndMerge matchDocumentMetaDataList is null or empty");
+        		setExitNow(execution);
+        		return;
+        	}
+        	
+        	Criteria searchWindowCriteria = getSearchWindowCriteria(searchWindow);
+    		if (searchWindowCriteria == null) {
+    			LOGGER.debug("MatchAndMerge no search window criteria for searchWindow={}", searchWindow);
+    			setExitNow(execution);
+    			return;
+    		}
+    		
+    		List<String> docLibPutDocumentIds = new ArrayList<>();
+            
+        	for (DocumentMetaData matchDocument : matchDocumentMetaDataList) {
+        		
+        		// take matchDocument, get searchCriteria
+        		String searchCriteria = getSearchCriteria(matchDocument, matchCriteria);
+        		if (searchCriteria == null) {
+        			LOGGER.warn("MatchAndMerge no search criteria for matchDocument={}, matchDocumentId={}, matchCriteria={}", matchDocument, matchDocument.getId(), matchCriteria);
+        			continue;
+        		}
+        		
+        		// if found document, then update metadata save to list for bulk update to mongo?
+        		List<DocumentMetaData> matchedDocumentList = documentMetaDataService.getDocumentMetaData(searchCriteria, searchWindowCriteria);
+        		List<String> completedMergeDocumentIds = mergeDocuments(matchedDocumentList, matchDocument);
+        		docLibPutDocumentIds.addAll(completedMergeDocumentIds);
+        	}
+        	execution.setVariable(Workflow.DOCLIB_PUT_DOCUMENT_IDS, docLibPutDocumentIds);
+
+    	} catch (Exception e) {
+    		LOGGER.error("MatchAndMerge-->doExecute-->exception={}", ExceptionUtils.getStackTrace(e));
+    		addErrorMsg("Exception", e.getMessage());
+    	}
+    }
+    
+    private List<String> mergeDocuments(List<DocumentMetaData> matchedDocumentList, DocumentMetaData matchedDocument) {
+    	LOGGER.info("MatchAndMerge mergeDocuments found documents to merge matchedDocument={}, matchedDocumentList={}", matchedDocument, matchedDocumentList);
+    	List<String> updatedDocumentIds = new ArrayList<>();
+    	for(DocumentMetaData doc : matchedDocumentList) {
+    		// merge documents
+    		doc.getMetadata().putAll(matchedDocument.getMetadata());
+    		DocumentMetaData updatedDoc = documentMetaDataService.saveDocumentMetaData(doc);
+    		updatedDocumentIds.add(updatedDoc.getId());
+    	}
+    	return updatedDocumentIds;
+    }
+    
+    private Criteria getSearchWindowCriteria(String searchWindow) throws IOException, ParseException {
+        if (validateJsonString(searchWindow) == null) {
+            LOGGER.error("MatchAndMerge-->doExecute-->search window is invalid");
+            return null;
+        }
+
+        Criteria searchWindowCriteria = WorkFlowUtil.getSearchWindowCriteria(searchWindow);
+        if (searchWindowCriteria == null) {
+            LOGGER.error("MatchAndMerge-->doExecute-->unable to create search window criteria");
+            return null;
+        }
+        return searchWindowCriteria;
+    }
+    
+    private String getSearchCriteria(DocumentMetaData matchDocument, String matchCriteria) {
+        String searchCriteria;
+        try {
+            var documentJsonString = Parser.toJson(matchDocument, "yyyy-MM-dd'T'HH:mm:ss.SSSXXX");
+            searchCriteria = WorkFlowUtil.replacePlaceHolders(matchCriteria, documentJsonString);
+            if (validateJsonString(searchCriteria) == null) {
+                LOGGER.error("MatchAndMerge-->doExecute-->match criteria is invalid after replacing placeholders");
                 return null;
             }
-            zdt = ZonedDateTime.parse(date, dateTimeFormatter);
-            convertedDate = zdt.format(outputFormat);
-            LOGGER.debug("convertedDate={}", convertedDate);
-            return formatter.get().parse(convertedDate);
-        } catch (Exception e1) {
-            LOGGER.debug("Failed dateTimeFormatter: date={}; e={}", date, e1.getMessage());
-            try {
-                zdt = ZonedDateTime.parse(date, dateTimeFormatter1);
-                convertedDate = zdt.format(outputFormat);
-                LOGGER.debug("convertedDate={}", convertedDate);
-                return formatter.get().parse(convertedDate);
-            } catch (Exception e2) {
-                LOGGER.debug("Failed dateTimeFormatter1: date={}; e={}", date, e1.getMessage());
-                try {
-                    zdt = ZonedDateTime.parse(date, dateTimeFormatter2);
-                    convertedDate = zdt.format(outputFormat);
-                    LOGGER.debug("convertedDate={}", convertedDate);
-                    return formatter.get().parse(convertedDate);
-                } catch (Exception e3) {
-                    LOGGER.debug("Failed dateTimeFormatter2: date={}; e={}", date, e3.getMessage());
-                    try {
-                        LocalDate ld = LocalDate.parse(date, dateFormatter3);
-                        zdt = ld.atStartOfDay(ZoneId.of("UTC"));
-                        convertedDate = zdt.format(outputFormat);
-                        LOGGER.debug("convertedDate={}", convertedDate);
-                        return formatter.get().parse(convertedDate);
-                    } catch (Exception e4) {
-                        LOGGER.debug("Failed dateFormatter: date={}; e={}", date, e4.getMessage());
-                        try{
-                            LocalDate ld = LocalDate.parse(date, dateFormatter4);
-                            zdt = ld.atStartOfDay(ZoneId.of("UTC"));
-                            convertedDate = zdt.format(outputFormat);
-                            LOGGER.debug("convertedDate={}", convertedDate);
-                            return formatter.get().parse(convertedDate);
-                        } catch (Exception e5) {
-                            LOGGER.error("Failed dateFormatter5: date={}; e={}", date, e4.getMessage());
-                            return null;
-                        }
-                    }
-                }
-            }
+        } catch (Exception e) {
+            LOGGER.error("MatchAndMerge doExecute Expection while replacing placeholders in match criteria matchDocumentId={}, matchCriteria={}, e={}", matchDocument.getId(), matchCriteria, ExceptionUtils.getStackTrace(e));
+            addErrorMsg("Exception: ", e.getMessage());
+            return null;
         }
+        return searchCriteria;
+    }
+    
+    protected HashMap<String, Object> validateJsonString(String jsonString) {
+        HashMap<String, Object> map = null;
+        try {
+            map = Parser.parseJson(jsonString, new TypeReference<>() {});
+        } catch (IOException e) {
+            LOGGER.error("validateJsonString Exception while executing MatchAndMergeDocumentsFromDB task {}={} {}", "jsonString", jsonString, ExceptionUtils.getStackTrace(e));
+            addErrorMsg("MatchAndMerge-->validateJsonString-->Input format is incorrect for " + jsonString, WorkFlowUtil.getStackTrace(e));
+        }
+        return map;
     }
 
 }
@@ -147,208 +299,258 @@ public class CustomDateDeserializer extends StdDeserializer<Date> {
 
 
 
+==
 
 
+@Service("MatchAndMergeDocumentsFromDB")
+public class MatchAndMergeDocumentsFromDB extends OptumJavaDelegateBase {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(MatchAndMergeDocumentsFromDB.class);
 
+    private static final String JSON_FILE_NAME = "UpdatedDocuments.json";
 
+    private static final String TARGET_TYPE = "documents";
 
+    private static final String DELEGATE_EXECUTION = "delegateExecutionId";
+    private static final List<String> REQ_VARS = List.of(
+            Workflow.JSON_FILE,
+            Workflow.MATCH_CRITERIA,
+            Workflow.SEARCH_WINDOW,
+            Workflow.OUTPUT_FILE_DIR
+    );
 
+    @Autowired
+    DocumentMetaDataService documentMetadataService;
 
+    @Autowired
+    EmailService emailService;
 
+    @Autowired
+    CsvProcessorsService csvProcessorsService;
 
+    @Autowired
+    ProcessorsService processorsService;
 
+    @Autowired
+    ProcessorService processorService;
 
+    private DelegateExecution tempExecution;
+    private List<DocumentMetaData> documentList;
+    private Criteria searchWindowCriteria;
 
-
-=====
-
-
-
-public class CustomizeDateDeserializer extends StdDeserializer<Date> implements ContextualDeserializer {
-	
-	private static final long serialVersionUID = 5875147769183417249L;
-
-	private static final Logger LOGGER = LoggerFactory.getLogger(CustomizeDateDeserializer.class);
-
-	private String customDateFormat = null;
-	 
-	public CustomizeDateDeserializer() {
-		super(Date.class);
-	}
-
-	public CustomizeDateDeserializer(String customDateFormat) {
-		super(Date.class);
-		this.customDateFormat = customDateFormat;
-	}
-	
-	@Override
-	public JsonDeserializer<?> createContextual(DeserializationContext ctxt, BeanProperty property)
-			throws JsonMappingException {
-		CustomDateFormat cusAnn = property.getAnnotation(CustomDateFormat.class);
-        if (cusAnn != null) {
-            String cusDateFormat = cusAnn.dateFormat();
-            // return a new instance, so that different properties will not share the same deserializer instance
-            return new CustomizeDateDeserializer(cusDateFormat);
-        }
-        return this;
-	}
-
-	@Override
-	public Date deserialize(JsonParser jsonParser, DeserializationContext context)
-			throws IOException {
-
-		Date date = null;
-		String dateStg = jsonParser.getText();
-
-		try {
-			if (StringUtils.isNullOrEmpty(dateStg)) {
-				return null;
-			}
-			SimpleDateFormat formatter = new SimpleDateFormat(this.customDateFormat);
-			formatter.setTimeZone(TimeZone.getTimeZone("UTC"));
-			try {
-				date = formatter.parse(dateStg);
-			} catch (ParseException e) {
-				// if the first format fails, try the second format
-				SimpleDateFormat formatter2 = new SimpleDateFormat("MMMM dd, yyyy");
-				formatter2.setTimeZone(TimeZone.getTimeZone("UTC"));
-				date = formatter2.parse(dateStg);
-			}
-
-		} catch (ParseException e) {
-			LOGGER.error("CustomJsonDateDeserializer {} dateStg {}", ExceptionUtils.getStackTrace(e), dateStg);
-		}
-		return date;
-	}
-
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-====
-
-
-@JsonInclude(JsonInclude.Include.NON_NULL)
-@JsonIgnoreProperties(ignoreUnknown = true)
-public class P360TXGCDocument implements Serializable {
-
-    @JsonProperty(value = "npi")
-    private String npi;
-    @JsonProperty(value = "ExemptionApprovalStatus")
-    private String ExemptionApprovalStatus;
-    @JsonProperty(value = "ExemptionStartDt")
-    private String ExemptionStartDt;
-    @JsonProperty(value = "ExemptionEndDt")
-
-    private String ExemptionEndDt;
-    @JsonProperty(value = "ExemptionCycleStartDt")
-    private String ExemptionCycleStartDt;
-    @JsonProperty(value = "ExemptionCycleEndDt")
-    private String ExemptionCycleEndDt;
-
-//    @JsonProperty(value = "Codes")
-//    private P360TXGCCodes[] Codes;
-
-//    public P360TXGCCodes[] getCodes() {
-//        return Codes;
-//    }
-//
-//    public void setCodes(P360TXGCCodes[] codes) {
-//        Codes = codes;
-//    }
-
-    public String getNpi() {
-        return npi;
-    }
-
-    public void setNpi(String npi) {
-        this.npi = npi;
-    }
-
-    public String getExemptionApprovalStatus() {
-        return ExemptionApprovalStatus;
-    }
-
-    public void setExemptionApprovalStatus(String exemptionApprovalStatus) {
-        ExemptionApprovalStatus = exemptionApprovalStatus;
-    }
-
-    public String getExemptionStartDt() {
-        return ExemptionStartDt;
-    }
-
-    public void setExemptionStartDt(String exemptionStartDt) {
-        ExemptionStartDt = exemptionStartDt;
-    }
-
-    public String getExemptionEndDt() {
-        return ExemptionEndDt;
-    }
-
-    public void setExemptionEndDt(String exemptionEndDt) {
-        ExemptionEndDt = exemptionEndDt;
-    }
-
-    public String getExemptionCycleStartDt() {
-        return ExemptionCycleStartDt;
-    }
-
-    public void setExemptionCycleStartDt(String exemptionCycleStartDt) {
-        ExemptionCycleStartDt = exemptionCycleStartDt;
-    }
-
-    public String getExemptionCycleEndDt() {
-        return ExemptionCycleEndDt;
-    }
-
-    public void setExemptionCycleEndDt(String exemptionCycleEndDt) {
-        ExemptionCycleEndDt = exemptionCycleEndDt;
+    public MatchAndMergeDocumentsFromDB() {
+        super(REQ_VARS);
     }
 
     @Override
-    public String toString() {
-        return "P360TXGCDocument{" +
-                "npi=" + npi +
-                ", ExemptionApprovalStatus='" + ExemptionApprovalStatus + '\'' +
-                ", ExemptionStartDt='" + ExemptionStartDt + '\'' +
-                ", ExemptionEndDt='" + ExemptionEndDt + '\'' +
-                ", ExemptionCycleStartDt='" + ExemptionCycleStartDt + '\'' +
-                ", ExemptionCycleEndDt='" + ExemptionCycleEndDt + '\'' +
-//                ", Codes=" + Arrays.toString(Codes) +
-                '}';
+    protected void doExecute(DelegateExecution execution) {
+        tempExecution = execution;
+        LOGGER.debug("MatchAndMergeDocumentsFromDB-->doExecute-->ENTER");
+        String matchCriteria = tempExecution.getVariable(Workflow.MATCH_CRITERIA, String.class);
+        String searchWindow = tempExecution.getVariable(Workflow.SEARCH_WINDOW, String.class);
+        String tempWorkingPath = tempExecution.getVariable(Workflow.OUTPUT_FILE_DIR, String.class);
+        String jsonFile = tempExecution.getVariable(Workflow.JSON_FILE, String.class);
+        String templateName = tempExecution.getVariable(Workflow.TEMPLATE_NAME, String.class);
+
+        try {
+            if (getDocumentListFromJson(jsonFile) || getSearchWindowCriteria(searchWindow)) {
+                return;
+            }
+
+            List<DocumentMetaData> documentUpdateList = new ArrayList<>();
+            Set<String> csvProcessorTransactionFound = new HashSet<>();
+
+			for (var document : documentList) {
+				try {
+					String companionFileName = getCompanionFileName(document);
+					if (companionFileName.equals(StringUtils.EMPTY)) {
+						continue;
+					}
+					String searchCriteria = getSearchCriteria(document, matchCriteria);
+					if (searchCriteria == null) {
+						continue;
+					}
+					if (checkCompanionFileIfPresent(csvProcessorTransactionFound, companionFileName, document)) {
+						LOGGER.info("Found companion file={}, documentId={}", companionFileName, document.getId());
+						List<DocumentMetaData> matchedDocumentList = documentMetadataService
+								.getCsvDocumentMetaData(searchCriteria, searchWindowCriteria);
+						if (!updateDocumentIfMatched(matchedDocumentList, document, companionFileName,
+								documentUpdateList, templateName)) {
+							LOGGER.info("! updateDocumentIfMatched return: companion file={}, documentId={}",
+									companionFileName, document.getId());
+							continue;
+						}
+					}
+				} catch (Exception e) {
+					LOGGER.error("Error to process companion record {} {}", document.getId(),
+							ExceptionUtils.getStackTrace(e));
+				}
+			}
+
+            if (documentUpdateList.isEmpty()) {
+                LOGGER.warn("MatchAndMergeDocumentsFromDB-->doExecute-->documentUpdateList is null or empty");
+                String messgeKey = tempExecution.getVariable(Workflow.PROCESS_KEY) + "_message";
+                tempExecution.setTransientVariable(messgeKey, "documentUpdateList is null or empty");
+                setExitNow(execution);
+            } else {
+                var updatedJsonFile = WorkFlowUtil.documentListToFile(documentUpdateList, tempWorkingPath, JSON_FILE_NAME);
+                tempExecution.setTransientVariable(Workflow.JSON_FILE, updatedJsonFile.getAbsolutePath());
+            }
+        } catch (Exception e) {
+            LOGGER.error("doExecute Exception while executing MatchAndMergeDocumentsFromDB task {}={} {}",
+                    DELEGATE_EXECUTION, tempExecution.getId(),
+                    ExceptionUtils.getStackTrace(e));
+            addErrorMsg("MatchAndMergeDocumentsFromDB-->doExecute-->Exception while executing MatchAndMergeDocumentsFromDB task", WorkFlowUtil.getStackTrace(e));
+        } finally {
+            finish();
+        }
+        LOGGER.debug("MatchAndMergeDocumentsFromDB-->doExecute-->EXIT: jsonFile={}, var={}", tempExecution.getVariable(Workflow.JSON_FILE), tempExecution.getVariableNames());
+    }
+
+    private void finish() {
+        if (newErrors() && errorMap.size() > 1) {
+            DelegateUtils.sendErrorNotification(tempExecution, errorMap, DelegateUtils.generateMessageforCronExpressionHookWorkflow(tempExecution), emailService);
+        }
+    }
+
+    protected boolean updateDocumentIfMatched(List<DocumentMetaData> matchedDocumentList, DocumentMetaData document, String companionFileName,
+           List<DocumentMetaData> documentUpdateList, String templateName) {
+        if (CollectionUtils.isEmpty(matchedDocumentList)) {
+            LOGGER.warn("Unable to find companionFileName={} for documentId={}", companionFileName, document.getId());
+            return true;
+        }
+        LOGGER.debug("Have companionFileName={}, documentId={}", companionFileName, document.getId());
+
+        String companionFileData = TemplateFactory.getInstance(templateName).convertWithTemplate(matchedDocumentList);
+        LOGGER.debug("Converted companionFileData={}, documentId={}", companionFileData, document.getId());
+        if (companionFileData == null) {
+            LOGGER.error("doExecute Unable to create companion file data using matchAndMerge template {}={}, {}={}",
+                    DELEGATE_EXECUTION, tempExecution.getId(), "companionFileName", companionFileName);
+            addErrorMsg("MatchAndMergeDocumentsFromDB-->doExecute-->Unable to create companion file data using matchAndMerge template", "companionFileData == null");
+            return false;
+        }
+        JSONObject companionFileDataObj = new JSONObject(companionFileData);
+        try {
+            List<String> recordsList = Parser.readValue(String.valueOf(companionFileDataObj.getJSONArray("originalCompanionFileRecords")), List.class);
+            document.getMetadata().put(Workflow.ORIGNIAL_COMPANION_FILE_RECORDS, recordsList);
+        } catch (IOException e) {
+            if(LOGGER.isErrorEnabled()) {
+                LOGGER.error("unable to convert JSONArray to list {}={}, {}={}, JSONArray: {} {}",
+                        DELEGATE_EXECUTION, tempExecution.getId(), "companionFileName", companionFileName,
+                        companionFileDataObj.getJSONArray("originalCompanionFileRecords"), WorkFlowUtil.getStackTrace(e));
+            }
+        }
+        documentUpdateList.add(document);
+        return true;
+    }
+
+    private boolean getDocumentListFromJson(String jsonFile) {
+        try {
+            documentList = WorkFlowUtil.readDocumentsFromJsonFile(jsonFile);
+        } catch (IOException e) {
+            LOGGER.error("doExecute Unable to read documents from JSON File {}={} {}",
+                    DELEGATE_EXECUTION, tempExecution.getId(),
+                    ExceptionUtils.getStackTrace(e));
+            addErrorMsg("MatchAndMergeDocumentsFromDB-->doExecute-->Unable to read documents from JSON File", WorkFlowUtil.getStackTrace(e));
+            return true;
+        }
+        return false;
+    }
+
+    private boolean getSearchWindowCriteria(String searchWindow) throws IOException, ParseException {
+        if (validateJsonString(searchWindow) == null) {
+            LOGGER.error("MatchAndMergeDocumentsFromDB-->doExecute-->search window is invalid");
+            addErrorMsg("MatchAndMergeDocumentsFromDB-->doExecute-->search window is invalid", "search window is invalid");
+            return true;
+        }
+
+        searchWindowCriteria = WorkFlowUtil.getSearchWindowCriteria(searchWindow);
+        if (searchWindowCriteria == null) {
+            LOGGER.error("MatchAndMergeDocumentsFromDB-->doExecute-->unable to create search window criteria");
+            addErrorMsg("MatchAndMergeDocumentsFromDB-->doExecute-->unable to create search window criteria", "unable to create search window criteria");
+            return true;
+        }
+        return false;
+    }
+
+    private String getSearchCriteria(DocumentMetaData document, String matchCriteria) {
+        String searchCriteria;
+        try {
+            var documentJsonString = Parser.toJson(document, "yyyy-MM-dd'T'HH:mm:ss.SSSXXX");
+            searchCriteria = WorkFlowUtil.replacePlaceHolders(matchCriteria, documentJsonString);
+            if (validateJsonString(searchCriteria) == null) {
+                LOGGER.error("MatchAndMergeDocumentsFromDB-->doExecute-->match criteria is invalid after replacing placeholders");
+                addErrorMsg("MatchAndMergeDocumentsFromDB-->doExecute-->match criteria is invalid after replacing placeholders",
+                        "match criteria is invalid after replacing placeholders");
+                return null;
+            }
+        } catch (Exception e) {
+            LOGGER.error("doExecute Expection while replacing placeholders in match criteria {}={} {}",
+                    DELEGATE_EXECUTION, tempExecution.getId(),
+                    ExceptionUtils.getStackTrace(e));
+            addErrorMsg("MatchAndMergeDocumentsFromDB-->doExecute-->Expection while replacing placeholders in match criteria", WorkFlowUtil.getStackTrace(e));
+            return null;
+        }
+        return searchCriteria;
+    }
+
+    private boolean checkCompanionFileIfPresent(Set<String> csvProcessorTransactionFound, String companionFileName, DocumentMetaData document) {
+
+        if (StringUtils.isEmpty(companionFileName)) {
+            LOGGER.warn("companion file is empty for document {}", document.getId());
+            return false;
+        }
+
+        if (csvProcessorTransactionFound.contains(companionFileName)) {
+            LOGGER.debug("companion file already in queue {}", companionFileName);
+            return true;
+        }
+
+        try {
+            var opt = Optional.ofNullable(csvProcessorsService.getCsvProcessorTransactionWithFileName(companionFileName))
+                    .filter(x -> x.getStatus().equals(MetaDataStatus.COMPLETE));
+            if (opt.isPresent()) {
+                csvProcessorTransactionFound.add(companionFileName);
+                return true;
+            }
+        } catch (Exception e) {
+            LOGGER.error(
+                    "doExecute Unable to get csvProcessor Transaction using companion Filename {}={}, {}={} {}",
+                    DELEGATE_EXECUTION, tempExecution.getId(),
+                    "companionFileName", companionFileName, e.getMessage());
+        }
+        return false;
+    }
+
+    private String getCompanionFileName(DocumentMetaData document) {
+        String documentId = document.getId();
+        String appIdentifier = document.getAppIdentifier();
+        return Optional.ofNullable(processorService.getProcessorFileTaskForTargetId(documentId, TARGET_TYPE, appIdentifier))
+                .map(ProcessorFileTask::getProcessorTransactionId)
+                .map(x -> {
+                    LOGGER.debug("documentId: {} appIdentifier: {} processorTransactionId: {}", documentId, appIdentifier, x);
+                    return x;
+                })
+                .map(processorsService::getTransactionProcessorById)
+                .map(ProcessorTransaction::getFileName)
+                .filter(x -> x.length() >= 10)
+                .map(x -> x.substring(0, 10) + ".cmp")
+                .orElse(StringUtils.EMPTY);
+
+    }
+
+    protected HashMap<String, Object> validateJsonString(String jsonString) {
+        HashMap<String, Object> map = null;
+        try {
+            map = Parser.parseJson(jsonString, new TypeReference<>() {
+            });
+        } catch (IOException e) {
+            LOGGER.error("validateJsonString Exception while executing MatchAndMergeDocumentsFromDB task {}={} {}",
+                    "jsonString", jsonString,
+                    ExceptionUtils.getStackTrace(e));
+            addErrorMsg("MatchAndMergeDocumentsFromDB-->validateJsonString-->Input format is incorrect for " + jsonString, WorkFlowUtil.getStackTrace(e));
+        }
+        return map;
     }
 }
 
@@ -376,73 +578,144 @@ public class P360TXGCDocument implements Serializable {
 
 
 
+==
 
 
+@Service("MoveOriginalZipToArchiveFolder")
+public class MoveOriginalZipToArchiveFolder extends OptumJavaDelegateBase {
 
+	private static final Logger log = LoggerFactory.getLogger(MoveOriginalZipToArchiveFolder.class);
 
+	private static final int SFTP_PORT = 22;
+	private static final String DELEGATE_EXECUTION_ID = "delegateExecutionId";
+	private static final String PROCESSOR_TRANSACTION = "processorTransaction";
+	private static final String INGEST_PATH = "ingestPath";
 
-
-=====
-====
-
-
-
-
-
-public class CommonConstants {
-	public static final String SPRING_PROFILES_ACTIVE = "spring.profiles.active";
+	@Autowired
+	ProcessorService processorService;
 	
-	public static final List<String> DEFAULT_SUBCATEGORY_LIST = new ArrayList<String>(Arrays.asList("CC", "PR", "RR", "OP", "XX", "ZZ"));
+	@Autowired
+	ErrorMetaDataService errorMetaDataService;
+	
+	@Autowired
+    private SftpUtil sftpUtil;
+	
+	private DelegateExecution tempExecution = null;
+	
+    private static final List<String> REQ_VARS = Arrays.asList(
+    	Workflow.PROCESSOR_TRANSACTION
+    );
+    
+    public MoveOriginalZipToArchiveFolder() {
+    	super(REQ_VARS);
+	}
 
-	public static final String SOMETHING_WENT_WRONG = "SOMETHING WENT WRONG ERROR={}";
+	@Override
+	public void doExecute(DelegateExecution execution) {
+		log.info("MoveOriginalZipToArchiveFolder-->doExecute-->ENTER");
+		tempExecution = execution;
+		ProcessorTransaction processorTransaction = null;
+		ProcessorExecutionRecord executionRecord = null;
+		Map<String, String> message = new HashMap<>();
+		try {
+			processorTransaction = execution.getVariable(Workflow.PROCESSOR_TRANSACTION, ProcessorTransaction.class);
+			String sftpHost = execution.getVariable(Workflow.SFTP_HOSTNAME, String.class);
+			String sftpUSER = execution.getVariable(Workflow.SFTP_USERNAME, String.class);
+			String sftpPASS = execution.getVariable(Workflow.SFTP_PW, String.class);
+			String archiveWorkingDir = execution.getVariable(Workflow.SFTP_ARCHIVE_DIRECTORY, String.class);
 
-	public static final String FDS_RETRY_COUNT_MAX = "FDSRetryCountMax";
-	public static final String FDS_RETRY_SLEEP_TIME_MS = "FDSRetrySleepTimeMS";
-	public static final String FDS_DOCUMENTS_URL = "FDSDocumentsUrl";
-	public static final String FDS_POST_PDO_DOCUMENTS_URL = "FDSPostPDODocumentsUrl";
-	public static final String FDS_RETENTION_PERIOD = "FDSRetentionPeriod";
+            log.info("processorTransaction:{}", getProcessorTransactionId(processorTransaction));
+            log.info("SFTP_HOSTNAME:{}", sftpHost);
+            log.info("SFTP_USERNAME:{}", sftpUSER);
+            log.info("SFTP_PASSWORD:{}", sftpPASS);
+            log.info("SFTP_ARCHIVE_DIRECTORY:{}",archiveWorkingDir);
+            
+			
+			executionRecord = ProcessorTaskUtil.createProcessorExecutionRecord("Moving source zip file to archive folder");
+			message = new HashMap<>();
+			processorTransaction = Optional.ofNullable(processorTransaction).orElseThrow(NullPointerException::new);
+			final String fileName = processorTransaction.getFileName();
 
-	public static final String FS2_DOCUMENTS_BODY_NAME = "documents";
+			archiveZipFile(processorTransaction ,fileName,execution,message);
 
-	public static final String INGEST_ROOT = "INGEST_ROOT";
-	public static final String CSV_JSON_FILENAME = "csv.json";
+		} catch(Exception e) {
+			log.error("doExecute Exception while executing MoveOriginalZipToArchiveFolder task {}={}, {}={}, {}={} {}",
+					DELEGATE_EXECUTION_ID, getDelegateExecutionId(execution),
+					PROCESSOR_TRANSACTION, getProcessorTransactionId(processorTransaction),
+					INGEST_PATH, getIngestPath(processorTransaction),
+					ExceptionUtils.getStackTrace(e));
+			
+			errorMetaDataService.writeToErrorCollection(execution, "MoveOriginalZipToArchiveFolder --> doExecute: " + e.getMessage());
 
-	public static final String QUEUED_ID = "id";
-	public static final String QUEUED_PATH_VARIABLE = "pathVariable";
-	public static final String QUEUED_API_URL = "apiUrl";
-	public static final String QUEUED_DELEGATE = "delegate";
-	public static final String QUEUED_DELEGATE_PARMS = "delegateParms";
-	public static final String QUEUED_RETRY_CNT = "retryCount";
-	public static final String QUEUED_REQUEST = "queuedRequest";
-	public static final String QUEUED_HTTP_METHOD = "httpMethod";
+			message.put(Workflow.OUTCOME_KEY, "File did not archived correctly");
 
-	public static final String SEND_QUEUE_NEEDS_SPACE_ID = "SendQueueNeedsSpaceId";
+		} finally {
+			ProcessorTaskUtil.addMessageToProcessorExecutionRecordToProcessorTransaction(processorTransaction, executionRecord, message);
+			execution.setTransientVariable(Workflow.PROCESSOR_TRANSACTION, processorTransaction);
+			processorService.updateProcessorTransactionMetaData(processorTransaction);
+		}
+		log.info("MoveOriginalZipToArchiveFolder-->doExecute-->EXIT");
+	}
 
-	public static final String CSV_SEND_QUEUE_AUTO_ERROR = "CsvSendQueueAutoError";
-	public static final String HOOK_SEND_QUEUE_AUTO_ERROR = "HookSendQueueAutoError";
-	public static final String METADATA_SEND_QUEUE_AUTO_ERROR = "MetadataSendQueueAutoError";
+	private void archiveZipFile(ProcessorTransaction processorTransaction ,String fileName,DelegateExecution execution,Map<String, String> message ) throws IOException{
+		String sftpHost = execution.getVariable(Workflow.SFTP_HOSTNAME, String.class);
+		String sftpUSER = execution.getVariable(Workflow.SFTP_USERNAME, String.class);
+		String sftpPASS = execution.getVariable(Workflow.SFTP_PW, String.class);
+		String archiveWorkingDir = execution.getVariable(Workflow.SFTP_ARCHIVE_DIRECTORY, String.class);
+		Integer maxSftpTriesVar = execution.getVariable(Workflow.MAX_SFTP_TRIES, Integer.class);
+		Long retryTimeSecsVar = execution.getVariable(Workflow.RETRY_TIME_SECS, Long.class);
+		int maxSftpTries = maxSftpTriesVar != null ? maxSftpTriesVar : 10;
+		long retryTimeSecs = retryTimeSecsVar != null ? retryTimeSecsVar: 360;  // 6 minutes
+		try {
+			log.info("INGEST_PATH:{}", getIngestPath(processorTransaction));
+			var zipFile = new File(getIngestPath(processorTransaction));
+			if (zipFile.exists()) {
+				moveFileFromLocalToSFTPLocation(sftpUSER, sftpPASS, sftpHost, archiveWorkingDir, getIngestPath(processorTransaction), maxSftpTries, retryTimeSecs);
+				message.put(Workflow.OUTCOME_KEY, String.format("File %s archive correctly", fileName));
+			} else {
+				message.put(Workflow.OUTCOME_KEY, String.format("File %s is not present in ingest folder", fileName));
+			}
+		} catch (SftpException e) {
+			log.error("doExecute Error during SFTP process for Source zip to archive folder {}={}, {}={}, {}={} {}",
+					DELEGATE_EXECUTION_ID, getDelegateExecutionId(execution),
+					PROCESSOR_TRANSACTION, getProcessorTransactionId(processorTransaction),
+					INGEST_PATH, getIngestPath(processorTransaction),
+					ExceptionUtils.getStackTrace(e));
+			message.put(Workflow.OUTCOME_KEY, "File did not archived correctly: fileName="
+					+ getIngestPath(processorTransaction));
+			errorMetaDataService.writeToErrorCollection(tempExecution, "MoveOriginalZipToArchiveFolder --> doExecute: " + e.getMessage());
+		} catch (JSchException e) {
+			log.error("doExecute Error during SSH protocol for Source zip to archive folder {}={}, {}={}, {}={} {}",
+					DELEGATE_EXECUTION_ID, getDelegateExecutionId(execution),
+					PROCESSOR_TRANSACTION, getProcessorTransactionId(processorTransaction),
+					INGEST_PATH, getIngestPath(processorTransaction),
+					ExceptionUtils.getStackTrace(e));
 
-	public static final String FTP_ROOT_DIR = "ftp_rootdir";
-
-	public static final String EMAIL_ALERT_REQ = "emailAlertReq";
-
-	// email properties
-	public static final String ELR_SMTP_RELAY_HOST = "ELR_SMTP_RELAY_HOST";
-	public static final String SERVER_TYPE = "serverType";
-
-	public static final String ENGINE_PORT_DEFAULT = "8081";
-	public static final String AZURE_WITH_IDENTIFIERS_URL = "AzureWithIdentifiersUrl";
-	public static final String AZURE_URL = "AzureUrl";
-	public static final String AZURE_SCHEDULE_URL = "AzureScheduleUrl";
-	public static final String AZURE_DLQ_URL = "AzureDlqUrl";
-	public static final String ENGINE_DELIGATE_URL = "EngineDelegateUrl";
-	public static final String HIGH_QUEUE = "HighPriorityQueue";
-	public static final String MEDIUM_QUEUE = "MediumPriorityQueue";
-	public static final String LOW_QUEUE = "LowPriorityQueue";
+			message.put(Workflow.OUTCOME_KEY, "File did not archived correctly: fileName="
+					+ getIngestPath(processorTransaction));
+			errorMetaDataService.writeToErrorCollection(tempExecution, "MoveOriginalZipToArchiveFolder --> doExecute: " + e.getMessage());
+		}
+	}
 
 
-	private CommonConstants(){throw new AssertionError();}
 
+
+	void moveFileFromLocalToSFTPLocation(String sftpUSER, String sftpPASS, String sftpHost, String archiveWorkingDir,
+			String fileName, int maxSftpTries, long retryTimeSecs) throws JSchException, SftpException, IOException {
+		sftpUtil.moveFileFromLocalToSFTPLocation(sftpUSER, sftpPASS, sftpHost, SFTP_PORT, archiveWorkingDir, fileName, maxSftpTries, retryTimeSecs);
+	}
+	
+	protected String getDelegateExecutionId(DelegateExecution execution) {
+		return execution != null ? execution.getId() : "NULL";
+	}
+
+	protected String getProcessorTransactionId(ProcessorTransaction processorTransaction) {
+		return processorTransaction != null ? processorTransaction.getId() : "NULL";
+	}
+
+	protected String getIngestPath(ProcessorTransaction processorTransaction) {
+		return processorTransaction != null ? processorTransaction.getLocation() + File.separator + processorTransaction.getFileName() : "NULL";
+	}
 }
 
 
@@ -464,60 +737,444 @@ public class CommonConstants {
 
 
 
+==
 
 
 
+public abstract class OptumJavaDelegateBase implements JavaDelegate {
+    private static final Logger LOGGER = LoggerFactory.getLogger(OptumJavaDelegateBase.class);
 
+    protected List<String> reqVars;
+    protected Document errorMap;
 
+    protected OptumJavaDelegateBase() {}
 
-
-
-
-
-
-
-
-
-=======
-
-
-public final class ProcessKeys {
-    private ProcessKeys() {
-        throw new AssertionError("cannot instantiate");
+    protected OptumJavaDelegateBase(List<String> reqVars) {
+        this.reqVars = reqVars;
     }
 
-    public static final String PROCESS_METADATA = "processorMetaData";
-    public static final String SFTP_PROCESS_KEY = "sftpProcess";
-    public static final String SFTP_ZIP_UNZIP_PROCESS_KEY = "sftpZipUnzipProcess";
-    public static final String UNZIP_FILE_PROCESS_KEY = "processFileUnzip";
-    public static final String PROCESS_METADATA_PROCESS_KEY = "processMetadataFiles";
-    public static final String PROCESS_METADATA_CALLBACK_PROCESS_KEY = "processMetadataFilesCallback"; 
-    public static final String CSV_SFTP_PROCESS_KEY = "csvSftpProcess"; 
-    public static final String STATUSFILE_PROCESS_KEY = "createStatusFileAndAckProcess";
-    public static final String SHUTTERFLY_PROCESS_KEY = "sendDocumentsToShutterflyProcess";
-    public static final String STORAGE_ERROR_SHUTTERFLY_PROCESS_KEY = "sendStorageErrorToShutterfly";
-    public static final String RESPONSEFILE_PROCESS_KEY = "createResponseFileProcess";
-    public static final String RESPONSEFILE_PROCESS_KEY_USP_CLAIMS="createResponseFileProcessUSPClaims";
-    public static final String BOUNCE_PROCESS_KEY = "bouncedProviderEmailAddressProcess";
-    public static final String RETRIEVE_PROVIDER_EMAIL_PROCESS_KEY = "retrieveProviderEmailAddressProcess";
-    public static final String REQUIRED_FIELD_RULE_PROCESS_KEY = "requiredFieldRuleProcess";
-    public static final String RETRIEVE_CORPORATE_MPIN_PROCESS_KEY = "retrieveCorporateMPINv2Process";
-    public static final String PROVIDER_EMAIL_NOTIFICATION_PROCESS_KEY = "providerEmailNotificationProcess";
-    public static final String MATCH_AND_MERGE_PROCESS_KEY = "matchAndMergeDocumentsFromDbProcess";
-    public static final String EMAIL_PROCESSOR_TRANSACTION_METADATA_PROCESS_KEY = "emailProcessorTransactionMetadataProcess";
-    public static final String CLEANUP_PROCESS_KEY = "processCleanupFilesCreateACK";
-    public static final String DOCLIB_PROCESS_KEY = "postDocumentDocvaultForElgsProcess";
-    public static final String CSV_CLEANUP_PROCESS_KEY = "csvCleanupFilesProcess";
-    public static final String GENERIC_WORKFLOW_PROCESS_KEY = "GENERIC_WORKFLOW_PROCESS_KEY";
-    public static final String POST_DOCUMENT_DOCLIB_FOR_ELGS_PROCESS_KEY = "postDocumentDocvaultForElgsProcess";
-    public static final String CALL_REST_API_WITH_MSG_SERVICE_ON_ERROR_CALLBACK_PROCESS_KEY = "callRestApiWithMsgServiceOnErrorCallback"; 
-    public static final String PROCESS_TEXT_FILE = "processTextFile"; 
-    public static final String PROCESS_SFTP_SEND_EMAIL = "sftpSendEmailProcess";
-    public static final String RETRIEVE_AND_SEND_METADATA_PROCESS = "retrieveAndSendMetadataProcess";
-    public static final String RESPONSE_MESSAGE_PROCESS_KEY = "createResponseMessageProcess";
-    public static final String RETRIEVE_AND_SEND_EMAIL_PROCESS = "retrieveAndSendEmailProcess";
-    public static final String SEND_BATCH_DYNAMIC_REQUEST_TO_PEN = "sendBatchDynamicEmailRequestToPEN";
+    @SuppressWarnings("unchecked")
+    private static Object createErrorMap(String x, Object y) {
+        if (y == null) {
+            return new Document().append(WorkflowConstants.NEW_ERRORS, 0);
+        } else if (y instanceof Map && !(y instanceof Document)) {
+            return new Document((Map<String, Object>) y);
+        }
+        return y;
+    }
 
+    public void execute(DelegateExecution execution)  {
+    	errorMap = getErrorMap(execution.getVariables());
+    	DateTimeFormatter dtf = DateTimeFormatter.ISO_DATE_TIME;
+    	String now = OffsetDateTime.now().format(dtf);
+    	execution.setTransientVariable("execStartTime", now);
+    	execution.setTransientVariable("podName", getPodName());
+        if ((!newErrors()) && errorMap.size() <= 1 && !isExitNow(execution)) {
+        	checkRequiredVars(reqVars, execution.getVariables(), this.getClass().getSimpleName());
+        	if ((!newErrors()) && errorMap.size() <= 1) {
+                doExecute(execution);        		
+        	}
+            execution.setTransientVariable(WorkflowConstants.ERROR_MAP, errorMap);
+            logErrorMsgs();
+        }
+    }
+
+    protected abstract void doExecute(DelegateExecution execution);
+
+    protected void addErrorMsg(String msgDescription, String errorMsg) {
+        errorMap.append(msgDescription, errorMsg)
+                .computeIfPresent(WorkflowConstants.NEW_ERRORS, (key, value) -> (int)value + 1);
+    }
+
+    protected boolean isExitNow(DelegateExecution execution) {
+        return Boolean.TRUE.equals(execution.getVariable("exitNow", Boolean.class));
+    }
+
+    /*
+     * If the variable is not present or the value of the variable is null or an
+     * empty string an error message is added to the error map.
+     */
+    void checkRequiredVars(List<String> requiredVars, Map<String, Object> execVars, String activityName) {
+        int newErrors = errorMap.get(WorkflowConstants.NEW_ERRORS, Integer.class);
+        if (requiredVars != null) {
+            var map = requiredVars
+                    .stream()
+                    .filter(x -> !execVars.containsKey(x) || execVars.get(x) == null || "".equals(execVars.get(x)))
+                    .collect(Collectors.toMap(key -> "In " +  activityName + ", " + key, key -> "Required var missing"));
+            errorMap.putAll(map);
+            newErrors += map.size();
+        }
+        errorMap.append(WorkflowConstants.NEW_ERRORS, newErrors);
+    }
+
+    protected boolean newErrors() {
+        return errorMap != null && errorMap.get(WorkflowConstants.NEW_ERRORS, 0) > 0;
+    }
+
+    /*
+     * Check if errorMap is passed in from upstream task in workflow; if exists,
+     * then use it If it does not exists, create a new errorMap for subsequent use.
+     */
+    @SuppressWarnings("unchecked")
+    static Document getErrorMap(Map<String, Object> execVars) {
+        return (Document) execVars.compute(Workflow.ERROR_MAP, OptumJavaDelegateBase::createErrorMap);
+    }
+
+    void logErrorMsgs() {
+        if (newErrors()) {
+            errorMap.toJson();
+            LOGGER.error("Failed to execute {} due to following errors:" , this.getClass().getSimpleName() );
+            errorMap.entrySet()
+                    .stream()
+                    .filter(errMsg -> !("newErrors").equals(errMsg.getKey()))
+                    .forEach(errMsg -> LOGGER.error("{} : {}", errMsg.getKey(),  errMsg.getValue()));
+        }
+    }
+    protected void setExitNow(DelegateExecution execution) {
+        execution.setTransientVariable("exitNow", true);
+    }
+    
+    String getPodName() {
+        var hostname = "unknown";
+        try {
+            hostname = InetAddress.getLocalHost().getHostName();
+        } catch(UnknownHostException e) {
+            LOGGER.error("Did not obtain pod name");
+        }
+        return hostname;
+    }
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+==
+
+
+
+@Service("ProcessFileUnzip")
+public class ProcessFileUnzip extends OptumJavaDelegateBase {
+
+	private static final String PROCESSOR_TRANSACTION_ID = "processorTransactionId";
+	private static final String PROCESSOR_ID = "processorId";
+	private static final String APP_IDENTIFIER = "appIdentifier";
+	private static final String IDENTIFIER = "ProcessFileUnzip";
+	private static final String CALLBACK = "processMetadataFiles";
+	private static final String QUEUE_EXCEPTION = "QUEUE: Exception sendRequestToQueue; spaceId={}, queue={}, appIdentifier={}, identifier={}, targetId={}, msg={}";
+	private static final int SFTP_PORT = 22;
+
+	private static final Logger LOGGER = LoggerFactory.getLogger(ProcessFileUnzip.class);
+
+	@Value("${ENGINE_DELIGATE_URL}")
+	private String engineDelegateUrl;
+	
+	@Value("${fileUnzipQueuesize}")
+	private Integer fileUnzipQueueSize;
+	
+	@Value("${serverType}")
+	private String serverType;
+
+	@Autowired
+	TransactionService transactionService;
+	@Autowired
+	ProcessorService processorService;
+	@Autowired
+	ProcessorsService processorsService;
+	@Autowired
+	ProcessSummary processSumaryService;
+	@Autowired
+	ProcessorTransactionsService processorTransactionsService;
+	@Autowired
+	ProcessorFileTaskService processorFileTaskService;
+	@Autowired
+	ServiceBase serviceBase;
+	@Autowired
+	SendQueueService sendQueueService;
+	@Autowired
+	ErrorMetaDataService errorMetaDataService;
+	@Autowired
+    private SftpUtil sftpUtil;
+	
+	private DelegateExecution tempExecution;
+
+	private static final List<String> REQ_VARS = Collections.emptyList();
+
+	public ProcessFileUnzip() {
+		super(REQ_VARS);
+	}
+
+	public ProcessFileUnzip(ProcessorsService processorsService, ProcessSummary processSumaryService,
+			TransactionService transactionService, ProcessorTransactionsService processorTransactionsService,
+			ProcessorFileTaskService processorFileTaskService) {
+		this.processorsService = processorsService;
+		this.processSumaryService = processSumaryService;
+		this.transactionService = transactionService;
+		this.processorTransactionsService = processorTransactionsService;
+		this.processorFileTaskService = processorFileTaskService;
+	}
+
+	@Override
+	public void doExecute(DelegateExecution execution) {
+
+		long startTime = System.currentTimeMillis();
+		var bAddProcessorTransactionMD = false;
+		ProcessorMetaData processor = null;
+		ProcessorTransaction processorTransaction = null;
+
+		tempExecution = execution;
+
+		var appIdentifier = execution.getVariable(APP_IDENTIFIER).toString();
+		var processorId = execution.getVariable(PROCESSOR_ID).toString();
+		List<String> arrProcessorTransactionId = (List<String>) execution.getVariable("processorTransactionIds");
+		for (String processorTransactionId : arrProcessorTransactionId) {
+			try {
+
+			if (!processorId.isEmpty() && !appIdentifier.isEmpty()) {
+				processor = processorsService.getProcessor(appIdentifier, processorId);
+			}
+
+			if (processor.getProcessConfig().get("addProcessorTransactionMetadata") != null) {
+				bAddProcessorTransactionMD = (boolean) processor.getProcessConfig()
+						.get("addProcessorTransactionMetadata");
+			}
+			if (processorTransactionId != null && !appIdentifier.isEmpty()) {
+				processorTransaction = processorsService.getTransactionProcessor(appIdentifier.trim(),
+						processorTransactionId.trim(), serverType);
+			} else {
+				LOGGER.warn("Processor Transaction is empty");
+				continue;
+			}
+
+			if (processor != null && (MetaDataStatus.IN_PROCESS.equals(processor.getStatus())
+					|| MetaDataStatus.ACTIVE.equals(processor.getStatus())
+					|| MetaDataStatus.NEW.equals(processor.getStatus()))) {
+				processorTransaction.setProcessedByHost(FileUtil.getInstance().getLocalHostName());
+				processorTransaction.setStartTime();
+				processorTransaction.setStatus(MetaDataStatus.IN_PROCESS);
+				var zipFilePath = Paths.get(processorTransaction.getLocation(), processorTransaction.getFileName());
+				var filePath = Paths.get(processorTransaction.getLocation());
+				try {
+					
+					if (Utilities.expandFile(zipFilePath, filePath)) {
+						LOGGER.warn("THE ZIP FILE EXISTS, ANOTHER UNZIP PROCESSING SKIPPED: {}, processorTransaction id: {}", filePath, processorTransaction.getId());
+						continue;
+	                }
+					LOGGER.debug("Zip file lock does not exist, expand zip file: {}, processorTransaction id: {}", filePath,
+							processorTransaction.getId());					
+				} catch (IOException e) {
+					LOGGER.error("execute FileUnzip IO errors for filePath and exited {} {} {}",
+							processorTransaction.getId(), filePath, ExceptionUtils.getStackTrace(e));
+					var processorError = new ProcessorError(ProcessorErrorCode.FILE_COULD_NOT_BE_UNZIPPED);
+					processorError.setFileName(execution.getVariable("fileName").toString());
+					processorTransaction.getSummary().addError(processorError);
+					execution.setTransientVariable(Workflow.UNZIP_ERROR_MESSAGE, e.getMessage());
+					processorTransaction.setStatus(MetaDataStatus.FATAL_ERROR);
+					processorsService.updateProcessorTransactionMetaData(processorTransaction);
+					errorMetaDataService.writeToErrorCollection(execution,
+							"ProcessFileUnzip --> doExecute: " + e.getMessage());
+				}
+				
+				try {
+					archiveAndDeleteZipFile(processor, zipFilePath);
+				} catch (Exception e) {
+					LOGGER.error("execute FileUnzip -- error archiving or deleting zipfile after inflation, processorTransactionId={}, filePath={}, err={}",
+							processorTransaction.getId(), filePath, ExceptionUtils.getStackTrace(e));
+				}
+				
+				processSumaryService.processSummaryFile(processorTransaction);
+				if (MetaDataStatus.FATAL_ERROR.equals(processorTransaction.getStatus())) {
+					var processorError = new ProcessorError(ProcessorErrorCode.FILE_COULD_NOT_BE_UNZIPPED);
+					processorTransaction.getSummary().addError(processorError);
+					LOGGER.error("Summary File errors and exited {} {}", processorTransaction.getId(), filePath);
+					execution.setTransientVariable(Workflow.UNZIP_ERROR_MESSAGE,
+							processorTransaction.getSummary().getErrorList()
+									.get(processorTransaction.getSummary().getErrorList().size() - 1)
+									.getErrorMessage());
+					continue;
+				}
+				
+				LOGGER.debug("ProcessFileUnzip -- doExecute -- ingest filePath {}, exists={}", filePath, Files.exists(filePath));
+
+				// create processor file task
+				long fileProcessed = 0;
+
+				if (processor != null && (MetaDataStatus.IN_PROCESS.equals(processor.getStatus())
+						|| MetaDataStatus.ACTIVE.equals(processor.getStatus())
+						|| MetaDataStatus.NEW.equals(processor.getStatus()))) {
+					if (processorTransaction.getFileToProcessList() != null) {
+						Set<String> processorFileTaskIds = new HashSet<>();
+						for (String entry : processorTransaction.getFileToProcessList()) {
+							try {
+								fileProcessed++;
+
+								if (!entry.isEmpty()) {
+									var processorFileTask = processorsService
+											.createProcessorFileTaskEntries(processorTransaction, entry);
+									LOGGER.debug("FileUnzip process execute filename for ProcessorTransaction Id on host: {} {} {}",
+											entry, processorTransactionId, Encode.forJava(FileUtil.getInstance().getLocalHostName()));
+									LOGGER.debug("FileUnzip created processorFileTask id={}, status={}", processorFileTask.getId(), processorFileTask.getStatus());
+									if (processorFileTask != null) {
+										processorFileTaskIds.add(processorFileTask.getId());
+									}
+								}
+
+								if (fileProcessed < processorTransaction.getFileToProcessList().size()) {
+									if (processorFileTaskIds.size() == fileUnzipQueueSize) {
+										String[] arrProcessorFileTaskIds = processorFileTaskIds.toArray(String[]::new);
+
+										trySendRequestToQueueArrProcessorFileTaskIds(processor.getConfigSpaceId(), arrProcessorFileTaskIds,
+												appIdentifier, processorTransactionId);
+										processorFileTaskIds.clear();
+									}
+								} else if (fileProcessed == processorTransaction.getFileToProcessList().size()) {
+									trySendRequestToQueueProcessorFileTaskIds(processor.getConfigSpaceId(), processorFileTaskIds, appIdentifier,
+											processorTransactionId);
+									processorFileTaskIds.clear();
+								}
+
+							} catch (Exception e) {
+								LOGGER.error("FileUnzip process failed to create processor fileTask and exited {} {}",
+										entry, ExceptionUtils.getStackTrace(e));
+								errorMetaDataService.writeToErrorCollection(execution,
+										"ProcessFileUnzip --> doExecute, failed to create processorFileTask " + entry
+												+ " : " + e.getMessage());
+							}
+						}
+					}
+				} else {
+					processorTransaction.setStatus(MetaDataStatus.SHUTDOWN);
+					processorsService.updateProcessorTransactionMetaData(processorTransaction);
+
+					if (processor != null) {
+						LOGGER.warn("FileUnzip process not able unzip files at the working folder for Processor Id: {}",
+								processor.getId());
+					}
+
+				}
+				// Set Success Response
+				if (bAddProcessorTransactionMD) {
+					ProcessorTransactionMetadata processorTransactionMetadata = null;
+					String strFileName = Utilities.stripFileExtension(processorTransaction.getFileName());
+					String companionFileName = WorkFlowUtil.convertToCompanionFileName(strFileName, ".cmp", 0, 10);
+					processorTransactionMetadata = processorTransactionsService
+							.getProcessorTransactionMetadataWithFileName(companionFileName);
+
+					if (processorTransactionMetadata == null && processor != null) {
+						Map<String, Object> clientHashMap = processorTransactionsService
+								.createProcessorTransactionMetadataClientHashmap(false, false,
+										processorTransaction.getFileName(), null);
+
+						var pmdTransactionMetada = processorTransactionsService.createProcessorTransactionMetadata(
+								clientHashMap, processor.getId(), processor.getConfigSpaceId(), companionFileName);
+						LOGGER.debug("FileUnzip->execute created  ProcessorTransactionMetadata for fileName={}",
+								pmdTransactionMetada.getFileName());
+
+					} else {
+
+						String fileName = Optional.ofNullable(processorTransactionMetadata)
+								.map(ProcessorTask::getFileName).orElse("");
+						LOGGER.debug("FileUnzip->execute getProcessorTransactionMetadataWithFileName {} ", fileName);
+
+					}
+				}
+				execution.setTransientVariable(Workflow.UNZIP_SUCCESS_MESSAGE, "Uzip of file complete");
+				LOGGER.debug("FileUnzip executed");
+			} else {
+				processorTransaction.setStatus(MetaDataStatus.SHUTDOWN);
+				processorsService.updateProcessorTransactionMetaData(processorTransaction);
+			}
+
+			if (LOGGER.isInfoEnabled()) {
+				long endTime = System.currentTimeMillis();
+				long duration = (endTime - startTime);
+				LOGGER.debug("FileUnzip - execute: {} ", duration);
+			}
+		} catch (Exception e) {
+			LOGGER.error("FileUnzip-->Error to process processor transaction Id {} {}", processorTransactionId, e.getMessage());
+		}
+		}
+
+	}
+	
+	private void archiveAndDeleteZipFile(ProcessorMetaData processor, Path zipFilePath) throws IOException, SftpException, JSchException {
+		Map<String, Object> processConfig = (Map<String, Object>) processor.getProcess().get("config");
+		
+		String sftpHost = (String) processConfig.get(Workflow.HOST_NAME_DESTINATION);
+		String sftpUSER = (String) processConfig.get(Workflow.USER_NAME_DESTINATION);
+		String sftpPASS = (String) processConfig.get(Workflow.USER_CREDENTIALS_DESTINATION);
+		String archiveWorkingDir = (String) processConfig.get(Workflow.FTP_ARCHIVE_DIR);
+		Integer maxSftpTriesVar = (Integer) processConfig.get(Workflow.MAX_SFTP_TRIES);
+		Long retryTimeSecsVar = (Long) processConfig.get(Workflow.RETRY_TIME_SECS);
+		int maxSftpTries = maxSftpTriesVar != null ? maxSftpTriesVar : 10;
+		long retryTimeSecs = retryTimeSecsVar != null ? retryTimeSecsVar: 360;  // 6 minutes
+		LOGGER.info("ProcessFileUnzip-->archiving zip file={}", zipFilePath);
+		sftpUtil.moveFileFromLocalToSFTPLocation(sftpUSER, sftpPASS, sftpHost, SFTP_PORT, archiveWorkingDir, zipFilePath.toAbsolutePath().toString(), maxSftpTries, retryTimeSecs);
+		File zipFile = zipFilePath.toFile();
+		if (zipFile.exists()) {
+			LOGGER.info("ProcessFileUnzip-->deleting zip file from ingest folder={}", zipFilePath);
+			FileUtils.forceDelete(zipFile);
+		}
+	}
+
+	private void trySendRequestToQueueArrProcessorFileTaskIds(Integer spaceId, String[] arrProcessorFileTaskIds, String appIdentifier, String processorTransactionId) {
+		Map<String, Object> variables = new HashMap<>();
+		variables.put(APP_IDENTIFIER, appIdentifier);
+		variables.put("processorFileTaskIds", arrProcessorFileTaskIds);
+		variables.put(PROCESSOR_TRANSACTION_ID, processorTransactionId);
+		try {
+			LOGGER.info("CALLING sendRequestToQueue: spaceId={}, identifier={}, targetId={}, callback={}", spaceId, IDENTIFIER, processorTransactionId, CALLBACK);
+			sendQueueService.sendRequestToQueue(spaceId, IDENTIFIER, processorTransactionId, CALLBACK, variables);
+		} catch (ProcessException e) {
+			String queue = sendQueueService.getPriorityQueue(spaceId);
+			LOGGER.error(QUEUE_EXCEPTION, spaceId, queue, appIdentifier, IDENTIFIER, processorTransactionId, e.getMessage());
+			errorMetaDataService.writeToMessageServiceErrorCollection(queue, CALLBACK, processorTransactionId, spaceId, variables, e.getMessage(), MetaDataStatus.MANUAL);
+		} catch (HttpServerException e) {
+			String queue = sendQueueService.getPriorityQueue(spaceId);
+			LOGGER.error(QUEUE_EXCEPTION, spaceId, queue, appIdentifier, IDENTIFIER, processorTransactionId, e.getMessage());
+			errorMetaDataService.writeToMessageServiceErrorCollection(queue, CALLBACK, processorTransactionId, spaceId, variables, e.getMessage(), MetaDataStatus.AUTOMATIC);
+		}
+	}
+
+	private void trySendRequestToQueueProcessorFileTaskIds(Integer spaceId, Set<String> processorFileTaskIds, String appIdentifier, String processorTransactionId ) {
+		String[] arrProcessorFileTaskIds = processorFileTaskIds.toArray(String[]::new);
+		Map<String, Object> variables = new HashMap<>();
+		variables.put(APP_IDENTIFIER, appIdentifier);
+		variables.put("processorFileTaskIds", arrProcessorFileTaskIds);
+		variables.put(PROCESSOR_TRANSACTION_ID, processorTransactionId);
+		try {
+			LOGGER.info("CALLING sendRequestToQueue: spaceId={}, identifier={}, targetId={}, callback={}", spaceId, IDENTIFIER, processorTransactionId, CALLBACK);
+			sendQueueService.sendRequestToQueue(spaceId, IDENTIFIER, processorTransactionId, CALLBACK, variables);
+		} catch (ProcessException e) {
+			String queue = sendQueueService.getPriorityQueue(spaceId);
+			LOGGER.error(QUEUE_EXCEPTION, spaceId, queue, appIdentifier, IDENTIFIER, processorTransactionId, e.getMessage());
+			errorMetaDataService.writeToMessageServiceErrorCollection(queue, CALLBACK, processorTransactionId, spaceId, variables, e.getMessage(), MetaDataStatus.MANUAL);
+		} catch (HttpServerException e) {
+			String queue = sendQueueService.getPriorityQueue(spaceId);
+			LOGGER.error(QUEUE_EXCEPTION, spaceId, queue, appIdentifier, IDENTIFIER, processorTransactionId, e.getMessage());
+			errorMetaDataService.writeToMessageServiceErrorCollection(queue, CALLBACK, processorTransactionId, spaceId, variables, e.getMessage(), MetaDataStatus.AUTOMATIC);
+		}
+	}
+
+	public void setProcessorService(ProcessorService processorService) {
+		this.processorService = processorService;
+	}
 
 }
 
@@ -543,10 +1200,1108 @@ public final class ProcessKeys {
 
 
 
+==
+
+
+
+@Service("ProcessMetadataFiles")
+public class ProcessMetadataFiles extends OptumJavaDelegateBase {
+	
+	private static final Logger LOGGER = LoggerFactory.getLogger(ProcessMetadataFiles.class);
+	
+	
+	@Autowired
+	ProcessorsService processorsService;
+	
+	@Autowired
+	ProcessFileTask processFileTask;
+	
+	@Autowired
+	ProcessorFileTaskService processorFileTaskService;
+	
+	private static final List<String> REQ_VARS = Arrays.asList(
+			"appIdentifier",
+			"processorTransactionId",
+			"processorFileTaskIds"
+	);
+
+	public ProcessMetadataFiles() {
+        super(REQ_VARS);
+	}
+	
+	
+	@Override
+	@SuppressWarnings("unchecked")
+	protected void doExecute(DelegateExecution execution) {
+		LOGGER.debug("ProcessMetadataFiles -- doExecute -- ENTER");
+		
+		long startTime = System.currentTimeMillis();
+		
+		execution.setTransientVariable(Workflow.PROCESS_KEY, ProcessKeys.PROCESS_METADATA_PROCESS_KEY);
+		// get processor file task
+		String appId = (String) execution.getVariable("appIdentifier");
+		String processorTransactionId = (String) execution.getVariable("processorTransactionId");
+		ArrayList<String> processorFileTaskIdsArrayList = (ArrayList<String>) execution.getVariable("processorFileTaskIds");
+        List<String> processorFileTaskIds = Collections.unmodifiableList(processorFileTaskIdsArrayList);
+        LOGGER.info("list of processorFileTaskIds to process={}", processorFileTaskIds);    
+        
+		for (String processorFileTaskId : processorFileTaskIds) {
+			try {
+				var processorFileTask = processorFileTaskService.getProcessorFileTaskById(processorFileTaskId, appId);
+
+				if (processorFileTask == null) {
+					LOGGER.error(
+							"ProcessMetadataFiles -- doExecute processorFileTask NULL; delegateExecutionId={}, appIdentifier={}, processorTransactionId={}, processorFileTaskId={}",
+							execution.getId(), appId, processorTransactionId, processorFileTaskId);
+					continue;
+				}
+				
+				processFileTask.processFileTaskWithRequiredFields(execution, processorFileTask);
+
+				if (MetaDataStatus.FATAL_ERROR.equals(processorFileTask.getStatus())) {
+					LOGGER.error("Error occurred processing metadata file and exited for processorFileTask id={}",
+							processorFileTask.getId());
+
+				} else {
+					// COMPLETE or COMPLETE_WITH_ERRORS
+					LOGGER.info("ProcessMetadataFiles executed successfully for processorFileTask id={}",
+							processorFileTask.getId());
+				}
+			} catch (Exception e) {
+				LOGGER.error("Error to process metadata file and exited for processorFileTaskId {} {}",
+						processorFileTaskId, ExceptionUtils.getStackTrace(e));
+			}
+
+		}
+		long endTime = System.currentTimeMillis();
+		LOGGER.debug("ProcessMetadataFiles -- doExecute execution duration in ms = {}", endTime - startTime);
+		
+		
+		
+	}
+
+}
 
 
 
 
 
 
-====
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+===
+
+
+@Service("ProcessMetadataFilesCallback")
+public class ProcessMetadataFilesCallback extends OptumJavaDelegateBase {
+	
+	private static final Logger LOGGER = LoggerFactory.getLogger(ProcessMetadataFilesCallback.class);
+	
+	
+	@Autowired
+	ProcessorsService processorsService;
+	
+	@Autowired
+	ProcessorFileTaskService processorFileTaskService;
+	
+	@Autowired
+	DocumentMetaDataService documentMetaDataService;
+	
+	@Autowired
+	ErrorMetaDataService errorMetaDataService;
+	
+	@Autowired
+	FilestoreService filestoreService;
+	
+	private static final List<String> REQ_VARS = Arrays.asList(
+			"appIdentifier",
+			"processorFileTaskId",
+			"response",
+			"prunDocumentId"
+	);
+
+	public ProcessMetadataFilesCallback() {
+        super(REQ_VARS);
+	}
+	
+	
+	@Override
+	public void doExecute(DelegateExecution execution) {
+		
+		execution.setTransientVariable(Workflow.PROCESS_KEY, ProcessKeys.PROCESS_METADATA_CALLBACK_PROCESS_KEY);
+		
+		String processorFileTaskId = (String) execution.getVariable("processorFileTaskId");
+		String prunDocumentId = (String) execution.getVariable("prunDocumentId");
+		String appId = (String) execution.getVariable("appIdentifier");
+		
+		var processorFileTask = processorFileTaskService.getProcessorFileTaskById(processorFileTaskId, appId);
+		var prunDocument = documentMetaDataService.getDocumentMetaData(prunDocumentId);
+		
+		if (processorFileTask == null) {
+			LOGGER.error("CALLBACK ProcessMetadataFilesCallback -- doExecute processorFileTask NULL; delegateExecutionId={}, appIdentifier={}, processorFileTaskId={}, prunDocumentId={}", execution.getId(), appId, processorFileTaskId, prunDocumentId);
+			return;
+		}
+		
+		if (prunDocument == null) {
+			LOGGER.error("CALLBACK ProcessMetadataFilesCallback -- doExecute prunDocument NULL; delegateExecutionId={}, appIdentifier={}, processorFileTaskId={}, prunDocumentId={}", execution.getId(), appId, processorFileTaskId, prunDocumentId);
+			return;
+		}
+
+		GenericResponse response = (GenericResponse) execution.getVariable("response");
+		LOGGER.info("CALLBACK ProcessMetadataFilesCallback: service layer response status code={}, response msg={}, processorFileTaskId={}, documentId={}",
+			response.getStatusCode(), response.getStatusMessage(), processorFileTaskId, prunDocumentId);
+		
+		var getCurrentProcessorFileTaskStatus = processorFileTaskService.getProcessorFileTask(
+				processorFileTask.getId(), processorFileTask.getAppIdentifier(), processorFileTask.getServerType());
+		
+		var executionRecord = ProcessorTaskUtil.createProcessorExecutionRecord("Updating processorFileTask from callback");
+		Map<String, String>message = new HashMap<>();
+		
+		
+		if (response.getStatusCode().equalsIgnoreCase("200") || response.getStatusCode().equalsIgnoreCase("201")) {
+			LOGGER.info("CALLBACK ProcessMetadataFilesCallback: Response is 200 or 201, processorFileTaskId={}, documentId={}", processorFileTaskId, prunDocumentId);
+			
+			var mapper = new ObjectMapper();
+			Map<String, Object> fdsDocumentResponse = (Map<String, Object>) response.getResponse();
+			
+			// set document
+			Object attachmentsMap = fdsDocumentResponse.get("attachments");
+			var fsId = "";
+			String fdsDocumentId = (String) fdsDocumentResponse.get("documentId");
+			
+			if (!fdsDocumentResponse.isEmpty() && attachmentsMap != null) {
+				List<DocumentAttachmentMetaData> attachments = mapper.convertValue(fdsDocumentResponse.get("attachments"),  new TypeReference<List<DocumentAttachmentMetaData>>() { });
+				fsId = attachments.get(0).getAttachmentId();
+				prunDocument.setDocumentAttachments(attachments);
+				prunDocument.setFsId(fsId);
+				prunDocument.setFdsAttachmentId(fsId);
+				prunDocument.setFdsDocumentId(fdsDocumentId);
+				LOGGER.debug("CALLBACK ProcessMetadataFilesCallback -- fds response attachments={}", attachments);
+				
+				documentMetaDataService.saveDocumentMetaData(prunDocument);
+
+			} else {
+				LOGGER.error("CALLBACK ProcessMetadataFilesCallback fds response did not contain attachment information, processorFileTaskId={}, response={}", processorFileTaskId, response);
+			}
+
+			processorFileTask.setFsId(fsId);
+			processorFileTask.setFdsDocumentId(fdsDocumentId);
+			processorFileTask.setPostFDSResponse(true);
+			
+			LOGGER.debug("CALLBACK ProcessMetadataFilesCallback, fdsDocId={}, postFdsResp={}", processorFileTask.getFdsDocumentId(), processorFileTask.isPostFDSResponse());
+
+			if (processorFileTask.getStatus() != MetaDataStatus.COMPLETE_WITH_ERRORS && processorFileTask.getStatus() != MetaDataStatus.SEVERE_ERROR) {
+				processorFileTask.setStatus(MetaDataStatus.COMPLETE);
+			}
+
+			message.put("outcome", "FDS response 200, document updated successfully");
+			ProcessorTaskUtil.updateProcessFileTaskWithExecutionRecord(processorFileTaskService, processorFileTask,
+					executionRecord, message);
+			
+		} else {
+			LOGGER.error("CALLBACK ProcessMetadataFilesCallback {}: service layer response is not 200, error; processorFileTaskId={}, documentId={}",
+				MetaDataStatus.STORAGE_ERROR, processorFileTaskId, prunDocument.getId());
+			
+			String[] parts = processorFileTask.getLocation().split("/");
+			String s3FilePath = parts[3] + "/" + parts[4] + "/";
+			
+			prunDocument.setS3FilePath(s3FilePath);
+			prunDocument.setFileName(processorFileTask.getFileName());
+			prunDocument.setStatus(MetaDataStatus.STORAGE_ERROR);
+			documentMetaDataService.saveDocumentMetaData(prunDocument);
+//			documentMetaDataService.updateDocumentMetaDataStatus(prunDocument.getId(),MetaDataStatus.STORAGE_ERROR.toString());
+			
+			// Store pdf in filestore
+			filestoreService.insertFile(processorFileTask.getLocation(), processorFileTask.getFileName());
+			
+			processorFileTask.setPostFDSResponse(false);
+			processorFileTask.setStatus(MetaDataStatus.FATAL_ERROR);
+			LOGGER.info("ProcessFileTask-->status = {}", MetaDataStatus.FATAL_ERROR);
+			LOGGER.error("sendDocumentToFDS Error out for ID={}, pdf={}, documentId={}", processorFileTask.getId(), processorFileTask.getFileName(), prunDocument.getId());
+			if (processorFileTask.getSummary() == null) {
+				processorFileTask.setSummary(new ProcessorSummary());
+			}
+			processorFileTask.getSummary().addError(new ProcessorError(ProcessorErrorCode.STORAGE_ERROR));
+			message.put("outcome", "FDS returned error response, document updated successfully");
+			ProcessorTaskUtil.updateProcessFileTaskWithExecutionRecord(processorFileTaskService, processorFileTask,
+					executionRecord, message);
+		}
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+==
+
+
+
+@Service("ProcessRequiredFieldRule")
+public class ProcessRequiredFieldRule extends OptumJavaDelegateBase {
+
+	private static final Logger LOGGER = LoggerFactory.getLogger(ProcessRequiredFieldRule.class);
+
+	private static final List<String> REQ_VARS = Arrays.asList(Workflow.DOCID, Workflow.RULES);
+
+	public ProcessRequiredFieldRule() {
+		super(REQ_VARS);
+	}
+	private static final String IND_835 = "Ind_835";
+	
+	@Autowired
+	DocumentMetaDataService documentMetaDataService;
+
+	@Autowired
+	private HookService hookService;
+	
+	@Value("${skipEFT_spaceIds}")
+	private List<Integer> skipEFT_spaceIds;
+
+	@Value("${skipEFT_categories}")
+	private List<String> skipEFT_categories;
+
+	@Value("${checkInd_835_spaceIds}")
+	private List<Integer> checkInd_835_spaceIds;
+
+	@SuppressWarnings("unchecked")
+	protected void doExecute(DelegateExecution execution) {
+		LOGGER.debug("ProcessRequiredFieldRule-->doExecute-->ENTER");
+		var docId = execution.getVariable(Workflow.DOCID, String.class);
+		var hookId = execution.getVariable(Workflow.HOOK_ID, String.class);
+		String[] docArr = docId.split(",");
+		List<String> docList = Arrays.asList(docArr);
+		var documentMetaDataObjectList = documentMetaDataService.getDocumentMetaDataList(docList);
+		List<String> successIds = new ArrayList<>();
+		LOGGER.info("Prepost doc list {}", StringUtils.join(docList, ","));
+		for (DocumentMetaData documentMetaDataObject : documentMetaDataObjectList) {
+			HookTransactionMetaData hookTransactionMetaData = null;
+			var metaData = documentMetaDataObject.getMetadata();
+			try {
+
+				// add list of docIds to execution bus for reconciliation error message
+				execution.setTransientVariable("documentIds", docList);
+
+				ArrayList<Document> rulesList = execution.getVariable(Workflow.RULES, ArrayList.class);
+				sendToDocumentVaultIfPresentOrShutterflyIfMissing(metaData, rulesList);
+				
+				executePostCardRules(metaData);
+				
+				sendToShutterflyIfInvalidProviderEmail(metaData);
+				
+				executeZeroPayPraRules(metaData, documentMetaDataObject.getSpaceId());
+
+
+				execution.setTransientVariable(Workflow.SEND_TO_DOCVAULT_MESSAGE,
+						metaData.getBoolean(Workflow.SEND_TO_DOCVAULT, false));
+				execution.setTransientVariable(Workflow.SEND_TO_SHUTTERFLY_MESSAGE,
+						metaData.getBoolean(Workflow.SEND_TO_SHUTTERFLY, false));
+
+				documentMetaDataService.saveDocumentMetaData(documentMetaDataObject);
+				
+				LOGGER.info("requiredFieldRule process complete for docId={}, sendToDocVault={}, sendToShutterfly={}, eDeliveryError={}",
+						documentMetaDataObject.getId(), metaData.getBoolean(Workflow.SEND_TO_DOCVAULT, false), metaData.getBoolean(Workflow.SEND_TO_SHUTTERFLY, false)
+						);
+				
+				var hookExecutionMessage = new HashMap<>(Map.of(Workflow.SEND_TO_SHUTTERFLY_MESSAGE,
+						"" + metaData.getBoolean(Workflow.SEND_TO_DOCVAULT, false) + "",
+						Workflow.SEND_TO_DOCVAULT_MESSAGE,
+						"" + metaData.getBoolean(Workflow.SEND_TO_SHUTTERFLY, false) + ""
+
+				));
+
+				hookTransactionMetaData = hookService.saveHookTransaction(HookTransactionUtil
+						.createHookTransactionWithHookId(documentMetaDataObject, hookExecutionMessage,
+								OptumProcessEnum.REQUIRED_FIELD_RULE_PROCESS.toString(), hookId));
+				execution.setTransientVariable(Workflow.HOOK_TRANSACTION_METADATA_ID,
+						hookTransactionMetaData.getId());
+				successIds.add(documentMetaDataObject.getId());
+
+				LOGGER.info("end of required field process, documentId={}", documentMetaDataObject.getId());
+			} catch (Exception e) {
+				LOGGER.error("doExecute Exception while executing ProcessRequiredFieldRule task {}={} {} documentId={}",
+						"delegateExecutionId", execution.getId(), ExceptionUtils.getStackTrace(e), documentMetaDataObject.getId());
+				
+				if (hookTransactionMetaData == null) {
+					var hookExecutionMessage = new HashMap<>(Map.of(Workflow.ERROR_MESSAGE, e.getMessage(), 
+							Workflow.SEND_TO_SHUTTERFLY_MESSAGE, "" + metaData.getBoolean(Workflow.SEND_TO_DOCVAULT, false) + "",
+							Workflow.SEND_TO_DOCVAULT_MESSAGE, "" + metaData.getBoolean(Workflow.SEND_TO_SHUTTERFLY, false) + "",
+							Workflow.COMMON_STATUS, "ERROR"
+							));
+
+
+					hookTransactionMetaData = hookService.saveHookTransaction(HookTransactionUtil
+							.createHookTransactionWithHookId(documentMetaDataObject, hookExecutionMessage,
+									OptumProcessEnum.REQUIRED_FIELD_RULE_PROCESS.toString(), hookId));
+					
+				} else {
+					var hookExecutionMessage = new HashMap<>(Map.of(Workflow.ERROR_MESSAGE, e.getMessage(),
+							Workflow.SEND_TO_SHUTTERFLY_MESSAGE,
+							"" + metaData.getBoolean(Workflow.SEND_TO_DOCVAULT, false) + "",
+							Workflow.SEND_TO_DOCVAULT_MESSAGE,
+							"" + metaData.getBoolean(Workflow.SEND_TO_SHUTTERFLY, false) + ""
+		
+					));
+					var hookExecutionRecord = new HashMap<>(Map.of(Workflow.SPACE_ID,
+							String.valueOf(hookTransactionMetaData.getSpaceId()), Workflow.CLIENTID,
+							String.valueOf(hookTransactionMetaData.getClientId()), Workflow.APP_IDENTIFIER,
+							hookTransactionMetaData.getAppIdentifier(), Workflow.HOOK_ID, hookId));
+		
+					var hookExecutionRecordMetaData = HookTransactionUtil.getHookExecutionRecord(hookExecutionRecord,
+							hookExecutionMessage, OptumProcessEnum.REQUIRED_FIELD_RULE_PROCESS.toString());
+		
+					List<HookExecutionRecordMetaData> objhookExecutionRecordMetaData = hookTransactionMetaData
+							.getHookExecutionList();
+					objhookExecutionRecordMetaData.add(hookExecutionRecordMetaData);
+		
+					hookTransactionMetaData.setHookExecutionList(objhookExecutionRecordMetaData);
+					hookService.updateHookTransaction(hookTransactionMetaData);
+					
+				}
+				
+				execution.setTransientVariable(Workflow.HOOK_TRANSACTION_METADATA_ID, hookTransactionMetaData.getId());
+				addErrorMsg(
+						"ProcessRequiredFieldRule-->doExecute-->Exception while executing ProcessRequiredFieldRule task",
+						e.getMessage());
+
+				LOGGER.info("end of required field process inside catch, documentId={}", documentMetaDataObject.getId());
+
+				continue;
+			}
+		}
+		Map<String, Object> updateMap = new HashMap<>();
+		updateMap.put(Workflow.PREPOSTENDED, true);
+		LOGGER.info("Prepost success list {}", StringUtils.join(successIds, ","));
+		documentMetaDataService.saveDocumentMetaDataMulti(successIds, updateMap);
+		
+		LOGGER.debug("ProcessRequiredFieldRule-->doExecute-->EXIT");
+	}
+
+	void executeZeroPayPraRules(Document metaData, Integer spaceId) {
+		 
+		boolean spaceIdEFTInd = skipEFT_spaceIds != null && skipEFT_spaceIds.contains(spaceId) ? true : false;
+		boolean spaceIdInd835 = checkInd_835_spaceIds!= null && checkInd_835_spaceIds.contains(spaceId) ? true : false;		
+		
+		if (spaceIdEFTInd || spaceIdInd835) {
+			LOGGER.debug("ProcessRequiredFieldRule-->executeZeroPayPraRules-->ENTER");
+			String emailAlertReq = metaData.getString(Workflow.EMAIL_ALERT_REQUEST);
+			  
+			String ind_835 = spaceIdInd835 && metaData.getString(Workflow.IND_835) == null ? "N" :  metaData.getString(Workflow.IND_835);
+			  
+			boolean skipEFTCategories = skipEFT_categories != null && skipEFT_categories.contains(metaData.getString(Workflow.SUBCATEGORY)) ? true : false;
+			  
+			if (emailAlertReq.equalsIgnoreCase(Workflow.Y) && 
+					((spaceIdInd835 && skipEFTCategories && StringUtils.equalsIgnoreCase(ind_835, "Y")) || (spaceIdEFTInd && skipEFTCategories && "Y".equals(metaData.getString(Workflow.EFT_IND)))) ) {
+				LOGGER.info(ind_835);
+				
+				metaData.put(Workflow.SEND_TO_SHUTTERFLY, false); 
+			 }
+			  
+			if (emailAlertReq.equalsIgnoreCase(Workflow.Y) && 
+					((spaceIdInd835 && skipEFTCategories && StringUtils.equalsIgnoreCase(ind_835, "N")) || (spaceIdEFTInd && skipEFTCategories && "N".equals(metaData.getString(Workflow.EFT_IND)))) ) {
+				String edeliveryError= metaData.getString(Workflow.EDELIVERY_ERROR) == null ? "" : metaData.getString(Workflow.EDELIVERY_ERROR);
+				   
+				if (StringUtils.isEmpty(metaData.getString(Workflow.PROV_CORP_MPIN)) || StringUtils.isEmpty(metaData.getString(Workflow.TIN)) || StringUtils.isEmpty(metaData.getString(Workflow.PROVIDER_EMAIL_ID)) 
+						|| (!StringUtils.isEmpty(metaData.getString(Workflow.PROVIDER_EMAIL_ID)) && edeliveryError.contains(Workflow.PROVIDER_EMAIL_ID))) {
+					metaData.put(Workflow.SEND_TO_SHUTTERFLY, true);
+				} else {
+					metaData.put(Workflow.SEND_TO_SHUTTERFLY, false); 
+				}
+				   
+			}
+			  
+		}
+		
+	}
+
+	void executePostCardRules(Document metaData) {
+		LOGGER.debug("ProcessRequiredFieldRule-->executePostCardRules-->ENTER");
+		
+		if (!StringUtils.isEmpty(metaData.getString(Workflow.EMAIL_ALERT_REQUEST))
+				&& metaData.getString(Workflow.EMAIL_ALERT_REQUEST).equalsIgnoreCase(Workflow.Y)
+				&& !StringUtils.isEmpty(metaData.getString(Workflow.PROV_CORP_MPIN))) {
+			metaData.put(Workflow.SEND_TO_DOCVAULT, true);
+		}
+		else if ( StringUtils.isEmpty(metaData.getString(Workflow.PROV_CORP_MPIN)) ) {
+			metaData.put(Workflow.SEND_TO_DOCVAULT, false);
+		}
+
+		LOGGER.debug("ProcessRequiredFieldRule-->executePostCardRules-->EXIT");
+	}
+
+	void sendToShutterflyIfInvalidProviderEmail(Document metaData){
+		LOGGER.debug("ProcessRequiredFieldRule --> sendToShutterflyIfInvalidProciderEmail --> ENTER");
+		
+		if(!StringUtils.isEmpty(metaData.getString(Workflow.PROVIDER_EMAIL_ID))
+				&& !(metaData.getString(Workflow.PROVIDER_EMAIL_ID).equals("Opt out"))
+			&& !StringUtils.isEmpty(metaData.getString(Workflow.EDELIVERY_ERROR))
+			&& metaData.getString(Workflow.EDELIVERY_ERROR).contains("Missing or invalid data: providerEmailId")
+			&& Boolean.FALSE.equals(metaData.getBoolean(Workflow.SEND_TO_SHUTTERFLY))){
+			metaData.put(Workflow.SEND_TO_SHUTTERFLY, true);
+		}
+
+		LOGGER.debug("ProcessRequiredFieldRule --> sendToShutterflyIfInvalidProciderEmail --> EXIT ");
+	}
+
+	@SuppressWarnings("unchecked")
+	void sendToDocumentVaultIfPresentOrShutterflyIfMissing(Document metaData, ArrayList<Document> rulesList) {
+		if (rulesList.isEmpty()) {
+			return;
+		}
+		for (Document rule : rulesList) {
+			String criteria = (String) rule.get(Workflow.CRITERIA);
+			if (ProcessorTaskUtil.validateCriteriaMatch(criteria, metaData)) {
+				metaData.put(Workflow.SEND_TO_DOCVAULT, true);
+				metaData.put(Workflow.SEND_TO_SHUTTERFLY, false);
+				ArrayList<String> requiredFieldsList = (ArrayList<String>) rule.get(Workflow.REQUIRED_FIELDS);
+
+				// made a new method to reduce the complexity
+				checkRequiredFields(requiredFieldsList, metaData);
+
+				if (metaData.getBoolean(Workflow.SEND_TO_DOCVAULT, false)) {
+					continue;
+				}
+				Boolean sendToShutterfly = rule.getBoolean(Workflow.SEND_TO_SHUTTERFLY, false);
+				if (Boolean.TRUE.equals(sendToShutterfly)) {
+					metaData.put(Workflow.SEND_TO_SHUTTERFLY, true);
+				}
+			}
+		}
+	}
+
+	protected void checkRequiredFields(ArrayList<String> requiredFieldsList, Document metaData) {
+		for (String requiredField : requiredFieldsList) {
+			if (metaData.get(requiredField) instanceof Boolean)
+			{
+				LOGGER.debug("Boolean: requiredField={}", requiredField);
+				continue;
+			}
+			if (StringUtils.isBlank(metaData.getString(requiredField))) {
+				WorkFlowUtil.updateEDeliveryError(metaData, requiredField);
+				metaData.put(Workflow.SEND_TO_DOCVAULT, false);
+			}
+		}
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+==
+
+
+
+@Service("PutDocumentDataDocLib")
+public class PutDocumentDataDocLib extends OptumJavaDelegateBase {
+	
+	private static final Logger LOGGER = LoggerFactory.getLogger(PutDocumentDataDocLib.class);
+	
+	private static final List<String> REQ_VARS = List.of(
+			Workflow.DOCLIB_PUT_DOCUMENT_IDS,
+			Workflow.DOCLIB_PUT_URL,
+			Workflow.DOCLIB_OAUTH_URL,
+            Workflow.DOCLIB_CLIENT_ID,
+            Workflow.DOCLIB_CLIENT_SECRET
+	);
+	
+	private final DateFormat df;
+
+	@Autowired
+	private RestTemplate restTemplate;
+	
+	@Autowired
+	private DocumentMetaDataService documentMetaDataService;
+
+    @Autowired
+	private OauthManagerUtil oauthManagerUtil;
+
+	@Autowired
+	private EhCache ehCache;
+    
+    private static final String METADATA_PREFIX = "metadata.";
+  
+	public PutDocumentDataDocLib() {
+		super(REQ_VARS);
+		df = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
+		df.setTimeZone(TimeZone.getTimeZone("UTC"));
+	}
+	
+	@Override
+	protected void doExecute(DelegateExecution execution) {
+		try {
+			putDocumentDataDocLib(execution);
+		} catch (Exception e) {
+			LOGGER.error("msg: {}", e.getMessage());
+			addErrorMsg("Exception", e.getMessage());
+			setExitNow(execution);
+		}
+	}
+	
+	@SuppressWarnings("unchecked")
+	void putDocumentDataDocLib(DelegateExecution execution) {
+		List<String> successDocumentList = new ArrayList<>();
+		List<String> failureDocumentList = new ArrayList<>();
+		try {
+			String localUploadTime = df.format(new Date());
+			
+			Map<String, Object> successUpdateMap = new HashMap<>(
+					Map.of(METADATA_PREFIX + Workflow.METADATA_UPDATE_DOCLIB_API_RESPONSE, true,
+							METADATA_PREFIX + Workflow.METADATA_UPDATE_DOCLIB_UPLOAD_DATE, localUploadTime,
+							METADATA_PREFIX + Workflow.METADATA_DOCSENTTO_FIELD, Workflow.METADATA_DOCSENTTO_DOCLIB));
+			
+			Map<String, Object> failureUpdateMap = new HashMap<>(
+					Map.of(METADATA_PREFIX + Workflow.METADATA_UPDATE_DOCLIB_API_RESPONSE, false
+					));
+			
+
+			execution.setTransientVariable("successUpdateMap", successUpdateMap);
+			execution.setTransientVariable("failureUpdateMap", failureUpdateMap);
+			
+			String docLibURL = execution.getVariable(Workflow.DOCLIB_PUT_URL, String.class);
+			
+			List<String> documentIds = execution.getVariable(Workflow.DOCLIB_PUT_DOCUMENT_IDS, List.class);
+			
+			if (documentIds.isEmpty()) {
+				LOGGER.debug("PutDocumentDataDocLib documentIds is null or empty");
+        		setExitNow(execution);
+        		return;
+			}
+
+			var docLibUrl = execution.getVariable(Workflow.DOCLIB_OAUTH_URL, String.class);
+			var docLibClientId = execution.getVariable(Workflow.DOCLIB_CLIENT_ID, String.class);
+			var docLibClientSecret = execution.getVariable(Workflow.DOCLIB_CLIENT_SECRET, String.class);
+
+
+			List<DocumentMetaData> documentMetaDataList = documentMetaDataService.getDocumentMetaDataList(documentIds);
+			
+			for (DocumentMetaData doc : documentMetaDataList) {
+				try {
+					String jsonStringBody = TemplateFactory.getInstance(Templates.DOCLIB_PUT_REQUEST.getTemplate()).convertWithTemplate(doc);
+					String token = oauthManagerUtil.getOauthToken("tokenStargate", docLibClientId,
+							docLibClientSecret, "client_credentials", docLibUrl, false, null);
+					
+					ResponseEntity<String> response = putDocumentToDocLibWithRetry(docLibURL, token, jsonStringBody, execution,
+							doc.getId());
+
+					int responseStatus = response.getStatusCode().value();
+					
+					if (responseStatus == 200) {
+						successDocumentList.add(doc.getId());
+					} else {
+						LOGGER.error("PutDocumentDataDocLib error sending PUT request to docLib for docId={}", doc.getId());
+						failureDocumentList.add(doc.getId());
+					}
+					
+				} catch (OutOfRetriesException e) {
+					LOGGER.error("OutOfRetriesException to PUT docLib docId={}, exception {}", doc.getId(), ExceptionUtils.getStackTrace(e));
+					addErrorMsg("Exception", e.getMessage());
+					failureDocumentList.add(doc.getId());
+				} catch (Exception e) {
+					LOGGER.error("Exception to PUT docLib docId={}, exception {}", doc.getId(), ExceptionUtils.getStackTrace(e));
+					addErrorMsg("Exception", e.getMessage());
+					failureDocumentList.add(doc.getId());
+				}
+			}
+			
+			execution.setTransientVariable("successDocumentList", successDocumentList);
+			execution.setTransientVariable("failureDocumentList", failureDocumentList);
+		} catch (Exception e) {
+			LOGGER.error("PutDocumentDataDocLib Exception to PUT DocLib e={}", ExceptionUtils.getStackTrace(e));
+		} finally {
+			execution.setTransientVariable("successDocumentList", successDocumentList);
+			execution.setTransientVariable("failureDocumentList", failureDocumentList);
+		}
+	}
+	
+	
+	private ResponseEntity<String> putDocumentToDocLibWithRetry(String endpoint, String accessToken, String jsonStringBody, DelegateExecution execution, String docId) throws OutOfRetriesException {
+		ResponseEntity<String> response = null;
+
+		var numRetries = execution.getVariable(Workflow.NUM_RETRIES, Number.class);
+		var timeToWaitMS = execution.getVariable(Workflow.TIME_TO_WAIT, Number.class);
+
+		var docLibUrl = execution.getVariable(Workflow.DOCLIB_OAUTH_URL, String.class);
+		var docLibClientId = execution.getVariable(Workflow.DOCLIB_CLIENT_ID, String.class);
+		var docLibClientSecret = execution.getVariable(Workflow.DOCLIB_CLIENT_SECRET, String.class);
+
+
+		var retryHandler = new RetryOnExceptionHandler(numRetries, timeToWaitMS);
+		String msg;
+		while (retryHandler.shouldRetry()) {
+			try {
+				try {
+					if (retryHandler.isRetry()) {
+//						String newToken = getOauthToken(execution, true);
+						String newToken = oauthManagerUtil.getOauthToken("tokenStargate", docLibClientId,
+								docLibClientSecret, "client_credentials", docLibUrl, true, null);
+						String newAccessToken = "Bearer " + newToken;
+						LOGGER.info("putDocumentToDocLibWithRetry retrying doclib call with new token");
+						response = putRequest(endpoint, newAccessToken, jsonStringBody);
+					} else {
+						response = putRequest(endpoint, accessToken, jsonStringBody);
+					}
+					break;
+				} catch (HttpClientErrorException.Unauthorized e) {
+					LOGGER.error("HttpClientErrorException Unauthorized for documentId={}, responseBody={}, statusCode={}", docId, e.getResponseBodyAsString(), e.getStatusCode());
+					retryHandler.setTimeToWaitMS(Long.sum(retryHandler.getTimeToWaitMS(), 250L));
+					retryHandler.exceptionOccurred();
+				} catch (HttpServerErrorException e) {
+					if (e instanceof HttpServerErrorException.GatewayTimeout || e instanceof HttpServerErrorException.BadGateway) {
+						LOGGER.error("HttpClientErrorException for documentId={}, responseBody={}, statusCode={}", docId, e.getResponseBodyAsString(), e.getStatusCode());
+						retryHandler.setTimeToWaitMS(Long.sum(retryHandler.getTimeToWaitMS(), 250L));
+						retryHandler.exceptionOccurred();
+					}
+					else {
+					LOGGER.error("{} exception for documentId={}, responseBody={}, statusCode={}", e.getClass().getSimpleName(), docId, e.getResponseBodyAsString(), e.getStatusCode());
+					return new ResponseEntity<>(e.getResponseBodyAsString(), e.getStatusCode());
+					}
+				} catch (HttpClientErrorException e) {
+					LOGGER.error("{} exception for documentId={}, responseBody={}, statusCode={}", e.getClass().getSimpleName(), docId, e.getResponseBodyAsString(), e.getStatusCode());
+					return new ResponseEntity<>(e.getResponseBodyAsString(), e.getStatusCode());					
+				} catch (RestClientException e) {
+					LOGGER.error("RestClientException for document {} and exception {} ", docId,
+							ExceptionUtils.getStackTrace(e));
+					retryHandler.setTimeToWaitMS(Long.sum(retryHandler.getTimeToWaitMS(), 250L));
+					retryHandler.exceptionOccurred();
+				}
+			} catch (OutOfRetriesException e) {
+				msg = String.format(
+						"RestClientException to endpoint %s and exhausted %s retries with retry time %s millis",
+						endpoint, retryHandler.getNumRetries(), retryHandler.getTimeToWaitMS());
+				LOGGER.error(msg);
+				throw new OutOfRetriesException(msg);
+			}
+		}
+		return response;
+	}
+	
+	
+	ResponseEntity<String> putRequest(String endpoint, String accessToken, String document)
+			throws RestClientException {
+		var headers = new HttpHeaders();
+		headers.setContentType(MediaType.APPLICATION_JSON);
+		headers.set("accept", "application/json");
+		headers.set("Authorization", accessToken);
+		HttpEntity<String> request = new HttpEntity<>(document, headers);
+		
+		LOGGER.info("putRequest endpoint={}, document={}", Encode.forJava(endpoint), Encode.forJava(document));
+		return restTemplate.exchange(endpoint, HttpMethod.PUT, request, String.class);
+	}
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+==
+
+
+
+@Service("RetrieveCorporateMPINv2")
+public class RetrieveCorporateMPINv2 extends OptumJavaDelegateBase {
+	private static final Logger LOGGER = LoggerFactory.getLogger(RetrieveCorporateMPINv2.class);
+	private static final String PADDING_0 = "0";
+	private static final List<String> REQ_VARS = List.of(
+			Workflow.PROV_APP_NAME, Workflow.PROV_ATTRIBUTE_SET,
+	  Workflow.PROV_COUNT, Workflow.PROV_SEARCH_URL
+	 
+	);
+	
+	@Value("${TRACKIT_SPACEID}")
+    private String trackitSpaceId;
+
+	@Value("${PRUN.EMAIL_WORKFLOW_SPACEID}")
+	private List<String> emailWorkflowSpaceIds;
+	
+	@Value("${PRUN.TRACKIT_MNR_SPACEID}")
+	private List<String> trackItAndMnrSpaceIds;
+
+	@Autowired
+	private RestTemplate restTemplate;
+
+	@Autowired
+	private EhCache ehcache;
+	
+	@Autowired
+	private HookService hookService;
+
+	@Autowired
+	private DocumentMetaDataService documentMetaDataService;
+	
+	@Autowired
+	private OauthManagerUtil oauthManagerUtil;
+
+	@Value("${MPIN_PES_TPS:60}")
+	private int mpinPesTps;
+
+	@Value("${ALINK_SPACEID}")
+    private String alinkSpaceId;
+
+	@Value("${SSBCI_SPACEID}")
+	private String ssbciSpaceId;
+
+    @Value("${PRUN.CONSUMER_ENGINEERING_SPACEID}")
+    private String pcpMemberReferralSpaceId;
+	
+	private static final String MISSING_OR_INVALID_DATA = "Missing or invalid data: ";
+	private static final String METADATA_PREFIX = "metadata.";
+
+
+	public RetrieveCorporateMPINv2() {
+		super(REQ_VARS);
+	}
+
+	@Override
+	protected void doExecute(DelegateExecution execution) {
+		LOGGER.debug("RetrieveCorporateMPINv2 delegate");
+		
+		String tin = StringUtils.EMPTY;
+		HookTransactionMetaData hookTransactionMetaData = null;
+		var hookId = execution.getVariable(Workflow.HOOK_ID, String.class);
+		var docId = execution.getVariable(Workflow.DOCID, String.class);
+
+		
+		String spaceId = execution.getVariable(Workflow.SPACE_ID).toString();
+		
+		List<DocumentMetaData> documentMetaDataObjectList = null;
+        
+        Map<String, List<String>> groupedByMetadataMap = null;
+        
+        if (spaceId != null && emailWorkflowSpaceIds.contains(spaceId)){
+        	documentMetaDataObjectList = (List<DocumentMetaData>) execution.getVariable("uniqueFieldDocumentList");
+        	groupedByMetadataMap = (Map<String, List<String>>) execution.getVariable("uniqueFieldMap");
+        } else {
+    		String[] docArr = docId.split(",");
+    		List<String> docList = Arrays.asList(docArr);
+        	documentMetaDataObjectList = documentMetaDataService.getDocumentMetaDataList(docList);
+        }
+
+		
+		for (DocumentMetaData documentMetaDataObject : documentMetaDataObjectList) {
+			LOGGER.info("Processing document. delegate=RetrieveCorporateMPINv2 docId={}", documentMetaDataObject.getId());
+			try {
+				var metadata = documentMetaDataObject.getMetadata();
+				var corporateMpinMetaData = metadata.getString(Workflow.PROV_CORP_MPIN);
+		    tin = metadata.getString(Workflow.TIN);
+			var validateCorprateMPIN = Boolean
+					.parseBoolean(String.valueOf(execution.getVariable(Workflow.VALIDATE_CORPORATE_MPIN)));
+
+			if (StringUtils.isNotBlank(corporateMpinMetaData)) {
+				execution.setTransientVariable(Workflow.PROV_CORP_MPIN, corporateMpinMetaData);
+				hookTransactionMetaData = hookService.findHookTransactionByTargetIdHookId(docId, hookId);
+				if(hookTransactionMetaData!=null) {
+					execution.setTransientVariable(Workflow.HOOK_TRANSACTION_METADATA_ID, hookTransactionMetaData.getId());
+				}
+				continue;
+			}
+
+			if (StringUtils.isEmpty(tin)) {
+				LOGGER.warn("tin is empty for docId {}", documentMetaDataObject.getId());
+				Map<String, String> hookExecutionMessage = new HashMap<>();
+				hookExecutionMessage.put(Workflow.TIN, tin);
+				hookExecutionMessage.put(Workflow.ERROR_MESSAGE, "tin is empty");
+				hookTransactionMetaData = hookService.saveHookTransaction(HookTransactionUtil
+						.createHookTransactionWithHookId(documentMetaDataObject, hookExecutionMessage,
+								OptumProcessEnum.RETRIEVE_CORPORATE_MPIN_V2_PROCESS.toString(), hookId));
+				execution.setTransientVariable(Workflow.HOOK_TRANSACTION_METADATA_ID, hookTransactionMetaData.getId());
+			}
+
+			if (spaceId != null && (spaceId.equals(alinkSpaceId) || spaceId.equals(ssbciSpaceId) || spaceId.equals(pcpMemberReferralSpaceId))) {
+				var corporateMpin = ehcache.getCorpMpinCache(formatTin(tin));
+				if (StringUtils.isEmpty(corporateMpin)) {
+						LOGGER.debug("Corporate MPIN is missing. Fetching from PES API for TIN = {}", tin);
+						corporateMpin = getMpinFromSvcs(execution, tin, RateLimiter.create(mpinPesTps));
+						if (StringUtils.isNotEmpty(corporateMpin)) {
+							ehcache.putCorpMpinCache(tin, corporateMpin);
+						} else {
+							LOGGER.error("Failed to retrieve Corporate MPIN for TIN = {}", tin);
+						}
+				}
+				verifyCorporateMpinEmptyOrNot(execution, corporateMpin, metadata, documentMetaDataObject, hookTransactionMetaData, tin, validateCorprateMPIN);
+			}
+			
+		  else if(spaceId != null && trackItAndMnrSpaceIds.contains(spaceId)) {
+	            	
+	           Map<String,String> physicianInfoMap = getMpinAndProviderOrgNameFromSvcs(execution, tin, RateLimiter.create(mpinPesTps));
+	           
+	           String providerName = "";
+	           String corporateMpin = "";
+	           
+	           if (physicianInfoMap != null && !physicianInfoMap.isEmpty()) {
+	        	   providerName = physicianInfoMap.get("providerName");
+	        	   corporateMpin = physicianInfoMap.get("corporateMpin");
+	           }
+	           
+			  verifyCorporateMpinEmptyOrNotTrackIt(execution, corporateMpin, documentMetaDataObject, 
+					  hookTransactionMetaData, tin, groupedByMetadataMap, providerName);
+	
+	          }
+			
+		 else {
+				
+			    var corporateMpin = ehcache.getCorpMpinCache(formatTin(tin));
+			    if (StringUtils.isEmpty(corporateMpin)) {
+				LOGGER.debug("Invoking Corporate MPIN retrieve service for tin= {}", tin);
+				corporateMpin = getMpinFromSvcs(execution, tin, RateLimiter.create(mpinPesTps));
+				ehcache.putCorpMpinCache(tin, corporateMpin);
+				
+			    } else {
+				   LOGGER.info("Picked from the cache for tin={}", tin);
+			     }
+			  
+			    verifyCorporateMpinEmptyOrNot(execution, corporateMpin, metadata, documentMetaDataObject, hookTransactionMetaData, tin, validateCorprateMPIN);
+            
+			}				
+				LOGGER.info("Completed processing document. delegate=RetrieveCorporateMPINv2 docId={}", documentMetaDataObject.getId());
+		} catch (Exception e) {
+			setExecutionError(execution, e.getMessage());
+			LOGGER.error("RetrieveCorporateMPIN Error: {} - {} - {}  ",
+					Encode.forJava((String) execution.getVariable("executionErrorSourceModule")),
+					Encode.forJava((String) execution.getVariable("executionErrorCode")),
+					Encode.forJava((String) execution.getVariable("executionErrorMsg")), e);
+			
+			Map<String, String> hookExecutionMessage = new HashMap<>();
+			hookExecutionMessage.put(Workflow.ERROR_MESSAGE, ExceptionUtils.getStackTrace(e));
+			hookExecutionMessage.put(Workflow.TIN, tin);
+			hookExecutionMessage.put(Workflow.COMMON_STATUS, "ERROR");
+			
+			hookTransactionMetaData = hookService.saveHookTransaction(
+					HookTransactionUtil.createHookTransactionWithHookId(documentMetaDataObject, hookExecutionMessage,
+							OptumProcessEnum.RETRIEVE_CORPORATE_MPIN_V2_PROCESS.toString(), hookId));
+			execution.setTransientVariable(Workflow.HOOK_TRANSACTION_METADATA, hookTransactionMetaData);
+			LOGGER.error("doExecute RetrieveCorporateMPIN terminated with an ERROR {}={} {}", "delegateExecutionId",
+					execution.getId(), ExceptionUtils.getStackTrace(e));
+			LOGGER.info("Corporate MPIN process completed inside catch TIN: {}, DocumentId: {}", tin, documentMetaDataObject.getId());
+		}
+		
+		}	
+	}
+	
+	public void updateHookTransaction(DelegateExecution execution, String tin, String corporateMpin, HookTransactionMetaData hookTransactionMetaData, DocumentMetaData documentMetaDataObject) {
+		// update hookTransaction
+		var hookId = execution.getVariable(Workflow.HOOK_ID, String.class);
+		Map<String, String> hookExecutionMessage = new HashMap<>();
+		hookExecutionMessage.put(Workflow.TIN, tin);
+		hookExecutionMessage.put("corporateMpin", corporateMpin);
+
+		hookTransactionMetaData = hookService.saveHookTransaction(HookTransactionUtil
+				.createHookTransactionWithHookId(documentMetaDataObject, hookExecutionMessage,
+						OptumProcessEnum.RETRIEVE_CORPORATE_MPIN_V2_PROCESS.toString(), hookId));
+		execution.setTransientVariable(Workflow.HOOK_TRANSACTION_METADATA_ID, hookTransactionMetaData.getId());
+
+	}
+	
+	public void verifyCorporateMpinEmptyOrNot(DelegateExecution execution,String corporateMpin, Document metadata, DocumentMetaData documentMetaDataObject, 
+			HookTransactionMetaData hookTransactionMetaData, String tin, boolean validateCorprateMPIN ) {
+		
+	    
+		if (StringUtils.isNotEmpty(corporateMpin)) {
+			corporateMpin = StringUtils.leftPad(corporateMpin, 9, PADDING_0);
+			metadata.put(Workflow.PROV_CORP_MPIN, corporateMpin);
+			documentMetaDataObject.setMetadata(metadata);
+			execution.setTransientVariable(Workflow.PROV_CORP_MPIN, corporateMpin);
+			documentMetaDataService.saveDocumentMetaData(documentMetaDataObject);
+			
+			
+		} else {
+			// throw severe error, return for PRAs ONLY. flag definition
+			validateCorporateMpin(validateCorprateMPIN, documentMetaDataObject, execution, metadata);
+			documentMetaDataService.saveDocumentMetaData(documentMetaDataObject);
+
+		}
+		
+		// update hookTransaction
+		updateHookTransaction(execution, tin, corporateMpin, hookTransactionMetaData, documentMetaDataObject);
+		LOGGER.info("Corporate MPIN process completed DocumentId: {}", documentMetaDataObject.getId());
+	  
+	}
+	
+	
+	public void verifyCorporateMpinEmptyOrNotTrackIt(DelegateExecution execution,String corporateMpin, DocumentMetaData documentMetaDataObject, 
+			HookTransactionMetaData hookTransactionMetaData, String tin, Map<String, List<String>> groupedByMetadataMap, String providerName) {
+	    var hookId = execution.getVariable(Workflow.HOOK_ID, String.class);
+	    
+	    org.bson.Document metadata = documentMetaDataObject.getMetadata();
+	    
+	    Map<String, Object> updateMap = new HashMap<>();
+	    
+		if (StringUtils.isNotEmpty(corporateMpin)) {
+			corporateMpin = StringUtils.leftPad(corporateMpin, 9, PADDING_0);
+			// multi update all documents with the same TIN
+			updateMap.put(METADATA_PREFIX + Workflow.PROV_CORP_MPIN, corporateMpin);
+			updateMap.put(METADATA_PREFIX + "providerName", providerName);
+	    	List<String> documentIdsUpdateList = groupedByMetadataMap.get(tin);			
+			documentMetaDataService.saveDocumentMetaDataMulti(documentIdsUpdateList, updateMap);
+			
+			execution.setTransientVariable(Workflow.PROV_CORP_MPIN, corporateMpin);
+			
+		} else {
+			// update eDeliveryError for all documents with the same TIN			
+        	String eDeliveryError = metadata.getString(Workflow.E_DELIVERY_ERROR);
+            String errorMessage = MISSING_OR_INVALID_DATA + Workflow.PROV_CORP_MPIN;
+            if (StringUtils.isBlank(eDeliveryError)) {
+            	updateMap.put(METADATA_PREFIX + Workflow.E_DELIVERY_ERROR, errorMessage);
+            } else {
+                if (!eDeliveryError.contains(errorMessage)) {
+                	updateMap.put(METADATA_PREFIX + Workflow.E_DELIVERY_ERROR, eDeliveryError + "|" + errorMessage);
+                }
+            }
+            
+            
+            List<String> documentIdsUpdateList = groupedByMetadataMap.get(tin);
+            if (!updateMap.isEmpty()) {
+    			documentMetaDataService.saveDocumentMetaDataMulti(documentIdsUpdateList, updateMap);
+    		}
+		}
+		
+		// update hook transaction
+		updateHookTransaction(execution, tin, corporateMpin, hookTransactionMetaData, documentMetaDataObject);
+		LOGGER.info("Corporate MPIN process completed DocumentId: {}", documentMetaDataObject.getId());
+	  
+		
+	}
+	
+	public void validateCorporateMpin(boolean validateCorprateMPIN, DocumentMetaData documentMetaDataObject, DelegateExecution execution, Document metadata) {
+		// throw severe error, return for PRAs ONLY. flag definition
+		if (validateCorprateMPIN) {
+			documentMetaDataObject.setStatus(MetaDataStatus.SEVERE_ERROR);
+			setExecutionError(execution, "Missing or invalid data: Provider TIN (Severe)");
+		} else {
+			WorkFlowUtil.updateEDeliveryError(metadata, Workflow.PROV_CORP_MPIN);
+			documentMetaDataObject.setMetadata(metadata);
+		}
+	}
+
+	public String getMpinFromSvcs(DelegateExecution execution, String tin, RateLimiter rateLimiter) {
+		LOGGER.debug("Invoking Corporate MPIN retrieve service for tin = {}", tin);
+		var request = createRequest(execution, tin);
+		var ps = new ProviderSearch(execution.getVariable(Workflow.PROV_SEARCH_URL, String.class),
+				restTemplate, oauthManagerUtil, ehcache);
+		try {
+			rateLimiter.acquire();
+			return ps.getProviderCorpMpin(request.getRequestBody(), request.getRequestHeader(), execution);
+		} catch (Exception e) {
+			LOGGER.error("getMpinFromSvcs Error in retrieveing corporate mpin {}={}, {}={} {}", "delegateExecutionId",
+					execution.getId(), "tin", tin, ExceptionUtils.getStackTrace(e));
+			return null;
+		}
+	}
+	
+	public Map<String,String> getMpinAndProviderOrgNameFromSvcs(DelegateExecution execution, String tin, RateLimiter rateLimiter) {
+		LOGGER.debug("Invoking provider details retrieve service for tin = {}", tin);
+		var request = createRequest(execution, tin);
+		var ps = new ProviderSearch(execution.getVariable(Workflow.PROV_SEARCH_URL, String.class),
+				restTemplate, oauthManagerUtil, ehcache);
+		try {
+			rateLimiter.acquire();
+			return ps.getProviderCorpMpinAndProviderOrg(request.getRequestBody(), request.getRequestHeader(), execution);
+		} catch (Exception e) {
+			LOGGER.error("getMpinAndProviderOrgNameFromSvcs Error in retrieveing provider data {}={}, {}={} {}", "delegateExecutionId",
+					execution.getId(), "tin", tin, ExceptionUtils.getStackTrace(e));
+			return null;
+		}
+	}
+	
+
+
+	private Request createRequest(DelegateExecution execution, String tin) {
+		
+		var pesAppId = execution.getVariable(Workflow.PES_APP_ID, String.class);
+        var pesAppSecret = execution.getVariable(Workflow.PES_APP_SECRET, String.class);
+        var pesUrl = execution.getVariable(Workflow.PES_OAUTH_URL, String.class);
+        var pesGrantType = execution.getVariable(Workflow.PES_GRANT_TYPE, String.class);
+        
+        String accessToken = oauthManagerUtil.getOauthToken("tokenStargate", pesAppId, pesAppSecret, pesGrantType, pesUrl, false, null);
+
+		var requestHeader = new RequestHeader.RequestHeaderBuilder().setToken(accessToken).build();
+
+		var requestBody = new RequestBody.RequestBodyBuilder()
+				.setAppName(execution.getVariable(Workflow.PROV_APP_NAME, String.class))
+				.setAttributeSet(execution.getVariable(Workflow.PROV_ATTRIBUTE_SET, String.class))
+				.setCount(execution.getVariable(Workflow.PROV_COUNT, String.class)).setTaxIdNumber(tin).build();
+
+		return new Request.RequestBuilder().setRequestBody(requestBody).setRequestHeader(requestHeader).build();
+	}
+
+	private void setExecutionError(DelegateExecution execution, String message) {
+		execution.setTransientVariable("executionErrorSourceModule", "RetrieveCorporateMPINv2");
+		execution.setTransientVariable("executionErrorCode", "RetrieveCorporateMPIN_V2 error");
+		execution.setTransientVariable("executionErrorMsg", message);
+	}
+
+	public String formatTin(String tin) {
+		String trimmedTin = tin.trim();
+		return trimmedTin.length() == 14 ? trimmedTin.substring(0, 9) : trimmedTin;
+	}
+}
+
+
+
