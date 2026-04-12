@@ -1,0 +1,1976 @@
+
+
+@Service("RetrieveDataFromPESAPI")
+public class RetrieveDataFromPESAPI extends OptumJavaDelegateBase {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(RetrieveDataFromPESAPI.class);
+
+    private static String AUTHORIZATION_STRING = "Authorization";
+    private static String BEARER_STRING = "Bearer ";
+    private static final ServiceBase serviceBase = new ServiceBase();
+    private final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ");
+
+    @Autowired
+    private RestTemplate restTemplate;
+    @Autowired
+    private EhCache ehCache;
+    @Autowired
+    private OauthManagerUtil oauthManagerUtil;
+    @Autowired
+    private DocumentMetaDataService documentMetaDataService;
+    @Value("${PES_TPS:5}")
+    private int PES_TPS;
+
+
+    @Override
+    protected void doExecute(DelegateExecution execution) {
+        LOGGER.info("RetrieveDataFromPESAPI-->doExecute-->ENTER");
+
+        RateLimiter rateLimiter = RateLimiter.create(PES_TPS);
+        
+        String jsonFile = execution.getVariable(Workflow.JSON_FILE, String.class);
+        String jsonString = null;
+        List<DocumentMetaData> documentMetaDataList = null;
+        try {
+        	documentMetaDataList = WorkFlowUtil.readDocumentsFromJsonFile(jsonFile);
+        } catch (IOException e) {
+            LOGGER.error("doExecute Unable to get DocumentMetadata {}={} err={}",
+                    "jsonFile", jsonFile,
+                    ExceptionUtils.getStackTrace(e));
+            addErrorMsg("TransformJsonAndGenerateFile-->doExecute-->Unable to get DocumentMetadata", WorkFlowUtil.getStackTrace(e));
+            return;
+        }
+
+//        List<DocumentMetaData> documentMetaDataList = (List<DocumentMetaData>) execution.getVariable(LIST_DOCUMENT_METADATA);
+        List<DocumentMetaData> updatedDocumentMetadataList = new ArrayList<>();
+        for (var document : documentMetaDataList) {
+            LOGGER.info("Processing document. delegate=RetrieveDataFromPESAPI docId={}", document.getId());
+            Document doc = document.getMetadata();
+            String id = document.getId();
+            String npi = doc.getString("providerNPI");
+            String providerDataList = null;
+            try {
+                if (StringUtils.isEmpty(npi)) {
+                    LOGGER.warn("NPI is empty for docId {}",id);
+                    WorkFlowUtil.updateEDeliveryError(doc, "NPI");
+                    documentMetaDataService.saveDocumentMetaData(document);
+                } else {
+                    providerDataList = getProviderDataPES(execution, document.getId(), npi, rateLimiter);
+                    updatedDocumentMetadataList.add(updateDocWithProviderData(providerDataList, id, execution));
+                }
+            } catch (Exception e) {
+                LOGGER.error("Error fetching provider data from PES API for docId={}, e={}", SanitizeUtil.sanitizeString(document.getId()), ExceptionUtils.getStackTrace(e));
+            }
+            LOGGER.info("Completed processing document. delegate=RetrieveDataFromPESAPI docId={}", document.getId());
+        }
+
+        execution.setTransientVariable("updatedDocumentMetadataList", updatedDocumentMetadataList);
+
+        LOGGER.info("RetrieveDataFromPESAPI-->doExecute-->EXIT");
+    }
+
+    public String getProviderDataPES(DelegateExecution execution, String docId, String npi, RateLimiter rateLimiter) {
+        var request = createRequest(execution, npi);
+        var ps = new ProviderSearch(execution.getVariable(Workflow.PROV_SEARCH_URL, String.class), restTemplate, oauthManagerUtil, ehCache);
+        try {
+            rateLimiter.acquire();
+            return ps.getProviderData(request.getRequestBodyNPI(), request.getRequestHeader(), execution);
+        } catch (Exception e) {
+            LOGGER.error("getProviderDataPES Error in retrieveing provider data, docId={}, e={}", SanitizeUtil.sanitizeString(docId), ExceptionUtils.getStackTrace(e));
+            return null;
+        }
+    }
+
+
+    private RequestNPI createRequest(DelegateExecution execution, String npi) {
+
+        var pesAppId = execution.getVariable(Workflow.PES_APP_ID, String.class);
+        var pesAppSecret = execution.getVariable(Workflow.PES_APP_SECRET, String.class);
+        var pesUrl = execution.getVariable(Workflow.PES_OAUTH_URL, String.class);
+        var pesGrantType = execution.getVariable(Workflow.PES_GRANT_TYPE, String.class);
+        String accessToken = oauthManagerUtil.getOauthToken("tokenStargate", pesAppId,
+                pesAppSecret, pesGrantType, pesUrl, false, null);
+
+        var requestHeader = new RequestHeader.RequestHeaderBuilder().setToken(accessToken).build();//
+
+        var requestBody = new RequestBodyNPI.RequestBodyBuilder()
+                .setAppName(execution.getVariable(Workflow.PROV_APP_NAME, String.class))
+                .setAttributeSet(execution.getVariable(Workflow.PROV_ATTRIBUTE_SET, String.class))
+                .setstCd(execution.getVariable(Workflow.ST_CD, String.class))
+                .setNPI(npi)
+                .setadrTypeCD(execution.getVariable(Workflow.ADR_TYPE_CD, String.class))
+                .build();
+
+        return new RequestNPI.RequestBuilder().setRequestBodyNPI(requestBody).setRequestHeader(requestHeader).build();
+    }
+
+    private DocumentMetaData updateDocWithProviderData(String providerData, String id, DelegateExecution execution) throws IOException {
+        var ps = new ProviderSearch(execution.getVariable(Workflow.PROV_SEARCH_URL, String.class), restTemplate, oauthManagerUtil, ehCache);
+        Element root = ps.getRootElement(providerData);
+        NodeList svcResponseList = ps.getElementFromRoot(root, "svcResponse");
+        
+        DocumentMetaData document = documentMetaDataService.getDocumentMetaData(id);
+        Document metadata = document.getMetadata();
+        List<Map<String, Object>> providerDataMap = new ArrayList<>();
+
+        for (int i = 0; i < svcResponseList.getLength(); i++) {
+            Map<String, Object> svcTemp = new HashMap<>();
+            Element svc = (Element) svcResponseList.item(i);
+            Element pfi = (Element) svc.getElementsByTagName("physicianFacilityInformation").item(0);
+
+            String firstName = ps.getProviderFirstName(pfi);
+            String lastName = ps.getProviderLastName(pfi);
+            svcTemp.put(Workflow.PROVIDER_FIRST_NAME, firstName);
+            svcTemp.put(Workflow.PROVIDER_LAST_NAME,lastName);
+            svcTemp.put(Workflow.PROVIDER_FULL_NAME,firstName +" "+ lastName);
+            svcTemp.put(Workflow.PROVIDER_ADDRESS_LINE_1, ps.getPostalAddress(pfi, "addressLine1"));
+            svcTemp.put(Workflow.PROVIDER_ADDRESS_LINE_2, ps.getPostalAddress(pfi, "addressLine2"));
+            svcTemp.put(Workflow.PROVIDER_CITY, ps.getPostalAddress(pfi, "city"));
+            svcTemp.put(Workflow.PROVIDER_COUNTY, ps.getPostalAddress(pfi, "county"));
+            svcTemp.put(Workflow.PROVIDER_STATE,ps.getPostalAddress(pfi, "state") );
+            svcTemp.put(Workflow.PROVIDERPROVINCE, execution.getVariable(Workflow.PROVIDERPROVINCE));
+            svcTemp.put(Workflow.PROVIDERCOUNTRY,execution.getVariable(Workflow.PROVIDERCOUNTRY));
+            svcTemp.put(Workflow.PROVIDER_ZIP, ps.getPostalAddress(pfi, "zip"));    
+            svcTemp.put(Workflow.PROVIDER_ZIP4,ps.getPostalAddress(pfi, "zip4"));
+            svcTemp.put(Workflow.TIN, ps.getProviderTin(pfi));
+            svcTemp.put(Workflow.PROVIDER_TYPE, ps.getProviderType(pfi));
+            svcTemp.put(Workflow.GROUP_NAME, ps.getGroupName(pfi));
+            
+            svcTemp.put(Workflow.UNIQUE_ID,(id+i));
+            providerDataMap.add(svcTemp);
+        }
+        metadata.put(Workflow.PROVIDER_DATA, providerDataMap);
+        documentMetaDataService.updateDocMetaData(document, id);
+        documentMetaDataService.saveDocumentMetaData(document);
+
+        return document;
+    }
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+==
+
+
+
+
+@Service("RetrieveEmailFromDigiSec")
+
+public class RetrieveEmailFromDigiSec extends OptumJavaDelegateBase {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(RetrieveEmailFromDigiSec.class);
+    private static final String JWT_HEADER = "{\"alg\":\"HS256\",\"typ\":\"JWT\"}";
+    private static final String METADATA_PREFIX = "metadata.";
+	
+    String oauthFailure = "Failed to retrieve OAuth Token for Digital security API";
+
+    private static String AUTHORIZATION_STRING = "Authorization";
+    private static final String MISSING_OR_INVALID_DATA = "Missing or invalid data: ";
+    private static final String PADDING_0 = "0";
+
+
+    @Autowired
+    private RestTemplate restTemplate;
+    
+    @Autowired
+    private DocumentMetaDataService documentMetaDataService;
+    
+    @Autowired
+    private OauthManagerUtil oauthManagerUtil;
+    
+    @Value("${DigiSec_PAA_URL}")
+    private String DigiSecPAAURL;
+    
+    @Value("${DIGISEC_JWT_TOKEN_SECRET_KEY}")
+    private String DIGISEC_JWT_TOKEN_SECRET_KEY;
+    
+    @Value("${DIGISEC_JWT_TOKEN_ISS}")
+    private String DIGISEC_JWT_TOKEN_ISS;
+    
+    @Value("${DIGISEC_JWT_TOKEN_SUB}")
+    private String DIGISEC_JWT_TOKEN_SUB;
+    
+    @Value("${DIGISEC_TPS:5}")
+    private int DIGISEC_TPS;
+    
+    @Value("${DIGISEC_MULTIPLE_EMAILS_CLIENT_LIST}")
+    public String digisecMultipleEmailsClientList;
+    
+    @Value("${DIGISEC_PAA_EMAIL_CLIENT_LIST}")
+    public String digisecPAAEmailClientList;
+
+	@Value("${PRUN.EMAIL_WORKFLOW_SPACEID}")
+	private List<String> emailWorkflowSpaceIds;
+
+
+	@Override
+    public void doExecute(DelegateExecution execution) {
+        LOGGER.info("RetrieveEmailFromDigiSec-->doExecute-->ENTER");
+        
+        // 5 TPS
+        RateLimiter rateLimiter = RateLimiter.create(DIGISEC_TPS);
+        
+        String clientName = execution.getVariable(Workflow.CLIENT_NAME).toString();
+        String spaceId = execution.getVariable(Workflow.SPACE_ID).toString();
+		boolean skipDocumentGrouping = Boolean
+				.parseBoolean(String.valueOf(execution.getVariable(Workflow.SKIP_DOCUMENT_GROUPING, String.class)));
+        
+        List<DocumentMetaData> documentMetaDataList = (List<DocumentMetaData>) execution.getVariable("documentMetaDataList");
+        List<DocumentMetaData> updatedDocumentMetadataList = new ArrayList<>();
+        
+        Map<String, List<String>> groupedByMetadataMap = null;
+        
+        // if trackit spaceId, then get other documentMetaDataList
+        if (emailWorkflowSpaceIds.contains(spaceId)){
+        	documentMetaDataList = (List<DocumentMetaData>) execution.getVariable("uniqueFieldDocumentList");
+        	groupedByMetadataMap = (Map<String, List<String>>) execution.getVariable("uniqueFieldMap");
+        }
+        
+        else if (documentMetaDataList == null || documentMetaDataList.isEmpty() ) {
+        	// if documentMetaDataList isn't on execution bus, check the documentIds variable to get list of documentIds 
+    		List<String> docList = execution.getVariable("documentIds", List.class);
+    		if (docList != null && !docList.isEmpty()) {
+    		   documentMetaDataList = documentMetaDataService.getDocumentMetaDataList(docList);
+    		}
+        }
+        
+        
+        
+        for (var document : documentMetaDataList) {
+			LOGGER.info("RetrieveEmailFromDigiSec process started for docId={}", document.getId());
+
+			document = documentMetaDataService.getDocumentMetaData(document.getId());
+            Document metadata = document.getMetadata();
+            String id = document.getId();
+            String corpMpin = metadata.getString("corporateMpin");
+            String tin = metadata.getString("tin");
+            String providerEmailId = metadata.getString(Workflow.PROVIDER_EMAIL_ID);
+            List<String> providerEmailList = new ArrayList<>();
+            try {
+            	
+            	if(providerEmailId ==null || providerEmailId.isEmpty()) {
+            	
+                if (StringUtils.isEmpty(corpMpin) || StringUtils.isEmpty(tin)) {
+                	// if missing tin or corpMpin, we can't fetch email, so no need to send to PEN
+                	updateDocWithEDeliveryError(spaceId, tin, corpMpin, groupedByMetadataMap, id, document, skipDocumentGrouping);
+                } else {
+                	providerEmailList = getEmailsByCorporate(execution, document.getId(), corpMpin, tin, rateLimiter, clientName);
+                }
+                // trackit workflow
+            	if (emailWorkflowSpaceIds.contains(spaceId)) {
+            		List<String> documentIdsToUpdate = null;
+					documentIdsToUpdate = (skipDocumentGrouping)?Collections.singletonList(id):groupedByMetadataMap.get(tin);
+            		updateDocumentListWithEmail(providerEmailList, documentIdsToUpdate, id);
+            	} else {
+            		updatedDocumentMetadataList.add(updateDocumentWithEmail(providerEmailList, id));
+            	}
+             }
+            } catch (Exception e) {
+            	LOGGER.error("Error fetching email from DigiSec API for docId={}, e={}", document.getId(), ExceptionUtils.getStackTrace(e));
+            	updateDocumentWithEmail(providerEmailList, document.getId());
+            }
+			LOGGER.info("RetrieveEmailFromDigiSec process complete for docId={}", document.getId());
+		}
+        
+        execution.setTransientVariable("updatedDocumentMetadataList", updatedDocumentMetadataList);
+        
+        LOGGER.info("RetrieveEmailFromDigiSec-->doExecute-->EXIT");
+    }
+
+    public List<String> getEmailsByCorporate(DelegateExecution execution, String docId, String corporateMpin, String tin, RateLimiter rateLimiter, String clientName) {
+    	rateLimiter.acquire();
+    	
+    	String formattedTin = StringUtils.leftPad(tin, 9, PADDING_0);
+    	
+    	try {
+    		ResponseEntity<String> response = postRequestToDigiSecWithRetry(execution, docId, corporateMpin, formattedTin);
+        	
+    		if (response != null && response.getBody() != null && response.getStatusCode().value() == 200) {
+    			ObjectMapper mapper = new ObjectMapper();
+            	ActiveUser activeUser;
+        		
+    			activeUser = mapper.readValue(response.getBody(), ActiveUser.class);
+    			
+    			//get multiple Emails
+    			if(digisecMultipleEmailsClientList.contains(clientName) && activeUser != null && !activeUser.getUsers().isEmpty())
+            	{
+                	  return getEmailList(activeUser.getUsers());
+                	
+                }
+                
+    			//get PAA Email
+                if(digisecPAAEmailClientList.contains(clientName) && activeUser != null && !activeUser.getUsers().isEmpty())
+                {
+                	
+             	      return getPAAEmail(activeUser.getUsers());
+         
+                }
+                
+    		}
+    		return null;
+		} catch (Exception e) {
+			LOGGER.error("Error getting email from DigiSec API for docId={}, e={}", docId, ExceptionUtils.getStackTrace(e));
+			return null;
+		}
+    }
+    
+    private List<String> getEmailList(List<User> users) {
+    	List<String> emailList = new ArrayList<>();
+    	for (User user : users) {
+    		if ( user.getEmail() != null && !user.getEmail().isEmpty()) {
+        		emailList.add(user.getEmail());
+    		}
+    	}
+    	return emailList;
+    }
+    
+    private List<String> getPAAEmail(List<User> users) {
+    	List<String> emailList = new ArrayList<>();
+    	
+    	for(User user : users) {
+    		if(user.getUserType().equals("PA") && user.getEmail() != null && !user.getEmail().isEmpty()) {
+    			emailList.add(user.getEmail());
+    		}
+    	}
+    	return emailList;
+    }
+    
+	ResponseEntity<String> postRequestToDigiSec(String corporateMpin, String tin, String token, String docId)
+			throws RestClientException {
+		
+		UriComponentsBuilder builder = UriComponentsBuilder.fromUriString(DigiSecPAAURL);
+		
+		var headers = new HttpHeaders();
+        headers.set(AUTHORIZATION_STRING, token);
+		headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setAccept(Collections.singletonList(MediaType.APPLICATION_JSON));
+        headers.set("x-identity", getHeaderJwtToken());
+        headers.setConnection("keep-alive");
+        Org provRequest = new Org();
+        provRequest.setCorpMpin(corporateMpin);
+        provRequest.setTin(tin);
+        HttpEntity<Org> requestEntity = new HttpEntity<Org>(provRequest, headers);
+        LOGGER.info("postRequestToDigiSec for docId={}", Encode.forJava(docId));
+        return restTemplate.exchange(builder.toUriString(), HttpMethod.POST, requestEntity, String.class);
+	}
+    
+    ResponseEntity<String> postRequestToDigiSecWithRetry(DelegateExecution execution, String docId, String corporateMpin, String tin) throws OutOfRetriesException {
+		ResponseEntity<String> response = null;
+		
+		var pesAppId = execution.getVariable(Workflow.PES_APP_ID, String.class);
+        var pesAppSecret = execution.getVariable(Workflow.PES_APP_SECRET, String.class);
+        var pesUrl = execution.getVariable(Workflow.PES_OAUTH_URL, String.class);
+        var pesGrantType = execution.getVariable(Workflow.PES_GRANT_TYPE, String.class);
+
+
+		var numRetries = 3;
+		var timeToWaitMS = 500L;
+		var retryHandler = new RetryOnExceptionHandler(numRetries, timeToWaitMS);
+
+		String msg;
+		while (retryHandler.shouldRetry()) {
+			try {
+				try {
+					if (retryHandler.isRetry()) {
+						String newToken = oauthManagerUtil.getOauthToken("tokenStargate", pesAppId, pesAppSecret, pesGrantType, pesUrl, true, null);
+						String newAccessToken = "Bearer " + newToken;
+						LOGGER.info("postRequestToDigiSecWithRetry retrying DigiSec call with new token");
+
+						response = postRequestToDigiSec(corporateMpin, tin, newAccessToken, docId);
+					} else {
+						String token = oauthManagerUtil.getOauthToken("tokenStargate", pesAppId, pesAppSecret, pesGrantType, pesUrl, false, null);
+						var accessToken = "Bearer " + token;
+						response = postRequestToDigiSec(corporateMpin, tin, accessToken, docId);
+					}
+					break;
+				} catch (HttpClientErrorException.Unauthorized e) {
+					LOGGER.error("HttpClientErrorException Unauthorized for documentId={}, responseBody={}, statusCode={}", docId, e.getResponseBodyAsString(), e.getStatusCode());
+					retryHandler.setTimeToWaitMS(Long.sum(retryHandler.getTimeToWaitMS(), 250L));
+					retryHandler.exceptionOccurred();
+				} catch (HttpClientErrorException e) {
+					if (e instanceof HttpClientErrorException.BadRequest) {
+						LOGGER.warn("HttpClientErrorException for documentId={}, responseBody={}, statusCode={}", docId, e.getResponseBodyAsString(), e.getStatusCode());
+					} else {
+						LOGGER.error("HttpClientErrorException for documentId={}, responseBody={}, statusCode={}", docId, e.getResponseBodyAsString(), e.getStatusCode());
+					}
+					return new ResponseEntity<>(e.getResponseBodyAsString(), e.getStatusCode());					
+				} catch (HttpServerErrorException e) {
+					if (e instanceof HttpServerErrorException.GatewayTimeout || e instanceof HttpServerErrorException.BadGateway) {
+						LOGGER.error("HttpClientErrorException for documentId={}, responseBody={}, statusCode={}", docId, e.getResponseBodyAsString(), e.getStatusCode());
+						retryHandler.setTimeToWaitMS(Long.sum(retryHandler.getTimeToWaitMS(), 250L));
+						retryHandler.exceptionOccurred();
+					}
+					else {
+						LOGGER.error("{} exception for documentId={}, responseBody={}, statusCode={}", e.getClass().getSimpleName(), docId, e.getResponseBodyAsString(), e.getStatusCode());
+						return new ResponseEntity<>(e.getResponseBodyAsString(), e.getStatusCode());
+					}
+				} catch (RestClientException e) {
+					LOGGER.error("RestClientException for document {} and exception {} ", docId,
+							ExceptionUtils.getStackTrace(e));
+
+					retryHandler.setTimeToWaitMS(Long.sum(retryHandler.getTimeToWaitMS(), 250L));
+					retryHandler.exceptionOccurred();
+				} catch(RuntimeException  e) {
+					LOGGER.error("{} for document {} and exception {} ", e.getClass().getSimpleName(), docId,
+							ExceptionUtils.getStackTrace(e));
+					retryHandler.setTimeToWaitMS(Long.sum(retryHandler.getTimeToWaitMS(), 250L));
+					retryHandler.exceptionOccurred();
+				}
+				
+			} catch (OutOfRetriesException e) {
+				msg = String.format(
+						"RestClientException to digisec exhausted %s retries with retry time %s millis",
+						retryHandler.getNumRetries(), retryHandler.getTimeToWaitMS());
+				LOGGER.error(msg);
+				addErrorMsg("RestClientException", msg);
+				throw new OutOfRetriesException(msg);
+			}
+		}
+		return response;
+	}
+
+	private static String encode(byte[] bytes) {
+	        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+	}
+	
+	private static String encode(JSONObject obj) {
+        return encode(obj.toString().getBytes(StandardCharsets.UTF_8));
+    }
+	
+	private String hmacSha256(String data, String secret) {
+	    try {
+
+	        byte[] hash = secret.getBytes(StandardCharsets.UTF_8);
+	        Mac sha256Hmac = Mac.getInstance("HmacSHA256");
+	        SecretKeySpec secretKey = new SecretKeySpec(hash, "HmacSHA256");
+	        sha256Hmac.init(secretKey);
+
+	        byte[] signedBytes = sha256Hmac.doFinal(data.getBytes(StandardCharsets.UTF_8));
+
+	        return encode(signedBytes);
+	    } catch (Exception ex) {
+	        LOGGER.error("Error signing data with HMAC SHA256, err={}", ExceptionUtils.getStackTrace(ex));
+	        return null;
+	    }
+	}
+	
+	
+    private String getHeaderJwtToken() {
+    	try {
+    		JSONObject payload = new JSONObject();
+        	
+        	payload.put("iss", DIGISEC_JWT_TOKEN_ISS);
+        	payload.put("sub", DIGISEC_JWT_TOKEN_SUB);
+        	payload.put("exp", (System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(10)) / 1000L);
+        	payload.put("iat", System.currentTimeMillis() / 1000L);
+        	payload.put("preferred_username", "optumid");
+        	payload.put("given_name", "fname");
+        	payload.put("family_name", "lastname");
+        	payload.put("email", "test@optum.com");
+        	
+        	String encodedHeader = encode(new JSONObject(JWT_HEADER));
+        	String signature = hmacSha256(encodedHeader + "." + encode(payload), DIGISEC_JWT_TOKEN_SECRET_KEY);
+        	String jwtToken = encodedHeader + "." + encode(payload) + "." + signature;
+        	
+        	return jwtToken;
+    	} catch (Exception ex) {
+    		LOGGER.error("Error creating JWT token, err={}", ExceptionUtils.getStackTrace(ex));
+    		return null;
+    	}
+    }
+
+//    private String getOauthToken(DelegateExecution execution, boolean shouldGetNewToken) {
+//        var pesAppId = execution.getVariable(Workflow.PES_APP_ID, String.class);
+//        var pesAppSecret = execution.getVariable(Workflow.PES_APP_SECRET, String.class);
+//        var pesUrl = execution.getVariable(Workflow.PES_OAUTH_URL, String.class);
+//        var pesGrantType = execution.getVariable(Workflow.PES_GRANT_TYPE, String.class);
+//
+//        Optional<OauthTokenExtended> oauthTokenExtendedOptional = null ;
+//
+//        String docToken = EhCache.getOauthTokenCache("tokenStargate");
+//
+//        if ( docToken == null || shouldGetNewToken) {
+//            oauthTokenExtendedOptional = oauthManagerUtil.getOauthTokenExtended(pesAppId, pesAppSecret, pesUrl, pesGrantType);
+//
+//        } else {
+//            var oauthTokenExtended = new OauthTokenExtended(pesAppId, pesAppSecret, pesUrl, pesGrantType);
+//            oauthTokenExtended.setAccessToken(docToken);
+//            oauthTokenExtendedOptional = Optional.of(oauthTokenExtended);
+//        }
+//
+//        var accessTokenOptional = oauthTokenExtendedOptional.map(OauthTokenExtended::getAccessToken);
+//
+//        if (accessTokenOptional.isPresent()) {
+//            var accessToken = accessTokenOptional.get();
+//            EhCache.putOauthToken("tokenStargate", accessToken);
+//            return accessToken;
+//        } else {
+//            LOGGER.warn("RetrieveEmailFromDigiSec-->getOauthToken-->oauth token is null or empty");
+//            return null;
+//        }
+//    }
+    
+    private void addEDeliverErrorToUpdateMap(Map<String, Object> updateMap, String field, org.bson.Document metadata) {
+    	String eDeliveryError = metadata.getString(Workflow.E_DELIVERY_ERROR);
+        String errorMessage = MISSING_OR_INVALID_DATA + field;
+        if (StringUtils.isBlank(eDeliveryError)) {
+        	updateMap.put(METADATA_PREFIX + Workflow.E_DELIVERY_ERROR, errorMessage);
+        } else {
+            if (!eDeliveryError.contains(errorMessage)) {
+            	updateMap.put(METADATA_PREFIX + Workflow.E_DELIVERY_ERROR, eDeliveryError + "|" + errorMessage);
+            }
+        }
+    }
+    
+    private void updateDocWithEDeliveryError(String spaceId, String tin, String corpMpin,
+											 Map<String, List<String>> groupedByMetadataMap, String documentId, DocumentMetaData document, boolean skipDocumentGrouping) {
+    	
+    	// trackit workflow
+    	if (emailWorkflowSpaceIds.contains(spaceId)) {
+			List<String> documentIdsUpdateList = null;
+			documentIdsUpdateList = (skipDocumentGrouping)?Collections.singletonList(documentId):groupedByMetadataMap.get(tin);
+    		Map<String, Object> updateMap = new HashMap<>();
+    		
+    		org.bson.Document metadata = document.getMetadata();
+    		
+    		if (StringUtils.isEmpty(corpMpin)) {
+    			LOGGER.info("adding corpMpin eDeliveryError, corpMpin={}", corpMpin);
+    			addEDeliverErrorToUpdateMap(updateMap, Workflow.PROV_CORP_MPIN, metadata);
+    		}
+    		
+    		if (StringUtils.isEmpty(tin)) {
+    			LOGGER.info("adding tin eDeliveryError, tin={}", tin);
+    			addEDeliverErrorToUpdateMap(updateMap, Workflow.TIN, metadata);
+    		}
+            
+    		LOGGER.info("updateDocWithEDeliveryError documentId={}, metadata={}, updateMap={}, docIdsUpdateList={}",
+    				documentId, metadata, updateMap, documentIdsUpdateList);  		
+    		if (!updateMap.isEmpty()) {
+    			documentMetaDataService.saveDocumentMetaDataMulti(documentIdsUpdateList, updateMap);
+    		}
+    		
+            
+    		
+    	} else {
+    		
+    		org.bson.Document metadata = document.getMetadata();
+    		if (StringUtils.isEmpty(corpMpin)) {
+        		WorkFlowUtil.updateEDeliveryError(metadata, Workflow.PROV_CORP_MPIN);
+        	}
+        	if (StringUtils.isEmpty(tin)) {
+                WorkFlowUtil.updateEDeliveryError(metadata, Workflow.TIN);
+        	}
+    		documentMetaDataService.saveDocumentMetaData(document);
+    	}
+        
+    	
+    }
+    
+    public void updateDocumentListWithEmail(List<String> providerEmailList, List<String> documentIdsUpdateList, String documentId) {
+    	
+    	Map<String, Object> updateMap = new HashMap<>();
+    	
+    	DocumentMetaData document = documentMetaDataService.getDocumentMetaData(documentId);
+    	
+    	org.bson.Document metadata = document.getMetadata();
+    	if (providerEmailList != null && !providerEmailList.isEmpty()) {
+    		updateMap.put(METADATA_PREFIX + Workflow.PROVIDER_EMAIL_ID_LIST, providerEmailList);
+    		updateMap.put(METADATA_PREFIX + Workflow.PROVIDER_EMAIL_ID, String.join("|", providerEmailList));
+    		if (!Utilities.validateProviderEmail(providerEmailList.get(0))) {
+    			// if providerEmail is invalid, add eDeliveryError
+    			addEDeliverErrorToUpdateMap(updateMap, Workflow.PROVIDER_EMAIL_ID, metadata);
+    		}
+    		
+        } else {
+        	addEDeliverErrorToUpdateMap(updateMap, Workflow.PROVIDER_EMAIL_ID, metadata);
+        }
+    	
+    	LOGGER.info("updateDocWithEDeliveryError documentId={}, metadata={}, updateMap={}, docIdsUpdateList={}",
+				documentId, metadata, updateMap, documentIdsUpdateList);  		
+		if (!updateMap.isEmpty()) {
+			documentMetaDataService.saveDocumentMetaDataMulti(documentIdsUpdateList, updateMap);
+		}
+    	
+    }
+
+    public DocumentMetaData updateDocumentWithEmail(List<String> providerEmailList, String id) {
+    	
+        DocumentMetaData document = documentMetaDataService.getDocumentMetaData(id);
+        Document metadata = document.getMetadata();
+        if (providerEmailList != null && !providerEmailList.isEmpty()) {
+            metadata.put(Workflow.PROVIDER_EMAIL_ID_LIST, providerEmailList);
+            metadata.put(Workflow.PROVIDER_EMAIL_ID, String.join("|", providerEmailList));
+            
+            if (!Utilities.validateProviderEmail(providerEmailList.get(0))) {
+    			// if providerEmail is invalid, add eDeliveryError
+            	WorkFlowUtil.updateEDeliveryError(metadata, Workflow.PROVIDER_EMAIL_ID);
+    		}
+            
+        } else {
+            WorkFlowUtil.updateEDeliveryError(metadata, Workflow.PROVIDER_EMAIL_ID);
+        }
+        documentMetaDataService.saveDocumentMetaData(document);
+        
+        
+        return document;
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+==
+
+
+
+
+@Service("RetrieveProcessorTransaction")
+public class RetrieveProcessorTransaction extends OptumJavaDelegateBase {
+    
+	private static final Logger LOGGER = LoggerFactory.getLogger(RetrieveProcessorTransaction.class);
+	private static final String QUERY_STRING = "{} query={}";
+	private static final String PROCESS_KEY = "createStatusFileAndAckProcess";
+	private static final String QUERY_EXCEPTION_STRING = "{} query={} {}";
+    private static final List<String> REQ_VARS = Arrays.asList(
+    		Workflow.SEARCH_CRITERIA, Workflow.SEARCH_WINDOW
+    );
+    @Autowired
+    MongoTemplate mongoTemplate;
+    @Autowired
+	ProcessorService processorService;
+	@Autowired
+    EmailService emailService;
+    @Autowired
+    HookService hookService;
+    
+    public RetrieveProcessorTransaction() {
+        super(REQ_VARS);
+    }
+    
+	@Override
+    protected void doExecute(DelegateExecution execution) {
+        LOGGER.debug("RetrieveProcessorTransaction-->doExecute-->ENTER");
+        
+        try {
+        	String searchCriteria = execution.getVariable(Workflow.SEARCH_CRITERIA, String.class);
+        	String hookId = execution.getVariable(Workflow.HOOK_ID, String.class);
+        	String appIdentifier = execution.getVariable(Workflow.APP_IDENTIFIER, String.class);
+        	Integer clientId = execution.getVariable(Workflow.CLIENT_ID, Integer.class);
+        	Integer configSpaceId = getConfigSpaceId(searchCriteria, execution);
+    		if(configSpaceId == null) {
+    			LOGGER.error("RetrieveProcessorTransaction-->doExecute-->configSpaceId is null delegateExecutionId={}", execution.getId());
+    			addErrorMsg("RetrieveProcessorTransaction-->doExecute-->configSpaceId is null", "configSpaceId is null");
+    			return;
+    		}
+
+        	String searchWindow = execution.getVariable(Workflow.SEARCH_WINDOW, String.class);        	
+        	var searchWindowCriteria = WorkFlowUtil.getSearchWindowCriteria(searchWindow);
+        	if(searchWindowCriteria == null) {
+    			LOGGER.error("RetrieveProcessorTransaction-->doExecute-->search_window is invalid delegateExecutionId={}", execution.getId());
+    			addErrorMsg("RetrieveProcessorTransaction-->doExecute-->search_window is invalid", "search_window is invalid");
+    			return;
+    		}
+
+    		List<ProcessorTransaction> processorTransactionList = getProcessorTransactions(searchCriteria, searchWindowCriteria, execution);
+    		if(processorTransactionList == null || processorTransactionList.isEmpty()) {
+            	LOGGER.debug("RetrieveProcessorTransaction-->doExecute-->processorTransactionList is null or empty; delegateExecutionId={}, configSpaceId={}, searchCriteria={}", execution.getId(), configSpaceId, searchCriteria);
+            	String messgeKey = (String) execution.getVariable(Workflow.PROCESS_KEY) + "_message";
+            	execution.setTransientVariable(messgeKey, "processorTransactionList documentList is null or empty");
+            	setExitNow(execution);
+            	return;
+    		}
+    		
+
+			LOGGER.debug("RetrieveProcessorTransaction-->doExecute-->processor transactions are present delegateExecutionId={}", execution.getId());
+			List<JSONObject> processorTransactionUpdateListJson = new ArrayList<>();
+			List<String> processorTransactionIds = new ArrayList<>();
+			for(ProcessorTransaction processorTransaction : processorTransactionList) {
+				var processorTransactionUpdateJson = new JSONObject();
+				processorTransactionUpdateJson.put(Workflow.MONGO_ID, processorTransaction.getId());
+				processorTransactionUpdateJson.put(Workflow.ACK_STATUS, Workflow.ACK_STATUS_IN_PROCESS);
+				processorTransactionUpdateListJson.add(processorTransactionUpdateJson);
+				processorTransactionIds.add(processorTransaction.getId());
+			}
+			// add list of processorTransactionIds to execution bus for reconciliation error message 
+			execution.setTransientVariable("processorTransactionIds", processorTransactionIds);
+			execution.setTransientVariable(Workflow.PROCESSOR_TRANSACTION_IDS_MESSAGE, processorTransactionIds.toString());
+    		
+    		var processorTransactionsJson = new JSONObject();
+			processorTransactionsJson.put(Workflow.PROCCESSOR_TRANSACTIONS, processorTransactionList);
+			
+			String tempWorkingPath = WorkFlowUtil.getTemporaryWorkingPath(configSpaceId);
+
+			String filePath = tempWorkingPath + File.separator + "processorTransactions.json";
+			var jsonFile = WorkFlowUtil.generateFileFromString(processorTransactionsJson.toString(), filePath);
+
+			execution.setTransientVariable(Workflow.OUTPUT_FILE_DIR, tempWorkingPath);
+			execution.setTransientVariable(Workflow.JSON_FILE, jsonFile.getAbsolutePath());
+			execution.setTransientVariable(Workflow.PROCESSOR_TRANSACTION_UPDATE, processorTransactionUpdateListJson.toString());
+			DelegateUtils.updateProcessorTransactionList(execution, processorService);
+			var hookExecutionMessage = new HashMap<>(Map.of(
+					Workflow.PROCESSOR_TRANSACTION_IDS_MESSAGE, processorTransactionIds.toString()
+            ));
+			var hookExecutionRecord = new HashMap<>(Map.of(
+                    Workflow.SPACE_ID, configSpaceId.toString(),
+                    Workflow.HOOK_ID, hookId,
+                    Workflow.APP_IDENTIFIER, appIdentifier,
+                    Workflow.CLIENTID, clientId.toString()
+            ));
+			
+			var hookExecutionRecordMetaData = HookTransactionUtil
+					.getHookExecutionRecord(hookExecutionRecord, hookExecutionMessage, PROCESS_KEY);
+			var hookTransactionMetaData = hookService
+					.saveHookTransaction(HookTransactionUtil.createCronHookTransaction(hookExecutionRecordMetaData));
+			execution.setTransientVariable(Workflow.HOOK_TRANSACTION_METADATA, hookTransactionMetaData);
+            
+        } catch(Exception e) {
+        	LOGGER.error("doExecute Exception while executing Retrieve Processor Transaction task {}={} {}",
+        			"delegateExecutionId", execution.getId(),
+	                ExceptionUtils.getStackTrace(e));
+    		addErrorMsg("RetrieveProcessorTransaction-->doExecute-->Exception while executing Retrieve Processor Transaction task", e.getMessage());
+        } finally {
+        	if (newErrors() && errorMap.size() > 1 ) {
+        		String message = DelegateUtils.generateMessageforCronExpressionHookWorkflow(execution);
+        		LOGGER.error("Error msg: {} , process key: {}, errorMap: {} ",message, execution.getProcessInstanceBusinessKey(),errorMap.values());
+    		}
+        }
+        LOGGER.debug("RetrieveProcessorTransaction-->doExecute-->EXIT");
+    }
+
+	@SuppressWarnings("unchecked")
+	private Integer getConfigSpaceId(String searchCriteria, DelegateExecution execution) throws IOException,NullPointerException {
+		Integer configSpaceId = null;
+		HashMap<String, Object> criteriaMap = null;
+		try {
+			criteriaMap = Parser.parseJson(searchCriteria, HashMap.class);
+		} catch (IOException e) {
+			LOGGER.error("getConfigSpaceId Unable to parse search_criteria {}={} {}",
+        			"searchCriteria", searchCriteria,
+	                ExceptionUtils.getStackTrace(e));
+			addErrorMsg("RetrieveProcessorTransaction-->getConfigSpaceId-->Unable to parse search_criteria", e.getMessage());
+			throw new NullPointerException();
+		}
+		configSpaceId = (Integer) criteriaMap.get(Workflow.REST_CONFIG_SPACE_ID);
+		return configSpaceId;
+	}
+
+	private List<ProcessorTransaction> getProcessorTransactions(String searchCriteria, Criteria searchWindowCriteria, DelegateExecution execution) {
+    	Query query = new BasicQuery(searchCriteria);
+    	query.addCriteria(Criteria.where(Workflow.PROCESSOR_RECORD_TYPE).is(ProcessorRecordTypes.processorTransaction.toString()));
+		query.addCriteria(searchWindowCriteria);
+		LOGGER.debug(QUERY_STRING, "getProcessorTransactions", query);
+		try {
+			return mongoTemplate.find(query, ProcessorTransaction.class, Workflow.PROCESSOR_TRANSACTION);
+		} catch (Exception e) {
+			LOGGER.error(QUERY_EXCEPTION_STRING, "getProcessorTransactions", query, ExceptionUtils.getStackTrace(e));
+			throw e;
+
+		}
+	}
+    
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+==
+
+
+
+@Service("RetrieveProviderEmailAddress")
+public class RetrieveProviderEmailAddress extends OptumJavaDelegateBase {
+
+	private static final Logger LOGGER = LoggerFactory.getLogger(RetrieveProviderEmailAddress.class);
+
+	private static final List<String> REQ_VARS = List.of(Workflow.DOCID);
+
+	@Autowired
+	private HookService hookService;
+
+	@Autowired
+	private OauthManagerUtil oauthManagerUtil;
+
+	@Autowired
+	private DocumentMetaDataService documentMetaDataService;
+
+	@Autowired
+	private RestTemplate restTemplate;
+
+	private String correlationID = StringUtils.EMPTY;
+
+	@Value("${FDSCloudPDOSpaceId}")
+	private String cloudSpaceId;
+
+	@Value("${skipEFT_spaceIds}")
+	private List<Integer> skipEFT_spaceIds;
+
+	@Value("${skipEFT_categories}")
+	private List<String> skipEFT_categories;
+
+	@Value("${checkInd_835_spaceIds}")
+	private List<Integer> checkInd_835_spaceIds;
+
+	DelegateExecution tempExecution;
+
+	public RetrieveProviderEmailAddress() {
+		super(REQ_VARS);
+	}
+
+	protected void doExecute(DelegateExecution execution) {
+		LOGGER.debug("Entering RetrieveProviderEmailAddress delegate");
+
+		tempExecution = execution;
+
+		String providerEmail = StringUtils.EMPTY;
+		String tin = StringUtils.EMPTY;
+		String mpin = StringUtils.EMPTY;
+		HookTransactionMetaData hookTransactionMetaData = null;
+		var hookId = execution.getVariable(Workflow.HOOK_ID, String.class);
+		var docId = execution.getVariable(Workflow.DOCID, String.class);
+		String[] docArr = docId.split(",");
+		List<String> docList = Arrays.asList(docArr);
+		Boolean useFDSCloud = execution.getVariable("useFDSCloud", Boolean.class);
+		var documentMetaDataObjectList = documentMetaDataService.getDocumentMetaDataList(docList);
+		
+		for (DocumentMetaData documentMetaDataObject : documentMetaDataObjectList) {
+			try {
+				LOGGER.info("start of retrieve email process, documentId={}", documentMetaDataObject.getId());
+				var metaData = documentMetaDataObject.getMetadata();
+				tin = metaData.getString(Workflow.TIN);
+				mpin = metaData.getString(Workflow.MPIN);
+				var hookExecutionMessage = new HashMap<>(Map.of(Workflow.TIN, tin, Workflow.MPIN, mpin));
+				hookTransactionMetaData = hookService.saveHookTransaction(HookTransactionUtil
+						.createHookTransactionWithHookId(documentMetaDataObject, hookExecutionMessage,
+								OptumProcessEnum.RETRIEVE_PROVIDER_EMAIL_ADDRESS_PROCESS.toString(), hookId));
+				execution.setTransientVariable(Workflow.HOOK_TRANSACTION_METADATA_ID, hookTransactionMetaData.getId());
+
+				
+				if (checkConditions(documentMetaDataObject.getSpaceId(), metaData, execution)) {
+					LOGGER.info("RetrieveProviderEmailAddresss, checkConditions not satisified, skipping retrieveProviderEmail spaceId={}, emailAlertReq={}, subCategory={}, EFT_Ind={}, Ind_835={}",
+							documentMetaDataObject.getSpaceId(), metaData.getString(Workflow.EMAIL_ALERT_REQUEST), 
+							metaData.getString(Workflow.SUBCATEGORY),
+							metaData.getString(Workflow.EFT_IND),
+							metaData.getString(Workflow.IND_835)
+					);
+					continue;
+				}
+				
+				correlationID = documentMetaDataObject.getId() + "_" + documentMetaDataObject.getSpaceId();
+
+				var providerEmailParams = createProviderEmailParams(execution, metaData);
+				tin = providerEmailParams.getTin();
+				mpin = providerEmailParams.getMpin();
+				String subCategory = providerEmailParams.getSubCategory();
+
+				if (tin != null && !tin.isEmpty() && tin.length() < 9) {
+					tin = StringUtils.leftPad(tin, 9, '0');
+				}
+				if (mpin != null && !mpin.isEmpty() && mpin.length() < 9) {
+					mpin = StringUtils.leftPad(mpin, 9, '0');
+				}
+
+
+				List<ProviderDocument> providerDocumentList = new ArrayList<>();
+
+				if (Boolean.TRUE.equals(useFDSCloud) && !(StringUtils.isEmpty(tin) || StringUtils.isEmpty(mpin))) {
+					providerDocumentList = getDocumentsFromFDSCloud(execution, tin, mpin, subCategory);
+				} else if (!Boolean.TRUE.equals(useFDSCloud)) {
+					if (providerEmailParams.getCriteria() != null) {
+						providerDocumentList = documentMetaDataService.getPDODocuments(providerEmailParams.getCriteria());
+					}
+				}
+
+				if (providerDocumentList == null) {
+					providerDocumentList = new ArrayList<>();
+				}
+
+				LOGGER.info("tin={}, mpin={}, documentCount={}, correlationID={}", providerEmailParams.getTin(),
+						providerEmailParams.getMpin(), providerDocumentList.size(), correlationID);
+
+				if (!providerDocumentList.isEmpty()) {
+					extracted(documentMetaDataObject, providerDocumentList, providerEmailParams, execution);
+				} else {
+					WorkFlowUtil.updateEDeliveryError(metaData, Workflow.PROVIDER_EMAIL_ID);
+					LOGGER.info("No email found for CorrelationID {}", correlationID);
+				}
+
+				LOGGER.info("end of retrieve email process correlationID={}", correlationID);
+			} catch (Exception e) {
+				LOGGER.error("doExecute Retrieve Email terminated with an ERROR {}={}, {}={} {}", "delegateExecutionId",
+						execution.getId(), "CorrelationID", correlationID, ExceptionUtils.getStackTrace(e));
+				var hookExecutionMessage = new HashMap<>(Map.of(Workflow.PROVIDER_EMAIL, providerEmail,
+						Workflow.ERROR_MESSAGE, ExceptionUtils.getStackTrace(e), Workflow.TIN, tin, Workflow.MPIN, mpin,
+						Workflow.COMMON_STATUS, "ERROR"));
+				var hookExecutionRecord = new HashMap<>(Map.of(Workflow.SPACE_ID,
+						String.valueOf(hookTransactionMetaData.getSpaceId()), Workflow.CLIENTID,
+						String.valueOf(hookTransactionMetaData.getClientId()), Workflow.APP_IDENTIFIER,
+						hookTransactionMetaData.getAppIdentifier(), Workflow.HOOK_ID, hookId));
+
+				var hookExecutionRecordMetaData = HookTransactionUtil.getHookExecutionRecord(hookExecutionRecord,
+						hookExecutionMessage, OptumProcessEnum.RETRIEVE_PROVIDER_EMAIL_ADDRESS_PROCESS.toString());
+
+				List<HookExecutionRecordMetaData> objhookExecutionRecordMetaData = hookTransactionMetaData
+						.getHookExecutionList();
+				objhookExecutionRecordMetaData.add(hookExecutionRecordMetaData);
+
+				hookTransactionMetaData.setHookExecutionList(objhookExecutionRecordMetaData);
+				hookService.updateHookTransaction(hookTransactionMetaData);
+				execution.setTransientVariable(Workflow.HOOK_TRANSACTION_METADATA_ID, hookTransactionMetaData.getId());
+				addErrorMsg("RetrieveProviderEmailAddress-->doExecute-->Exception while executing Retrieve Email task",
+						e.getMessage());
+
+				LOGGER.info("end of retrieve email process inside catch, correlationID={}", correlationID);
+			}
+		}
+	}
+
+	private List<ProviderDocument> getDocumentsFromFDSCloud(DelegateExecution execution, String tin, String mpin,
+			String subCategory) throws URISyntaxException, InterruptedException, IOException {
+
+		String fdsCloudOauthUrl = (String) execution.getVariable(Workflow.FDS_CLOUD_AUTH_URL);
+		String clientId = (String) execution.getVariable(Workflow.CLOUD_CLIENT_ID);
+		String clientSecret = (String) execution.getVariable(Workflow.CLOUD_CLIENT_SECRET);
+		String grantType = (String) execution.getVariable(Workflow.CLOUD_GRANT_TYPE);
+		
+		
+		String accessToken = oauthManagerUtil.getOauthToken("tokenFDSCloudPDO", clientId, clientSecret, grantType, fdsCloudOauthUrl, false, null);
+
+		if (accessToken == null || accessToken.isEmpty()) {
+			return null;
+		}
+
+		String url = (String) execution.getVariable(Workflow.FDS_CLOUD_GET_DOCUMENT_URL);
+
+		Map<String, Object> query = new HashMap<>();
+		query.put("tin", tin);
+		query.put("mpin", mpin);
+		query.put("fileName", subCategory);
+
+		String queryString = createSearchTermsFromMap(query);
+
+		UriComponentsBuilder uriBuilder = UriComponentsBuilder.fromUriString(url).queryParam("searchTerms", queryString);
+
+		String uriString = uriBuilder.buildAndExpand(cloudSpaceId).toUriString() + "&sort=%7BmodifiedOn%3Adesc%7D";
+
+		URI uri = new URI(uriString);
+
+		HttpHeaders headers = new HttpHeaders();
+		headers.set("Accept", MediaType.APPLICATION_JSON_VALUE);
+		headers.set("fds-authorization", accessToken);
+		HttpEntity<?> entity = new HttpEntity<>(headers);
+		LOGGER.info("queryString={}", SanitizeUtil.sanitizeToString(queryString) );
+		ResponseEntity<FDSCloudGetDocumentsResponse> response;
+		
+		
+		long startTime = System.nanoTime();
+		try {
+
+			  response = restTemplate.exchange(uri, HttpMethod.GET, entity, FDSCloudGetDocumentsResponse.class);
+			  long latency = (System.nanoTime() - startTime) / 1000000;
+			  LOGGER.info("getFDSCloudSearchTerms Consumer=fds.paperless, ServiceName=fds.cloud, FDSCloudSpaceId={}, URI={}, HTTPMethod={}, HTTPStatus={}, TotalLatency={}", 
+					  Encode.forJava(cloudSpaceId), Encode.forJava(url), HttpMethod.GET.toString(), response.getStatusCode().value(), latency );
+				
+		} catch (HttpStatusCodeException e) {
+			long latency = (System.nanoTime() - startTime) / 1000000;
+			
+			LOGGER.info("getFDSCloudSearchTerms HttpStatusCodeException Consumer=fds.paperless, ServiceName=fds.cloud, FDSCloudSpaceId={}, URI={}, HTTPMethod={}, HTTPStatus={}, TotalLatency={}", 
+					  Encode.forJava(cloudSpaceId), Encode.forJava(url), HttpMethod.GET.toString(), e.getStatusCode().value(), latency );
+			
+			String newAccessToken = oauthManagerUtil.getOauthToken("tokenFDSCloudPDO", clientId, clientSecret, grantType, fdsCloudOauthUrl, true, null);
+			
+			response = retryGetDocumentsFromFDSCloud(execution, uri, newAccessToken);
+
+		} catch (Exception e) {
+			LOGGER.error("getDocumentsFromFDSCloud Error while retrieving provider email queryString={}, err={}", queryString, ExceptionUtils.getStackTrace(e));
+			return null;
+		}
+		
+		Objects.requireNonNull(response);
+		Objects.requireNonNull(response.getBody());
+
+		return response.getBody().getDocuments();
+	}
+	
+	private ResponseEntity<FDSCloudGetDocumentsResponse> retryGetDocumentsFromFDSCloud(DelegateExecution execution, URI uri, String newAccessToken) throws InterruptedException {
+		
+		var retryInterval = 500L;
+		var retryCount = 3;
+		
+		var retryHandler = new RetryOnExceptionHandler(retryCount, retryInterval);
+		
+		// get new token for retry
+		HttpHeaders headers = new HttpHeaders();
+		headers.set("Accept", MediaType.APPLICATION_JSON_VALUE);
+		headers.set("fds-authorization", newAccessToken);
+		HttpEntity<?> entity = new HttpEntity<>(headers);
+		
+		ResponseEntity<FDSCloudGetDocumentsResponse> response = null;
+		
+		long startTime = System.nanoTime();
+		
+		while (retryHandler.shouldRetry()) {
+			try {
+				try {
+					response = restTemplate.exchange(uri, HttpMethod.GET, entity, FDSCloudGetDocumentsResponse.class);
+					
+					long latency = (System.nanoTime() - startTime) / 1000000;
+					
+					LOGGER.info("retryGetDocumentsFromFDSCloud Consumer=fds.paperless, ServiceName=fds.cloud, URI={}, HTTPMethod={}, HTTPStatus={}, TotalLatency={}", 
+							 Encode.forJava(uri.toString()), HttpMethod.GET.toString(), response.getStatusCode().value(), latency );
+					break;
+				} catch (HttpStatusCodeException e) {
+					long latency = (System.nanoTime() - startTime) / 1000000;
+				
+					if (HttpUtils.validateStatusCode(e.getStatusCode())) {
+						
+						LOGGER.error("retryGetDocumentsFromFDSCloud HttpStatusCodeException Invoking Retry Mechanism Consumer=fds.paperless, ServiceName=fds.cloud, URI={}, HTTPMethod={}, HTTPStatus={}, TotalLatency={}, responseBody={}, err={}", 
+								Encode.forJava(uri.toString()), HttpMethod.GET.toString(), e.getStatusCode().value(), latency, e.getResponseBodyAsString(), ExceptionUtils.getStackTrace(e) );
+						
+						retryHandler.exceptionOccurred();
+					} else {
+						LOGGER.error("retryGetDocumentsFromFDSCloud HttpStatusCodeException Invoking Retry Mechanism Consumer=fds.paperless, ServiceName=fds.cloud, URI={}, HTTPMethod={}, HTTPStatus={}, TotalLatency={}, responseBody={}, err={}", 
+								Encode.forJava(uri.toString()), HttpMethod.GET.toString(), e.getStatusCode().value(), latency, e.getResponseBodyAsString(), ExceptionUtils.getStackTrace(e) );
+						
+						ResponseEntity<FDSCloudGetDocumentsResponse> errorResponse = new ResponseEntity<FDSCloudGetDocumentsResponse>(null, headers, e.getStatusCode().value());
+						return errorResponse;
+					}
+				}
+			} catch (OutOfRetriesException e) {
+
+				LOGGER.error("retryFDSCloudGetCall HttpStatusCodeException 3 retries exhausted Consumer=fds.paperless, ServiceName=fds.cloud, URI={}, HTTPMethod={}, err={}", 
+						Encode.forJava(uri.toString()), HttpMethod.GET.toString(), ExceptionUtils.getStackTrace(e));
+				ResponseEntity<FDSCloudGetDocumentsResponse> errorResponse = new ResponseEntity<FDSCloudGetDocumentsResponse>(HttpStatus.INTERNAL_SERVER_ERROR);
+				return errorResponse;
+			}
+		}
+		return null;
+	}
+
+
+	protected String createSearchTermsFromMap(Map<String, Object> metadata) {
+		String searchTerms = "";
+		List<String> searchConcat = new ArrayList<>();
+		for (String key : metadata.keySet()) {
+			String formatKey = new StringBuilder("(").append(key).append("%3D").append(metadata.get(key)).append(")")
+					.toString();
+			searchConcat.add(formatKey);
+		}
+		if (!searchConcat.isEmpty()) {
+			searchTerms = String.join("%2B", searchConcat);
+		}
+		return searchTerms;
+	}
+
+	private RetrieveProviderEmailParams createProviderEmailParams(DelegateExecution execution, Document metaData) {
+		String providerPreferenceSpaceId = execution.getVariable(Workflow.PROVIDER_PREFERENCE_SPACE_ID, String.class);
+		String providerPreferenceSpaceIdV2 = execution.getVariable(Workflow.PROVIDER_PREFERENCE_SPACE_ID_V2,
+				String.class);
+
+		return new RetrieveProviderEmailParams.RetrieveProviderEmailParamsBuilder()
+				.setTin(metaData.getString(Workflow.TIN)).setMpin(metaData.getString(Workflow.MPIN))
+				.setSubCategory(metaData.getString(Workflow.SUBCATEGORY))
+				.setProviderPreferenceSpaceId(providerPreferenceSpaceId)
+				.setProviderPreferenceSpaceIdV2(providerPreferenceSpaceIdV2).build();
+	}
+
+	
+	protected boolean checkConditions(Integer spaceId, Document metaData, DelegateExecution execution) {
+		
+		// if emailAlertReq = N, skip retrieve email
+		if ("N".equals(metaData.getString(CommonConstants.EMAIL_ALERT_REQ))) {
+			LOGGER.debug("exiting RetrieveProviderEmailAddress workflow with metadata.emailAlertReq: N");
+			return true;
+		}
+		
+		// if emailAlertReq = Y, it's a zero pay subCategory and EFT_Ind == Y, skip retrieve email
+		boolean skipEFTCategories = skipEFT_categories != null && skipEFT_categories.contains(metaData.getString(Workflow.SUBCATEGORY)) ? true : false;
+		
+		boolean spaceIdEFTInd = skipEFT_spaceIds != null && skipEFT_spaceIds.contains(spaceId) ? true : false;
+		
+		if (spaceIdEFTInd && !skipEFTCategories && StringUtils.equalsIgnoreCase( metaData.getString(Workflow.EFT_IND), "Y")) {
+			LOGGER.debug("exiting RetrieveProviderEmailAddress workflow with emailAlertReq: Y, EFT_Ind: Y, not a zero pay category");
+			return true;
+		}
+
+		// if emailAlertReq = Y, it's a zero pay subCategory and Ind_835 == Y, skip retrieve email
+		boolean spaceIdInd835 = checkInd_835_spaceIds!= null && checkInd_835_spaceIds.contains(spaceId) ? true : false;
+		String ind_835 = spaceIdInd835 && metaData.getString(Workflow.IND_835) == null ? "N" :  metaData.getString(Workflow.IND_835);			
+		
+		if (spaceIdInd835 && !skipEFTCategories && StringUtils.equalsIgnoreCase(ind_835, "Y")) {
+			LOGGER.debug("exiting RetrieveProviderEmailAddress workflow with emailAlertReq: Y, Ind_835: Y, not a zero pay category");
+			return true;
+		}
+		
+
+		
+		return false;
+	}
+
+
+	private void extracted(DocumentMetaData documentMetaDataObject, List<ProviderDocument> providerDocumentList,
+			RetrieveProviderEmailParams providerEmailParams, DelegateExecution execution) {
+		String providerEmail = null;
+		String frequency = null;
+		String weekDay = null;
+		String subscribeToEmail = "Y";
+		String tin = providerEmailParams.getTin();
+		String mpin = providerEmailParams.getMpin();
+
+		var metaData = documentMetaDataObject.getMetadata();
+		int documentCount = providerDocumentList.size();
+
+		var currentDate = ZonedDateTime.now(ZoneOffset.UTC);
+		AutoEnrollment autoEnrollment1;
+		var autoEnrollment0 = determineDocumentIndex(providerDocumentList, documentCount, 0, currentDate);
+		int index = -1;
+
+		if (documentCount == 1) {
+			if (autoEnrollment0.isValidAutoEnrollment() || autoEnrollment0.isNotAutoEnrollment()) {
+				index = 0;
+			}
+		} else {
+			autoEnrollment1 = determineDocumentIndex(providerDocumentList, documentCount, 1, currentDate);
+			index = determineMulti(autoEnrollment0, autoEnrollment1);
+		}
+
+		if (index >= 0) {
+			var providerDocumentMetaData = providerDocumentList.get(index).getMetadata();
+			subscribeToEmail = StringUtils.isEmpty(providerDocumentMetaData.getSubscribeToEmail()) ? "Y" : providerDocumentMetaData.getSubscribeToEmail();
+			providerEmail = providerDocumentMetaData.getProviderEmailId();
+			frequency = StringUtils.isEmpty(providerDocumentMetaData.getFrequency()) ? "D"
+					: providerDocumentMetaData.getFrequency();
+			weekDay = providerDocumentMetaData.getWeekday();
+
+		}
+		LOGGER.info("index={}, tin={}, mpin={}, providerEmail={}, subscribeToEmail={}, frequency={}, weekDay={}, correlationID={}", index, tin, mpin,
+				providerEmail, subscribeToEmail, frequency, weekDay, correlationID);
+
+		if (StringUtils.isEmpty(providerEmail)) {
+			LOGGER.info("updating edelivery error in extracted, providerEmail={}, correlationID={}", providerEmail, correlationID);
+			WorkFlowUtil.updateEDeliveryError(metaData, Workflow.PROVIDER_EMAIL_ID);
+			metaData.put(Workflow.SUBSCRIBE_TO_EMAIL,subscribeToEmail);
+			documentMetaDataService.saveDocumentMetaData(documentMetaDataObject);
+		} else if (providerEmail.equals("Opt out") && subscribeToEmail.equals("Y")) {
+			// if providerEmail is "Opt out" and subscribeToEmail is "Y", update subscribeToEmail to "N"
+			LOGGER.info("Updating opt out providerEmailId in extracted, providerEmail={}, correlationID={}", providerEmail, correlationID);
+			metaData.put(Workflow.PROVIDER_EMAIL, providerEmail);
+			metaData.put(Workflow.SUBSCRIBE_TO_EMAIL,"N");
+			documentMetaDataService.saveDocumentMetaData(documentMetaDataObject);
+		} else if(!Utilities.validateProviderEmail(providerEmail) && subscribeToEmail.equals("Y")){
+			LOGGER.info("updating providerEmail in extracted, providerEmail={}, subscribeToEmail={}, correlationID={}", providerEmail, subscribeToEmail, correlationID);
+			WorkFlowUtil.updateEDeliveryError(metaData,Workflow.PROVIDER_EMAIL_ID);
+			metaData.put(Workflow.PROVIDER_EMAIL, providerEmail);
+			metaData.put(Workflow.SUBSCRIBE_TO_EMAIL,subscribeToEmail);
+			documentMetaDataService.saveDocumentMetaData(documentMetaDataObject);
+		}
+		else {
+			metaData.put(Workflow.PROVIDER_EMAIL, providerEmail);
+			metaData.put(Workflow.SUBSCRIBE_TO_EMAIL,subscribeToEmail);
+			var hookExecutionMessage = new HashMap<>(Map.of(Workflow.PROVIDER_EMAIL, providerEmail, Workflow.SUBSCRIBE_TO_EMAIL,subscribeToEmail,
+					Workflow.FREQUENCY,
+					frequency, Workflow.TIN, providerEmailParams.getTin(), Workflow.MPIN, providerEmailParams.getMpin(),
+					"fileName", providerEmailParams.getSubCategory(), "providerPreferenceSpaceId",
+					providerEmailParams.getProviderPreferenceSpaceId(), "providerPreferenceSpaceIdV2",
+					providerEmailParams.getProviderPreferenceSpaceIdV2(), "documentCount",
+					String.valueOf(documentCount)));
+
+			if (StringUtils.isNotEmpty(weekDay)) {
+				hookExecutionMessage.put(Workflow.WEEK_DAY, weekDay);
+				metaData.put(Workflow.WEEK_DAY, weekDay);
+			}
+			documentMetaDataService.saveDocumentMetaData(documentMetaDataObject);
+			var hookId = execution.getVariable(Workflow.HOOK_ID, String.class);
+			var hookTransactionId = execution.getVariable(Workflow.HOOK_TRANSACTION_METADATA_ID, String.class);
+			HookTransactionMetaData hookTransactionMetaData = hookService.getHookTransactionById(hookTransactionId);
+
+			var hookExecutionRecord = new HashMap<>(
+					Map.of(Workflow.SPACE_ID, String.valueOf(hookTransactionMetaData.getSpaceId()), Workflow.CLIENTID,
+							String.valueOf(hookTransactionMetaData.getClientId()), Workflow.APP_IDENTIFIER,
+							hookTransactionMetaData.getAppIdentifier(), Workflow.HOOK_ID, hookId));
+
+			var hookExecutionRecordMetaData = HookTransactionUtil.getHookExecutionRecord(hookExecutionRecord,
+					hookExecutionMessage, OptumProcessEnum.RETRIEVE_PROVIDER_EMAIL_ADDRESS_PROCESS.toString());
+
+			List<HookExecutionRecordMetaData> objhookExecutionRecordMetaData = hookTransactionMetaData
+					.getHookExecutionList();
+			objhookExecutionRecordMetaData.add(hookExecutionRecordMetaData);
+
+			hookTransactionMetaData.setHookExecutionList(objhookExecutionRecordMetaData);
+			hookService.updateHookTransaction(hookTransactionMetaData);
+			execution.setTransientVariable(Workflow.HOOK_TRANSACTION_METADATA_ID, hookTransactionMetaData.getId());
+		}
+
+	}
+
+
+
+	protected AutoEnrollment determineDocumentIndex(List<ProviderDocument> documentList, int documentCount, int index,
+			ZonedDateTime currentDate) {
+		LOGGER.debug("Entering determineDocumentIndex: documentCount={}, index={}", documentCount, index);
+
+		// PDO have the assumption that a maximum of 2 documents will exist for a given
+		// MPIN/TIN/LetterType combination
+		// them being the AutoEnrollment and the pre-AutoEnrollment records.
+		// The niche scenario occurs where a preference only has an AutoEnrollment
+		// record with no
+		// pre-AutoEnrollment record for
+		// it will create a new pre-AutoEnrollment record to store client changes
+		// between now and
+		// AutoEnrollment date.
+		// Thus if we have > 2 records they will be ignore.
+		String activeDateStr = documentList.get(index).getMetadata().getActiveDate();
+		if (StringUtils.isEmpty(activeDateStr)) {
+			LOGGER.debug("AutoEnrollment not found: documentCount={}, index={}, {}", documentCount, index,
+					getBodyFields(documentList.get(index).getMetadata()));
+			return new AutoEnrollment(false, index);
+		}
+
+		ZonedDateTime activeDate;
+		try {
+			activeDate = ZonedDateTime.parse(activeDateStr);
+		} catch (Exception e) {
+			LOGGER.error("checkDocumentIndex: ZonedDateTime; {}: {}",
+					getBodyFields(documentList.get(index).getMetadata()), ExceptionUtils.getStackTrace(e));
+			return new AutoEnrollment(true, -1);
+		}
+		if (currentDate.isAfter(activeDate)) {
+			LOGGER.debug("AutoEnrollment active: documentCount={}, index={}, {}", documentCount, index,
+					getBodyFields(documentList.get(index).getMetadata()));
+			return new AutoEnrollment(true, index);
+		}
+		LOGGER.debug("AutoEnrollment not active: documentCount={}, index={}, {}", documentCount, index,
+				getBodyFields(documentList.get(index).getMetadata()));
+		return new AutoEnrollment(true, -1);
+	}
+
+	protected int determineMulti(AutoEnrollment autoEnrollment0, AutoEnrollment autoEnrollment1) {
+		if (autoEnrollment0.isValidAutoEnrollment()) {
+			return 0;
+		}
+		if (autoEnrollment1.isValidAutoEnrollment()) {
+			return 1;
+		}
+		if (autoEnrollment0.isNotAutoEnrollment()) {
+			return 0;
+		}
+		if (autoEnrollment1.isNotAutoEnrollment()) {
+			return 1;
+		}
+		return -1;
+	}
+
+	protected String getBodyFields(ProviderDocumentMetaData providerDocumentMetaData) {
+		return "providerEmailId=" + providerDocumentMetaData.getProviderEmailId() + ", mpin="
+				+ providerDocumentMetaData.getMpin();
+	}
+
+	public static class AutoEnrollment {
+
+		private final boolean isAutoEnrollment;
+		private final int index;
+
+		AutoEnrollment(boolean isAutoEnrollment, int index) {
+			this.isAutoEnrollment = isAutoEnrollment;
+			this.index = index;
+		}
+
+		boolean isNotAutoEnrollment() {
+			return !isAutoEnrollment;
+		}
+
+		public boolean isValidAutoEnrollment() {
+			return isAutoEnrollment && index != -1;
+		}
+	}
+
+	private static class RetrieveProviderEmailParams {
+		private final String tin;
+		private final String mpin;
+		private final String subCategory;
+		private final String providerPreferenceSpaceId;
+		private final String providerPreferenceSpaceIdV2;
+		private Document criteria;
+
+		public RetrieveProviderEmailParams(RetrieveProviderEmailParamsBuilder builder) {
+			this.tin = Optional.ofNullable(builder.tin).orElse(StringUtils.EMPTY);
+			this.mpin = Optional.ofNullable(builder.mpin).orElse(StringUtils.EMPTY);
+			this.subCategory = Optional.ofNullable(builder.subCategory).orElse(StringUtils.EMPTY);
+			this.providerPreferenceSpaceId = Optional.ofNullable(builder.providerPreferenceSpaceId)
+					.orElse(StringUtils.EMPTY);
+			this.providerPreferenceSpaceIdV2 = Optional.ofNullable(builder.providerPreferenceSpaceIdV2)
+					.orElse(StringUtils.EMPTY);
+		}
+
+		public static class RetrieveProviderEmailParamsBuilder {
+			private String tin;
+			private String mpin;
+			private String subCategory;
+			private String providerPreferenceSpaceId;
+			private String providerPreferenceSpaceIdV2;
+
+			public RetrieveProviderEmailParamsBuilder setTin(String tin) {
+				this.tin = tin;
+				return this;
+			}
+
+			public RetrieveProviderEmailParamsBuilder setMpin(String mpin) {
+				this.mpin = mpin;
+				return this;
+			}
+
+			public RetrieveProviderEmailParamsBuilder setSubCategory(String subCategory) {
+				this.subCategory = subCategory;
+				return this;
+			}
+
+			public RetrieveProviderEmailParamsBuilder setProviderPreferenceSpaceId(String providerPreferenceSpaceId) {
+				this.providerPreferenceSpaceId = providerPreferenceSpaceId;
+				return this;
+			}
+
+			public RetrieveProviderEmailParamsBuilder setProviderPreferenceSpaceIdV2(
+					String providerPreferenceSpaceIdV2) {
+				this.providerPreferenceSpaceIdV2 = providerPreferenceSpaceIdV2;
+				return this;
+			}
+
+			public RetrieveProviderEmailParams build() {
+				return new RetrieveProviderEmailParams(this);
+			}
+		}
+
+		public String getTin() {
+			return tin;
+		}
+
+		public String getMpin() {
+			return mpin;
+		}
+
+		public String getSubCategory() {
+			return subCategory;
+		}
+
+		public String getProviderPreferenceSpaceId() {
+			return providerPreferenceSpaceId;
+		}
+
+		public String getProviderPreferenceSpaceIdV2() {
+			return providerPreferenceSpaceIdV2;
+		}
+
+		public Document getCriteria() {
+
+			if (criteria == null) {
+				criteria = new Document();
+				if (StringUtils.isEmpty(providerPreferenceSpaceIdV2)) {
+					criteria.append("spaceId", Integer.parseInt(providerPreferenceSpaceId));
+				} else {
+					criteria.append("spaceId", Integer.parseInt(providerPreferenceSpaceIdV2)).append("metadata.mpin",
+							mpin);
+				}
+				criteria.append("metadata.tin", tin).append("metadata.fileName", subCategory);
+			}
+			return criteria;
+		}
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+===
+
+
+
+
+@Component
+public class ScheduledCsvSftpMonitor {
+	@Value("${FDSPostPDODocumentsUrl}")
+	private String fDSPostPDODocumentsUrl;
+	
+	@Autowired
+	ProcessorService processorService;
+
+	@Autowired
+	ProcessorsService processorsService;
+
+	@Autowired
+	SftpMonitorUtil sftpMonitorUtil;
+
+	@Autowired
+	CsvToJsonFile csvToJsonFile;
+
+	@Autowired
+	CsvProcessorsService csvProcessorsService;
+
+	@Autowired
+	CsvProcessorService csvProcessorService;
+
+	@Autowired
+	CsvProcessorsMonitor csvProcessorsMonitor;
+
+	@Autowired
+	SendQueueService sendQueueService;
+
+	@Autowired
+	CsvCleanupFilesProcess csvCleanupFilesProcess;
+
+	private static final Logger LOGGER = LoggerFactory.getLogger(ScheduledCsvSftpMonitor.class);
+
+	private static final String HOST_NAME_SOURCE = "host_name_source";
+	private static final String USER_NAME_SOURCE = "username_source";
+	private static final String USER_CREDENTIALS_SOURCE = "pw_source";
+	private static final String FTP_ROOT_DIR = "ftp_rootdir";
+	public static final String INGEST_PATH_PROPERTY_NAME = "INGEST_ROOT";
+	private static final String DIRECTORY_LISTING = "directoryListing";
+	private static final String CHANNEL_SFTP = "channelSftp";
+	private static final String SFTP_SESSION = "sftpSession";
+	private static final String CHANNEL = "channel";
+	private static final String INCLUDE_FILENAME_REGEX_PATTERN = "includeFileNameRegExPattern";
+	private static final String EXCLUDE_FILENAME_REGEX_PATTERN = "excludeFileNameRegExPattern";	
+
+	@Value("${PDOSpaceId}")
+	private Integer PDOSpaceId;
+
+	@Value("${PDOAppId}")
+	private String PDOAppId;
+
+	@Value("${IsRedisMsgBroker}")
+	private Boolean isRedisMsgBroker;
+
+	public ScheduledCsvSftpMonitor() {
+		// Required constructor
+	}
+
+	public ScheduledCsvSftpMonitor(ProcessorsService processorsService, SftpMonitorUtil sftpMonitorUtil,
+			CsvProcessorsService csvProcessorsService) {
+		this.processorsService = processorsService;
+		this.sftpMonitorUtil = sftpMonitorUtil;
+		this.csvProcessorsService = csvProcessorsService;
+	}
+
+	public static boolean validateFileExtn(String fileName, String includeRegEx, String excludeRegEx) {
+		var valid1 = false;
+		var valid2 = false;
+		if (StringUtils.isEmpty(includeRegEx)) {
+			includeRegEx = "([^\\s]+(\\.(?i)(csv))$)";
+		}
+		var fileExtnPtrn = Pattern.compile(includeRegEx);
+		var mtch = fileExtnPtrn.matcher(fileName);
+		if (mtch.matches())
+			valid1 = true;
+		LOGGER.debug("validateFileExtn RegExPattern: {}{}{}{}{}", includeRegEx, " filename:", fileName, "matched: ",
+				valid1);
+
+		if (!StringUtils.isEmpty(excludeRegEx)) {
+			var fileExtnPtrn2 = Pattern.compile(excludeRegEx);
+			var mtch2 = fileExtnPtrn2.matcher(fileName);
+			if (!mtch2.matches())
+				valid2 = true;
+		} else {
+			valid2 = true;
+		}
+		return (valid1 && valid2);
+	}
+
+	@SuppressWarnings("unchecked")
+	public void runCsvSFTPMonitor(DelegateExecution execution, ProcessorMetaData inProcessor) throws IOException {
+		LOGGER.debug("ScheduledCsvSftpMonitor-->runCsvSFTPMonitor-->ENTER");
+
+		var processMap = inProcessor.getProcess();
+		var processConfigMap = (Map) inProcessor.getProcess().get("config");
+		LOGGER.debug("processMap={}", processMap);
+		LOGGER.debug("processConfigMap={}", processConfigMap);
+		String spaceId = (String) processConfigMap.get("space_id");
+		String appIdentifier = (String) processConfigMap.get("appIdentifier");
+		String sftpHost = (String) processConfigMap.get(HOST_NAME_SOURCE);
+		String sftpUSER = (String) processConfigMap.get(USER_NAME_SOURCE);
+		String sftpPASS = (String) processConfigMap.get(USER_CREDENTIALS_SOURCE);
+		String includeRegEx = (String) processConfigMap.get(INCLUDE_FILENAME_REGEX_PATTERN);
+		String excludeRegEx = (String) processConfigMap.get(EXCLUDE_FILENAME_REGEX_PATTERN);
+		String sftpWorkingDir = (String) processConfigMap.get(FTP_ROOT_DIR);
+		String ftpArchiveDir = (String) processConfigMap.get("ftp_archivedir");
+		var configSpaceId = Integer.valueOf(spaceId);
+
+		ProcessorMetaData processor = null;
+		String processorId;
+		var processorTransactionId = "";
+
+		LOGGER.debug("sftpHost={}, sftpUSER={}, sftpWorkingDir={}", sftpHost, sftpUSER, sftpWorkingDir);
+		if (Boolean.TRUE.equals(sftpMonitorUtil.isMissingLoginCredential(sftpHost, sftpUSER, sftpPASS, sftpWorkingDir))) {
+			LOGGER.info("runCsvSFTPMonitor Login credentials must be supplied ; not able to login to SFTP host={}", sftpHost);
+			// throw new errors
+			throw new IOException("Missing login credentials host=" + sftpHost);
+		}
+
+		LOGGER.debug("Calling getProcessor: appIdentifier={}, id={}", inProcessor.getAppIdentifier(), inProcessor.getId());
+		inProcessor.setConfigSpaceId(Integer.getInteger(spaceId));
+		processor = inProcessor;
+		processorId = processor != null ? processor.getId() : "";
+		LOGGER.debug("hasValidStatus={}", sftpMonitorUtil.hasValidStatus(processor));
+		if (Boolean.TRUE.equals(sftpMonitorUtil.hasValidStatus(processor))) {
+			LOGGER.debug("hasValidStatus; Processing");
+			Map<String, Object> processSftpResults = null;
+			try {
+				var workDone = false;
+				LOGGER.debug("sftpHost={}, sftpUSER={}, sftpWorkingDir={}", sftpHost, sftpUSER, sftpWorkingDir);
+				processSftpResults = sftpMonitorUtil.proccessSFTPDirectory(sftpUSER, sftpPASS, sftpHost, sftpWorkingDir);
+				LOGGER.debug("directoryListing={}", processSftpResults.get(DIRECTORY_LISTING));
+
+				// for each csv file in remote drop directory
+				for (ChannelSftp.LsEntry entry : (ArrayList<ChannelSftp.LsEntry>) processSftpResults.get(DIRECTORY_LISTING)) {
+					LOGGER.debug("ScheduledCsvSftpMonitor-->runCsvSFTPMonitor-->filename=[{}], entry={}", entry.getFilename(), entry);
+					if (validateFileExtn(entry.getFilename(), includeRegEx, excludeRegEx) &&
+						csvProcessorsService.findProcessorMetaDataByFileName(entry.getFilename(),
+						processor.getAppIdentifier()) == null) {
+						// Search processorTransaction for existing csv file entry
+						var transactionMetaData = processorsService.createTransactionRecord(processor);
+						LOGGER.debug("createdTransactionRecord: id={}, transactionId={}, dateCreated={}, spaceId={}",
+								transactionMetaData.getId(), transactionMetaData.getTransactionId(),
+								transactionMetaData.getDateCreated(), transactionMetaData.getSpaceId());
+
+						// Set Create File OutPut Directory
+						String dir = sftpMonitorUtil.createFileOutputDirectoryPath(processConfigMap, processor, entry.getFilename());
+						LOGGER.debug("dir={}", dir);
+						if (!Paths.get(dir).toFile().exists()) {
+							workDone = true;
+							var filePath = Utilities.createWorkingDirectory(dir);
+
+							// Downloading the specified file from the remote directory to the specified folder path
+							((ChannelSftp) processSftpResults.get(CHANNEL_SFTP)).get(entry.getFilename(),
+									filePath.toAbsolutePath().toString());
+
+							// Create processorTransaction entry
+							var csvProcessorTransaction = csvProcessorsService
+									.createCsvProcessorTransaction(processor, entry.getFilename(),
+											filePath.toAbsolutePath().toString(),
+											transactionMetaData.getTransactionId());
+							processorTransactionId = csvProcessorTransaction.getId();
+
+							LOGGER.debug("CREATED: csvProcessorTransactionId={}, id={}, fileName={}, jsonFileName={}",
+									processorTransactionId, csvProcessorTransaction.getProcessorId(),
+									csvProcessorTransaction.getFileName(), csvProcessorTransaction.getJsonFileName());
+
+							execution.setTransientVariable(WorkflowConstants.APP_IDENTIFIER, appIdentifier);
+							execution.setTransientVariable(Workflow.CSV_PROCESSOR_TRANSACTION, csvProcessorTransaction);
+
+							LOGGER.debug("Calling: CSV_TO_FDS_DOCUMENT_PROCESS");
+							csvToJsonFile.doExecute(execution);
+
+							String jsonFileName = (String) execution.getVariable("jsonFileName");
+							String locationDirectory = csvProcessorTransaction.getLocation();
+							LOGGER.debug("csvProcessorTransaction: locationDirectory={}, jsonFileName={}", locationDirectory, jsonFileName);
+
+							var location = Paths.get(locationDirectory);
+							var jsonFileToProcess = new File(location.toFile(), jsonFileName);
+
+							LOGGER.debug("Send records to document collection; jsonFileToProcess={}", jsonFileToProcess);
+							execution.setTransientVariable(Workflow.SFTP_HOSTNAME, sftpHost);
+							execution.setTransientVariable(Workflow.SFTP_USERNAME, sftpUSER);
+							execution.setTransientVariable(Workflow.SFTP_PW, sftpPASS);
+							execution.setTransientVariable(Workflow.SFTP_ROOT_DIRECTORY, sftpWorkingDir);
+							execution.setTransientVariable(Workflow.SFTP_ARCHIVE_DIRECTORY, ftpArchiveDir);
+							execution.setTransientVariable(Workflow.MAX_SFTP_TRIES, (Integer) 3);
+							execution.setTransientVariable(Workflow.RETRY_TIME_SECS, (Integer) 10);
+
+							String fileName = entry.getFilename();
+							traverseCsvFile(csvProcessorTransaction, configSpaceId, fileName, jsonFileName, jsonFileToProcess, appIdentifier);
+							csvProcessorTransaction.setStatus("COMPLETE");
+							csvProcessorsService.updateCsvProcessorTransactionMetaData(csvProcessorTransaction);
+						} else {
+							LOGGER.warn("runCsvSFTPMonitor Directory already exists. Do not process. {}", dir);
+						}
+					} else {
+						LOGGER.warn("Not validateFileExtn; exiting");
+					}
+				}
+				if (workDone) {
+					csvCleanupFilesProcess.doExecute(execution);
+				} else {
+					LOGGER.warn("workDone={}", workDone);
+				}
+			} catch (Exception e) {
+				LOGGER.error("runCsvSFTPMonitor Exception {}={}, {}={}, {}={}, {}:{}", "transactionId",
+						inProcessor.getTransactionId(), "processorId", processorId, "processorTransactionId",
+						processorTransactionId, e.getClass().getSimpleName(), e.getMessage());
+				LOGGER.error("runCsvSFTPMonitor Stack {}", ExceptionUtils.getStackTrace(e));
+				if (e.getMessage() != null && !e.getMessage().contains("No such file")
+						&& !e.getMessage().endsWith("Failure")) {
+					LOGGER.error("runCsvSFTPMonitor Stack {}", ExceptionUtils.getStackTrace(e));
+				}
+			} finally {
+				if (processSftpResults != null) {
+					sftpMonitorUtil.closeSFTPChannel((ChannelSftp) processSftpResults.get(CHANNEL_SFTP),
+						(Session) processSftpResults.get(SFTP_SESSION), (Channel) processSftpResults.get(CHANNEL));
+				}
+				// update processor lastRun.
+				processorsService.setLastRunAndStatus(processor.getId(), MetaDataStatus.IN_PROCESS);
+			}
+		}
+		else
+		if (LOGGER.isInfoEnabled() && processor != null) {
+			LOGGER.debug("runCsvSFTPMonitor Processor: {}{}{}{}{}{}", processor.getName(), ", ID: ",
+					processor.getId(), ", is in status of ", processor.getStatus(),
+					". CSV SFTP process will not move files from the SFTP folder to the working folder.");
+		}
+		LOGGER.debug("ScheduledCsvSftpMonitor-->runCsvSFTPMonitor-->EXIT");
+	}
+
+	protected boolean traverseCsvFile(CsvProcessorTransaction csvProcessorTransaction, Integer configSpaceId, String fileName,
+			String jsonFileName, File jsonFileToProcess, String appId) {
+		try {
+			String jsonFileStr = FileUtils.readFileToString(jsonFileToProcess, Charset.forName("utf-8"));
+			LOGGER.debug("jsonFileStr={}", jsonFileStr);
+			ObjectMapper objectMapper = new ObjectMapper();
+			ArrayList<Map<String, Object>> arrayList;
+			Map<String, Object> requestMap = null;
+			arrayList = objectMapper.readValue(jsonFileStr, new TypeReference<>(){});
+			LOGGER.debug("Processing jsonFileName={}: recordCnt={}", jsonFileName, arrayList.size());
+			var rowNumber = 1;
+			int arrayListSize = arrayList.size();
+			boolean lastRow = false;
+			Iterator<Map<String, Object>> itr = arrayList.iterator();
+			while (itr.hasNext()) {
+				requestMap = itr.next();
+				LOGGER.debug("row={}", requestMap);
+				if (rowNumber >= arrayListSize) {
+					lastRow = true;
+				}
+				if (flushRecord(requestMap, csvProcessorTransaction, configSpaceId, fileName, jsonFileName, rowNumber, lastRow, appId)) {
+					rowNumber++;
+				}
+			}
+			return true;
+		} catch (IOException e) {
+			LOGGER.error("Process exception: {}", ExceptionUtils.getStackTrace(e));
+			return false;
+		}
+	}
+
+	protected boolean flushRecord(Map<String, Object> requestMap, CsvProcessorTransaction csvProcessorTransaction, Integer configSpaceId, String fileName,
+			String jsonFileName, int rowNumber, boolean lastRecord, String appId) {
+		if (requestMap.isEmpty()) {
+			return false;
+		}
+
+		var documentMetaData = createCsvRecord(requestMap, configSpaceId, appId);
+		csvProcessorsService.createCsvProcessorRowTask(csvProcessorTransaction, configSpaceId, fileName, jsonFileName, rowNumber, requestMap.toString(), documentMetaData.getId(), MetaDataStatus.COMPLETE);
+
+		if (rowNumber == 1 && ! lastRecord) {
+			LOGGER.debug("Have firstRecord");
+			var executionRecord = ProcessorTaskUtil.createProcessorExecutionRecord("Posted first CSV documents to PRUN", csvProcessorTransaction);
+			ProcessorTaskUtil.updateProcessTransactionWithExecutionRecord(csvProcessorService, csvProcessorTransaction, executionRecord);
+		}
+		if (lastRecord) {
+			LOGGER.debug("Have lastRecord={}, rowNumber={}", lastRecord, rowNumber);
+			var executionRecord = ProcessorTaskUtil.createProcessorExecutionRecord("Posted " + rowNumber + " CSV documents to PRUN", csvProcessorTransaction);
+			ProcessorTaskUtil.updateProcessTransactionWithExecutionRecord(csvProcessorService, csvProcessorTransaction, executionRecord);
+		}
+		return true;
+	}
+
+	protected DocumentMetaData createCsvRecord(Map<String, Object> requestMap, Integer spaceId, String appId) {
+		LOGGER.debug("requestMap={}", requestMap);
+		Iterator<Map.Entry<String, Object>> iterator = requestMap.entrySet().iterator();
+		while (iterator.hasNext()) {
+			Map.Entry<String, Object> entry = iterator.next();
+			Object value = entry.getValue();
+			if (value.getClass().equals(String.class) && ((String) value).isBlank())
+			{
+				iterator.remove();
+			}
+		}
+		var documentMetaData = csvProcessorsService.createCsvRecord(spaceId, appId, MetaDataStatus.AVAILABLE, requestMap);
+		LOGGER.debug("CSV: createdCsvRecord; id={}", documentMetaData.getId());
+		return documentMetaData;
+	}
+
+	protected DocumentMetaData createPdoRecord(String request) {
+		try {
+			Map<String, Object> requestMap = Parser.readValue(request, HashMap.class);
+			String tin = (String) requestMap.get(Workflow.TIN);
+			String mpin = (String) requestMap.get(Workflow.MPIN);
+			String fileName = (String) requestMap.get(Workflow.FILE_NAME);
+			String fileType = (String) requestMap.get(Workflow.FILE_TYPE);
+			String providerEmailId = (String) requestMap.get(Workflow.PROVIDER_EMAIL_ID);
+			String frequency = (String) requestMap.get(Workflow.FREQUENCY);
+			String deliveryMethod = (String) requestMap.get(Workflow.DELIVERY_METHOD);
+			String okToChangePdoInd = (String) requestMap.get(Workflow.OK_TO_CHANGE_PDO_IND);
+			String autoEdelUpdateInd = (String) requestMap.get(Workflow.AUTO_EDEL_UPDATE_IND);
+			
+			var documentMetaData = csvProcessorsService.createCsvRecord(PDOSpaceId, PDOAppId, tin, mpin, fileName, fileType, providerEmailId, frequency, deliveryMethod,
+					okToChangePdoInd, autoEdelUpdateInd, MetaDataStatus.AVAILABLE);
+			LOGGER.debug("PDO: createPdoRecord={}", documentMetaData.getId());
+			return documentMetaData;
+		} catch (IOException e) {
+			LOGGER.error("createPdoRecord failed: {}", ExceptionUtils.getStackTrace(e));
+		}
+		return null;
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+==
+
+
+
+@Service("SendACKFileToSftpServer")
+public class SendACKFileToSftpServer extends OptumJavaDelegateBase {
+
+	private static final Logger LOGGER = LoggerFactory.getLogger(SendACKFileToSftpServer.class);
+
+	private static final int SFTP_PORT = 22;
+	private static final String DESTINATION = "destination";
+	
+	@Autowired
+	ProcessorService processorService;
+	
+	@Autowired
+	ErrorMetaDataService errorMetaDataService;
+	
+	@Autowired
+    private SftpUtil sftpUtil;
+	
+	private DelegateExecution tempExecution = null;
+		
+	private static final List<String> REQ_VARS = Arrays.asList(
+		Workflow.PROCESSOR_TRANSACTION, Workflow.ACK_FLAG
+    );
+
+	public SendACKFileToSftpServer() {
+		super(REQ_VARS);
+	}
+		
+	@Override
+	protected void doExecute(DelegateExecution execution) {
+        LOGGER.debug("SendACKFileToSftpServer-->doExecute-->ENTER");
+        tempExecution = execution;
+        ProcessorTransaction processorTransaction = null;
+        ProcessorExecutionRecord executionRecord = null;
+        Map<String, String> message = new HashMap<>();
+		try {
+			processorTransaction = execution.getVariable(Workflow.PROCESSOR_TRANSACTION, ProcessorTransaction.class);
+			Boolean ackFlag = execution.getVariable(Workflow.ACK_FLAG, Boolean.class);
+			if(Boolean.TRUE.equals(ackFlag)) {
+				String sftpHost = execution.getVariable(Workflow.SFTP_HOSTNAME, String.class);
+				String sftpUser = execution.getVariable(Workflow.SFTP_USERNAME, String.class);
+				String sftpPass = execution.getVariable(Workflow.SFTP_PW, String.class);
+				String sftpAckDir = execution.getVariable(Workflow.SFTP_ACK_DIRECTORY, String.class);
+				String sftpArchiveDir = execution.getVariable(Workflow.SFTP_ARCHIVE_DIRECTORY, String.class);
+				String ackFile = execution.getVariable(Workflow.ACK_FILE, String.class);
+
+				Map<String,String> sftpMap = new HashMap<>();
+				sftpMap.put("sftpHost",sftpHost);
+				sftpMap.put("sftpUser",sftpUser);
+				sftpMap.put("sftpPass",sftpPass);
+
+
+	            Integer maxSftpTriesVar = execution.getVariable(Workflow.MAX_SFTP_TRIES, Integer.class);
+	            Long retryTimeSecsVar = execution.getVariable(Workflow.RETRY_TIME_SECS, Long.class);
+	            int maxSftpTries = maxSftpTriesVar != null ? maxSftpTriesVar : 10;
+	            long retryTimeSecs = retryTimeSecsVar != null ? retryTimeSecsVar: 360;  // 6 minutes
+				// Move zipped ack files to target ACK folder
+		        executionRecord = ProcessorTaskUtil.createProcessorExecutionRecord("Moving ACK file to target ACK folder");
+		        message = new HashMap<>();
+
+				boolean errors = moveFileFromLocalToSFTPLocation(message, sftpMap, sftpAckDir, ackFile, "ACK",
+						maxSftpTries, retryTimeSecs);
+				ProcessorTaskUtil.addMessageToProcessorExecutionRecordToProcessorTransaction(processorTransaction,
+						executionRecord, message);
+				if (errors) {
+					addErrorMsg(
+							"SendACKFileToSftpServer-->doExecute-->Error while Moving ACK file to target ACK folder",
+							"Error while Moving ACK file to target ACK folder");
+					errorMetaDataService.writeToErrorCollection(execution, "SendACKFileToSftpServer --> doExecute: Error while moving ACK file to target ACK folder");
+					return;
+				}
+		        // Move ack file to target Archive folder
+		        if(!StringUtils.isNullOrEmpty(sftpArchiveDir)) {
+		        	executionRecord = ProcessorTaskUtil.createProcessorExecutionRecord("Moving ACK file to target archive folder");
+			        message = new HashMap<>();
+			        moveFileFromLocalToSFTPLocation(message, sftpMap, sftpArchiveDir, ackFile, "archive", maxSftpTries, retryTimeSecs);
+			        ProcessorTaskUtil.addMessageToProcessorExecutionRecordToProcessorTransaction(processorTransaction, executionRecord, message);
+		        }
+			} else {
+				LOGGER.warn("SendACKFileToSftpServer-->doExecute-->ackWorkingDir is not defined, Suppressing sending of ACK file");
+			}
+	        //update processor transaction status to COMPLETE
+			if (processorTransaction.getStatus() != MetaDataStatus.FATAL_ERROR) {
+		        executionRecord = ProcessorTaskUtil.createProcessorExecutionRecord("Updating processorTransaction status");
+				message = new HashMap<>();
+				processorTransaction.setCompleteStatus();
+				message.put(Workflow.OUTCOME_KEY, "processorTransaction status updated");
+		        ProcessorTaskUtil.addMessageToProcessorExecutionRecordToProcessorTransaction(processorTransaction, executionRecord, message);
+			}
+        } catch(Exception e) {
+        	LOGGER.error("doExecute Exception while executing SendACKFileToSftpServer task {}={} {}",
+	        		  "processorTransactionId", processorTransaction != null ? processorTransaction.getId() : "NULL",
+	        		  ExceptionUtils.getStackTrace(e));
+    		addErrorMsg("SendACKFileToSftpServer-->doExecute-->Exception while executing SendACKFileToSftpServer task", e.getMessage());
+			message.put(Workflow.OUTCOME_KEY, "Exception while moving ACK file target SFTP folder");
+			message.put(Workflow.ERROR_KEY, e.toString());
+			ProcessorTaskUtil.addMessageToProcessorExecutionRecordToProcessorTransaction(processorTransaction, executionRecord, message);
+			errorMetaDataService.writeToErrorCollection(execution, "SendACKFileToSftpServer --> doExecute: " + e.getMessage());
+
+        } finally {
+			execution.setTransientVariable(Workflow.PROCESSOR_TRANSACTION, processorTransaction);
+			processorService.updateProcessorTransactionMetaData(processorTransaction);
+        }
+        LOGGER.debug("SendACKFileToSftpServer-->doExecute-->EXIT");
+	}
+	
+	boolean moveFileFromLocalToSFTPLocation(Map<String, String> message, Map<String,String> sftpMap, String targetWorkingDir, String zipFileName, String destination, int maxSftpTries, long retryTimeSecs) {
+		LOGGER.debug("SendACKFileToSftpServer-->moveFileFromLocalToSFTPLocation-->ENTER");
+		var errors = false;
+		try {
+            errors = false;
+            moveFileFromLocalToSFTPLocation(sftpMap, targetWorkingDir, zipFileName, maxSftpTries, retryTimeSecs);
+            message.put(Workflow.OUTCOME_KEY, String.format("Ack file moved to target %s folder", destination));
+        } catch (SftpException e) {
+        	LOGGER.error("moveFileFromLocalToSFTPLocation Error during SFTP process for ACK file to folder {}={} {}",
+	        		  DESTINATION, destination,
+	        		  ExceptionUtils.getStackTrace(e));
+            message.put(Workflow.OUTCOME_KEY, String.format("Error during SFTP process for ACK file to %s folder", destination));
+            message.put(Workflow.ERROR_KEY, e.toString());
+            errors = true;
+            errorMetaDataService.writeToErrorCollection(tempExecution, "SendACKFileToSftpServer --> moveFileFromLocalToSFTPLocation: " + e.getMessage());
+        } catch (JSchException e) {
+        	LOGGER.error("moveFileFromLocalToSFTPLocation Error during SSH protocol for ACK file to folder {}={} {}",
+	        		  DESTINATION, destination,
+	        		  ExceptionUtils.getStackTrace(e));
+            message.put(Workflow.OUTCOME_KEY, String.format("Error during SSH protocol for ACK file to %s folder", destination));
+            message.put(Workflow.ERROR_KEY, e.toString());
+            errors = true;
+            errorMetaDataService.writeToErrorCollection(tempExecution, "SendACKFileToSftpServer --> moveFileFromLocalToSFTPLocation: " + e.getMessage());
+        } catch (FileNotFoundException e) {
+        	LOGGER.error("moveFileFromLocalToSFTPLocation Could not locate the ACK file {}={} {}",
+	        		  DESTINATION, destination,
+	        		  ExceptionUtils.getStackTrace(e));
+            message.put(Workflow.OUTCOME_KEY, "Could not locate the ACK file");
+            message.put(Workflow.ERROR_KEY, e.toString());
+            errors = true;
+            errorMetaDataService.writeToErrorCollection(tempExecution, "SendACKFileToSftpServer --> moveFileFromLocalToSFTPLocation: " + e.getMessage());
+        } catch (IOException e) {
+        	LOGGER.error("moveFileFromLocalToSFTPLocation Could not close local file {}={} {}",
+	        		  DESTINATION, destination,
+	        		  ExceptionUtils.getStackTrace(e));
+            message.put(Workflow.OUTCOME_KEY, "Could not close local file");
+            message.put(Workflow.ERROR_KEY, e.toString());
+            errors = true;
+            errorMetaDataService.writeToErrorCollection(tempExecution, "SendACKFileToSftpServer --> moveFileFromLocalToSFTPLocation: " + e.getMessage());
+        }
+		LOGGER.debug("SendACKFileToSftpServer-->moveFileFromLocalToSFTPLocation-->EXIT");
+		return errors;
+	}
+
+	void moveFileFromLocalToSFTPLocation(Map<String,String> sftpMap, String targetWorkingDir,
+			String zipFileName, int maxSftpTries, long retryTimeSecs) throws JSchException, SftpException, IOException {
+		sftpUtil.moveFileFromLocalToSFTPLocation(sftpMap.get("sftpUser"), sftpMap.get("sftpPass"),sftpMap.get( "sftpHost"), SFTP_PORT, targetWorkingDir, zipFileName, maxSftpTries, retryTimeSecs);
+	}
+	
+}
