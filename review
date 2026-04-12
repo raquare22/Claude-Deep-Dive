@@ -1,599 +1,131 @@
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          
-@Service("emailService")
-public class EmailServiceImpl implements EmailService {
-	
-	@Value("${ELR_SMTP_RELAY_HOST}")
-	private String elrSMTPRelayOSEHost;
-	
-
-	private static final Logger LOGGER = LoggerFactory.getLogger(EmailServiceImpl.class);
-
-	@Autowired
-	JavaMailSender javaMailSender;
-
-
-	public EmailServiceImpl(JavaMailSender javaMailSender) {
-		this.javaMailSender = javaMailSender;
-	}
-
-	/**
-	 * Below Method will be used for sending mails with error/exception details.
-	 * 
-	 * @param errorMap
-	 * @return void
-	 */
-	public boolean sendEmail(DelegateExecution execution, Map<String, Object> errorMap, String message) {
-
-		boolean mailSent = false;
-		LOGGER.debug("EmailServiceImpl-->sendEmail-->ENTER");
-		if(errorMap != null && !errorMap.isEmpty()) {
-		for (Map.Entry<String, Object> errMsg : errorMap.entrySet()) {
-			LOGGER.debug("EmailServiceImpl-->sendEmail-->{}", errMsg.getKey().concat(": ").concat(errMsg.getValue().toString()));
-		}
-		}
-		try {
-			boolean isErrorExists = false;
-			if ((errorMap != null &&  errorMap.get(Workflow.NEW_ERRORS) != null && errorMap.size() > 1)
-					|| (errorMap != null && errorMap.get(Workflow.NEW_ERRORS) == null && errorMap.size() >= 1)) {
-				isErrorExists = true;
-			}
-			if (errorMap != null && !errorMap.isEmpty() ) {
-				for (Map.Entry<String, Object> errMsg : errorMap.entrySet()) {
-					LOGGER.debug("{}: {}", errMsg.getKey(), errMsg.getValue());
-				}
-			}
-			if (isErrorExists) {
-				
-				String emailSender = "noreply@optum.com";
-				String emailReceiver = execution.getVariable(Workflow.EMAIL_RECEIVER, String.class);
-				String emailMessage = getEmailMessage(errorMap, message);
-				String environment = execution.getVariable(Workflow.ENVIRONMENT, String.class);
-				String hostName = Inet4Address.getLocalHost().getHostAddress();
-				String emailSubject = "FDS: Exception in " + execution.getEventName() + " - " + environment + " - "
-						+ hostName;
-				
-
-				if (javaMailSender instanceof JavaMailSenderImpl) {
-					JavaMailSenderImpl javaMailSenderImpl = (JavaMailSenderImpl) javaMailSender;
-					javaMailSenderImpl.setHost(elrSMTPRelayOSEHost);
-				}
-				if (emailReceiver.contains("{")) {
-					// if multiple receiver emails, parse the string into an array
-					String[] emailReceiverArr = parseEmailReceiver(emailReceiver);
-					LOGGER.debug("parseEmailReceiver arr={}", Arrays.toString(emailReceiverArr));
-					EmailSender.sendMail(emailSender, emailReceiverArr, emailSubject, emailMessage, javaMailSender);
-				} else {
-					EmailSender.sendMail(emailSender, emailReceiver, emailSubject, emailMessage, javaMailSender);
-				}
-				mailSent = true;
-			}
-
-		} catch (Exception e) {
-			LOGGER.error("sendEmail Error while sending out Email {}={}, {}={} {}",
-					"delegateExecutionId", execution != null ? execution.getId() : "NULL",
-					"message", message,
-					ExceptionUtils.getStackTrace(e));
-			mailSent = false;
-		}
-		LOGGER.debug("EmailServiceImpl-->sendEmail-->EXIT");
-		return mailSent;
-	}
-
-	/**
-	 * Generate Email message based on error details.
-	 * 
-	 * @param errorMap
-	 * @return String
-	 */
-	private String getEmailMessage(Map<String, Object> errorMap, String message) {
-		StringBuilder sb = new StringBuilder();
-		if (StringUtils.isNotEmpty(message)) {
-			sb.append(message);
-			sb.append("\n");
-		}
-		for (Map.Entry<String, Object> errMsg : errorMap.entrySet()) {
-			if (!(Workflow.NEW_ERRORS).equals(errMsg.getKey())) {
-				sb.append(errMsg.getKey()).append(": ").append(errMsg.getValue());
-			}
-		}
-
-		return sb.toString();
-	}
-
-	@Override
-	public boolean sendEmail(DelegateExecution execution, String message) {
-		boolean mailSent = false;
-		LOGGER.debug("EmailServiceImpl-->sendEmail-->ENTER");
-		
-		try {
-				String emailSender = execution.getVariable(Workflow.EMAIL_SENDER, String.class);
-				String emailReceiver = execution.getVariable(Workflow.EMAIL_RECEIVER, String.class);
-				String emailMessage = getEmailMessage(message);
-				String emailSubject = execution.getVariable(Workflow.EMAIL_SUBJECT, String.class);
-
-				if (javaMailSender instanceof JavaMailSenderImpl) {
-					JavaMailSenderImpl javaMailSenderImpl = (JavaMailSenderImpl) javaMailSender;
-					javaMailSenderImpl.setHost(elrSMTPRelayOSEHost);
-				}
-				
-				if (emailReceiver.contains("{")) {
-					// if multiple receiver emails, parse the string into an array
-					String[] emailReceiverArr = parseEmailReceiver(emailReceiver);
-					LOGGER.debug("parseEmailReceiver arr={}", Arrays.toString(emailReceiverArr));
-					EmailSender.sendMail(emailSender, emailReceiverArr, emailSubject, emailMessage, javaMailSender);
-				} else {
-					EmailSender.sendMail(emailSender, emailReceiver, emailSubject, emailMessage, javaMailSender);
-				}
-				
-				
-				mailSent = true;
-			
-
-		} catch (Exception e) {
-			LOGGER.error("sendEmail Error while sending out Email {}={}, {}={} {}",
-					"delegateExecutionId", execution != null ? execution.getId() : "NULL",
-					"message", message,
-					ExceptionUtils.getStackTrace(e));
-			mailSent = false;
-		}
-		LOGGER.debug("EmailServiceImpl-->sendEmail-->EXIT");
-		return mailSent;
-	}
-	
-	private String getEmailMessage(String message) {
-		StringBuilder sb = new StringBuilder();
-		if (StringUtils.isNotEmpty(message)) {
-			sb.append(message);
-			sb.append("\n");
-		}
-		return sb.toString();
-	}
-	
-	protected String[] parseEmailReceiver(String emailReceiver) {
-		return emailReceiver.substring(emailReceiver.indexOf("{")+1, emailReceiver.indexOf("}")).split("\\s*;\\s*");
-	}
-
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-==
 
 
 @Component
-public class WorkFlowUtil {
-	
-	@Value("${INGEST_ROOT}")
-	private static String ingestRoot;
-	
-    private static final Logger LOGGER = LoggerFactory.getLogger(WorkFlowUtil.class);
+public class FileSplitUtil {
+	private static final Logger LOGGER = LoggerFactory.getLogger(FileSplitUtil.class);
 
-    private static final String MISSING_OR_INVALID_DATA = "Missing or invalid data: ";
-    private static final String DEFAULT_OFFSET = "0";
-    private static final String DEFAULT_FORMAT_HOURS = "Hours";
-    private static final ObjectMapper objectMapper = new ObjectMapper();
-    private static final Pattern pattern = Pattern.compile("\\$\\{([^}]+)}");
-    
-    @Autowired
-    private SftpUtil sftpUtil;
+	private static long bytesSplitMultiple = 1024L * 1024L;
 
-    private WorkFlowUtil() {
-    }
-
-    @SuppressWarnings("unchecked")
-    public static Criteria getSearchWindowCriteria(String searchWindow) throws IOException, ParseException {
-        Criteria searchWindowCriteria = null;
-        if (searchWindow != null) {
-            Date startDate = null;
-            Date endDate = null;
-            Instant instant = Instant.now();
-
-            Document windowMap = Parser.parseJson(searchWindow, Document.class);
-            String startDateString = windowMap.get(Workflow.SEARCH_WINDOW_START_DATE, String.class);
-            String endDateString = windowMap.get(Workflow.SEARCH_WINDOW_END_DATE, String.class);
-            Map<String, String> startDateOffset = windowMap.get(Workflow.SEARCH_WINDOW_START_DATE_OFFSET, HashMap.class);
-            Map<String, String> endDateOffset = windowMap.get(Workflow.SEARCH_WINDOW_END_DATE_OFFSET, HashMap.class);
-
-            if (StringUtils.isNoneEmpty(startDateString, endDateString)) {
-                SimpleDateFormat formatter = new SimpleDateFormat(Workflow.DATE_FORMAT);
-                startDate = formatter.parse(startDateString);
-                endDate = formatter.parse(endDateString);
-            } else if (startDateOffset != null) {
-                String startTimeWindow = Optional.of(startDateOffset)
-                        .map(mapper -> mapper.get(Workflow.SEARCH_WINDOW_TIMEWINDOW))
-                        .orElse(null);
-                String startFormat = Optional.of(startDateOffset)
-                        .map(mapper -> mapper.get(Workflow.SEARCH_WINDOW_FORMAT))
-                        .orElse(DEFAULT_FORMAT_HOURS);
-
-                String endTimeWindow = Optional.ofNullable(endDateOffset)
-                        .map(mapper -> mapper.get(Workflow.SEARCH_WINDOW_TIMEWINDOW))
-                        .orElse(DEFAULT_OFFSET);
-                String endFormat = Optional.ofNullable(endDateOffset)
-                        .map(mapper -> mapper.get(Workflow.SEARCH_WINDOW_FORMAT))
-                        .orElse(DEFAULT_FORMAT_HOURS);
-
-                if (StringUtils.isNoneEmpty(startTimeWindow, startFormat, endTimeWindow, endFormat)) {
-                    ZonedDateTime time = null;
-
-                    time = getLocalDateTimeByTimeWindow(instant, startTimeWindow, startFormat);
-                    startDate = Date.from(time.toInstant());
-
-                    time = getLocalDateTimeByTimeWindow(instant, endTimeWindow, endFormat);
-                    endDate = Date.from(time.toInstant());
-                }
-
-            }
-
-            if (startDate != null && endDate != null) {
-                searchWindowCriteria = Criteria.where(Workflow.PROCESSOR_DATE_CREATED).gte(startDate).lt(endDate);
-            }
-        }
-        return searchWindowCriteria;
-    }
-
-    public static String getTemporaryWorkingPath(Integer spaceId) throws FSDataException, IOException {
-//    	TODO find why ingest value is not set here from config store.
-    	if(ObjectUtils.isEmpty(ingestRoot)) {
-    		ingestRoot = "/ingest";
-    	}
-        String ingestWorkingDir=ingestRoot;
-    	Path tempWorkingPath = Utilities.createWorkingDirectory(ingestWorkingDir + File.separator + spaceId + File.separator + UUID.randomUUID());
-        return tempWorkingPath.toString();
-    }
-
-    public static ZonedDateTime getLocalDateTimeByTimeWindow(Instant instant, String timeWindow, String timeUnit) {
-        int timeTosubtract = Integer.parseInt(timeWindow);
-        ZonedDateTime now = ZonedDateTime.ofInstant(instant, ZoneOffset.UTC);
-        return now.minus(timeTosubtract, ChronoUnit.valueOf(timeUnit.toUpperCase()));
-    }
-
-    public static File generateFileFromString(String data, String filePath) throws IOException {
-        File file = new File(filePath);
-        try (OutputStream fos = new BufferedOutputStream(Files.newOutputStream(file.toPath()));
-             BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(fos))) {
-            bw.write(data);
-        }
-        return file;
-    }
-
-    public static void updateEDeliveryError(Document metaData, String field) {
-        String eDeliveryError = metaData.getString(Workflow.E_DELIVERY_ERROR);
-        String errorMessage = MISSING_OR_INVALID_DATA + field;
-        if (StringUtils.isBlank(eDeliveryError)) {
-            metaData.put(Workflow.E_DELIVERY_ERROR, errorMessage);
-        } else {
-            if (!eDeliveryError.contains(errorMessage)) {
-                metaData.put(Workflow.E_DELIVERY_ERROR, eDeliveryError + "|" + errorMessage);
-            }
-        }
-    }
-
-    public static String getStackTrace(final Throwable throwable) {
-        final StringWriter sw = new StringWriter();
-        final PrintWriter pw = new PrintWriter(sw, true);
-        throwable.printStackTrace(pw);
-        return sw.getBuffer().toString();
-    }
-
-    public static List<DocumentMetaData> readDocumentsFromJsonFile(String fileName) throws IOException, JSONException {
-        List<DocumentMetaData> documentMetaDataList = new ArrayList<>();
-        try (InputStream is = new BufferedInputStream(Files.newInputStream(Paths.get(fileName)))) {
-            String documentsAsJsonString = Parser.inputStreamToStringNoBomExclusion(is);
-            JSONObject documentsAsJson = new JSONObject(documentsAsJsonString);
-            JSONArray documentsArray = documentsAsJson.getJSONArray(Workflow.DOCUMENTS);
-            SimpleDateFormat sdf = new SimpleDateFormat("EEE MMM dd HH:mm:ss zzz yyyy");
-            for (int i = 0; i < documentsArray.length(); i++) {
-                DocumentMetaData metaData = Parser.parseJsonWithDateFormat(documentsArray.getJSONObject(i).toString(),
-                        DocumentMetaData.class, sdf);
-                documentMetaDataList.add(metaData);
-            }
-        }
-        return documentMetaDataList;
-    }
-    
-    public static Map<String, List<DocumentMetaData>> readDocumentsFromJsonFileMap(String fileName, Set<String> zipFileName) throws IOException, JSONException {
-    	 HashMap<String, List<DocumentMetaData>> documentMapList=new HashMap<>();
-    	
-        try (InputStream is = new BufferedInputStream(Files.newInputStream(Paths.get(fileName)))) {
-            String documentsAsJsonString = Parser.inputStreamToStringNoBomExclusion(is);
-            JSONObject documentsAsJson = new JSONObject(documentsAsJsonString);
-            for(String zipfile : zipFileName)
-            {
-              List<DocumentMetaData> documentMetaDataList = new ArrayList<>();
-              JSONArray documentsListAsJson=(JSONArray) documentsAsJson.get(zipfile);
-              
-            
-              SimpleDateFormat sdf = new SimpleDateFormat("EEE MMM dd HH:mm:ss zzz yyyy");
-              for (int i = 0; i < documentsListAsJson.length(); i++) {
-                  DocumentMetaData metaData = Parser.parseJsonWithDateFormat(documentsListAsJson.getJSONObject(i).toString(),
-                          DocumentMetaData.class, sdf);
-                  documentMetaDataList.add(metaData);
-              }
-              documentMapList.put(zipfile, documentMetaDataList);
-             }
-           
-        }
-        return documentMapList;
-    }
-    
-    public static String readDocumentsFromJsonFileToString(String fileName) throws IOException, JSONException {
-    	String txtFileString = null;
-        try (InputStream is = new BufferedInputStream(Files.newInputStream(Paths.get(fileName)))) {
-            txtFileString = Parser.inputStreamToStringNoBomExclusion(is);
-        }
-        return txtFileString;
-    }
-
-    
-    public static List<DocumentMetaData> readDocumentsFromJsonFile(String fileName, String dateFormat) throws IOException, JSONException {
-        List<DocumentMetaData> documentMetaDataList = new ArrayList<>();
-        try (InputStream is = new BufferedInputStream(Files.newInputStream(Paths.get(fileName)))) {
-            String documentsAsJsonString = Parser.inputStreamToStringNoBomExclusion(is);
-            JSONObject documentsAsJson = new JSONObject(documentsAsJsonString);
-            JSONArray documentsArray = documentsAsJson.getJSONArray(Workflow.DOCUMENTS);
-            SimpleDateFormat sdf = new SimpleDateFormat(dateFormat);
-            for (int i = 0; i < documentsArray.length(); i++) {
-                DocumentMetaData metaData = Parser.parseJsonWithDateFormat(documentsArray.getJSONObject(i).toString(),
-                        DocumentMetaData.class, sdf);
-                documentMetaDataList.add(metaData);
-            }
-        }
-        return documentMetaDataList;
-    }
-    
-    public static List<DocumentMetaData> readDocumentsFromJsonString(String jsonString) throws IOException, JSONException {
-        List<DocumentMetaData> documentMetaDataList = new ArrayList<>();
-        JSONObject documentsAsJson = new JSONObject(jsonString);
-        JSONArray documentsArray = documentsAsJson.getJSONArray(Workflow.DOCUMENTS);
-        SimpleDateFormat sdf = new SimpleDateFormat("EEE MMM dd HH:mm:ss zzz yyyy");
-        for (int i = 0; i < documentsArray.length(); i++) {
-            DocumentMetaData metaData = Parser.parseJsonWithDateFormat(documentsArray.getJSONObject(i).toString(),
-                    DocumentMetaData.class, sdf);
-            documentMetaDataList.add(metaData);
-        }
-        return documentMetaDataList;
-    }
-
-    public static DocumentMetaData readDocumentFromJsonFile(String fileName) throws IOException, JSONException {
-        try (InputStream is = new BufferedInputStream(Files.newInputStream(Paths.get(fileName)))) {
-            String documentAsJsonString = Parser.inputStreamToStringNoBomExclusion(is);
-            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
-
-            return Parser.parseJsonWithDateFormat(documentAsJsonString,
-                    DocumentMetaData.class, sdf);
-        }
-    }
-
-    public static AckFileBean readAckFileBeanFromJsonFile(String fileName) throws IOException, JSONException {
-        try (InputStream is = new ByteArrayInputStream(fileName.getBytes())) {
-            String batchAsJsonString = Parser.inputStreamToStringNoBomExclusion(is);
-            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
-
-            return Parser.parseJsonWithDateFormat(batchAsJsonString,
-                    AckFileBean.class, sdf);
-        }
-    }
-
-    public static Batch readBatchFromJsonFile(String fileName) throws IOException, JSONException {
-        try (InputStream is = new ByteArrayInputStream(fileName.getBytes())) {
-            String batchAsJsonString = Parser.inputStreamToString(is);
-            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
-
-            return Parser.parseJsonWithDateFormat(batchAsJsonString,
-                    Batch.class, sdf);
-        }
-    }
-
-    public static DocumentMetaData readDocumentFromJsonFilePath(String fileName) throws IOException, JSONException{
-        InputStream is = new BufferedInputStream(Files.newInputStream(Paths.get(fileName)));
-        String documentAsJsonString = Parser.inputStreamToStringNoBomExclusion(is);
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
-        JSONObject processorTransactionAsJson = new JSONObject(documentAsJsonString);
-        DocumentMetaData docmetadata = new DocumentMetaData();
-        org.bson.Document metaData = Parser.parseJsonWithDateFormat(processorTransactionAsJson.getString(Workflow.DOCUMENT_METADATA), org.bson.Document.class, sdf);
-        docmetadata.setMetadata(metaData);
-        return docmetadata;
-    }
-    
-    public static DocumentMetaData readDocumentMetadataFromJsonString(String jsonString) throws IOException, JSONException{
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
-        DocumentMetaData docmetadata = new DocumentMetaData();
-        org.bson.Document metaData = Parser.parseJsonWithDateFormat(jsonString, org.bson.Document.class, sdf);
-        docmetadata.setMetadata(metaData);
-        return docmetadata;
-    }
-    
-    public static DocumentMetaData readDocumentFromJsonString(String jsonString) throws IOException, JSONException {
-    
-    	 SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
-         DocumentMetaData documentMetadata;
-         JSONObject document=new JSONObject(jsonString);
-         documentMetadata = Parser.parseJsonWithDateFormat(document.toString(),
-                 DocumentMetaData.class, sdf);
-    	return documentMetadata;
-    }
-    
-    public static org.bson.Document readMetadataFromJsonString(String jsonString) throws IOException, JSONException{
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
-        org.bson.Document metaData = Parser.parseJsonWithDateFormat(jsonString, org.bson.Document.class, sdf);
-        return metaData;
-    }
-
-    public static File convertDocumentToFile(String metadata , String tempWorkingPath, String fileName) throws IOException {
-        Map<String, Object> documentJson = new HashMap<>();
-        documentJson.put(Workflow.DOCUMENT_METADATA, metadata);
-        String documentListJsonString = Parser.toJson(documentJson);
-        String filePath = tempWorkingPath + File.separator + fileName;
-        return generateFileFromString(documentListJsonString, filePath);
-    }
-
-    public static DocumentResponse readDocumentResponseFromJsonFile(String fileName) throws IOException, JSONException {
-        try (InputStream is = new BufferedInputStream(Files.newInputStream(Paths.get(fileName)))) {
-            String documentAsJsonString = Parser.inputStreamToStringNoBomExclusion(is);
-            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
-
-            return Parser.parseJsonWithDateFormat(documentAsJsonString,
-                    DocumentResponse.class, sdf);
-        }
-    }
-    
-    public static DocumentResponse readDocumentResponseFromJsonString(String jsonString) throws IOException, JSONException {
-    	SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
-        return Parser.parseJsonWithDateFormat(jsonString,
-                DocumentResponse.class, sdf);
-    }
-
-
-    public static List<ProcessorTransactionMetadata> readProcessorTransactionMetadataFromJsonFile(String fileName) throws IOException, JSONException {
-        List<ProcessorTransactionMetadata> processorTransactionMetadataList = new ArrayList<>();
-        try (InputStream is = new BufferedInputStream(Files.newInputStream(Paths.get(fileName)))) {
-            String processorTransactionAsJsonString = Parser.inputStreamToStringNoBomExclusion(is);
-            JSONObject processorTransactionAsJson = new JSONObject(processorTransactionAsJsonString);
-            JSONArray processorTransactionArray = processorTransactionAsJson.getJSONArray(Workflow.PROCESSOR_TRANSACTIONS);
-            SimpleDateFormat sdf = new SimpleDateFormat("EEE MMM dd HH:mm:ss zzz yyyy");
-            for (int i = 0; i < processorTransactionArray.length(); i++) {
-                ProcessorTransactionMetadata metaData = Parser.parseJsonWithDateFormat(processorTransactionArray.getJSONObject(i).toString(),
-                        ProcessorTransactionMetadata.class, sdf);
-                processorTransactionMetadataList.add(metaData);
-            }
-        }
-        return processorTransactionMetadataList;
-    }
-
-    public static File processorTransactionMetadataListToFile(List<ProcessorTransactionMetadata> processorTransactionList, String tempWorkingPath, String fileName) throws IOException {
-        Map<String,Object> processorTransactionListJson = new HashMap<>();
-        processorTransactionListJson.put(Workflow.PROCESSOR_TRANSACTIONS, processorTransactionList);
-        String processorTransactionJsonString = Parser.toJson(processorTransactionListJson);
-        String filePath = tempWorkingPath + File.separator + fileName;
-        return generateFileFromString(processorTransactionJsonString, filePath);
-    }
-
-    public static String replacePlaceHolders(String target, String sourceAsJsonString) throws IOException {
-        StringBuilder builder = new StringBuilder();
-        Matcher matcher = pattern.matcher(target);
-        int start = 0;
-        while (matcher.find(start)) {
-            builder.append(target, start, matcher.start());
-            String property = matcher.group(1);
-            Object value = JsonPath.read(sourceAsJsonString, property);
-            String valueAsJsonString = Parser.toJson(value);
-            builder.append(valueAsJsonString);
-            start = matcher.end();
-        }
-        builder.append(target.substring(start));
-        return builder.toString();
-    }
-
-    public static File documentListToFile(List<DocumentMetaData> documentList, String tempWorkingPath, String fileName) throws IOException {
-        Map<String, Object> documentListJson = new HashMap<>();
-        documentListJson.put(Workflow.DOCUMENTS, documentList);
-        String documentListJsonString = Parser.toJson(documentListJson);
-        String filePath = tempWorkingPath + File.separator + fileName;
-        return generateFileFromString(documentListJsonString, filePath);
-    }
-    
-    public static File documentMapToFile(Map<String, List<DocumentMetaData>> documentMapList, String tempWorkingPath, String fileName) throws IOException {
-       
-        String documentMapListJsonString = Parser.toJson(documentMapList);
-        String filePath = tempWorkingPath + File.separator + fileName;
-        return generateFileFromString(documentMapListJsonString, filePath);
-    }
-
-//    public static String convertJsonWithTemplate(String jsonString, String templateDefinition) throws IOException {
-//        JsonNode jsonNode = objectMapper.readValue(jsonString, JsonNode.class);
-//        ObjectNode objectNode = (ObjectNode) jsonNode;
-//        HandlebarTemplateUtil templateUtil = new HandlebarTemplateUtil();
-//        com.github.jknack.handlebars.Template template = templateUtil.getTemplateInLine(templateDefinition);
-//        return template.apply(templateUtil.getContext(objectNode));
-//    }
-
-    public void moveFileFromSFTPDirToArchive(String sftpUSER, String sftpPASS, String sftpHost, int sftpPort, String ftpWorkingDir, String archiveWorkingDir,
-                                                    String fileName, int maxSftpTries, long retryTimeSecs) throws JSchException, SftpException, FileNotFoundException {
-    	sftpUtil.moveFileFromSFTPDirToArchive(sftpUSER, sftpPASS, sftpHost, sftpPort, ftpWorkingDir, archiveWorkingDir, fileName, maxSftpTries, retryTimeSecs);
-    }
-
-    public void moveFileFromLocalToSFTPLocation(String sftpUSER, String sftpPASS, String sftpHost, int sftpPort, String archiveWorkingDir,
-                                                       String fileName, int maxSftpTries, long retryTimeSecs) throws JSchException, SftpException, IOException {
-    	sftpUtil.moveFileFromLocalToSFTPLocation(sftpUSER, sftpPASS, sftpHost, sftpPort, archiveWorkingDir, fileName, maxSftpTries, retryTimeSecs);
-    }
-
-
-    public static String convertToCompanionFileName(String fileName, String fileExtension, int startIndex, int endIndex) {
-        String companionFileName = "";
-        if (!StringUtils.isEmpty(fileName)) {
-            if (fileName.length() > endIndex) {
-                companionFileName = fileName.substring(startIndex, endIndex) + fileExtension;
-            } else {
-                companionFileName = companionFileName + fileExtension;
-            }
-        }
-        return companionFileName;
-    }
-
-	public static String getSearchWindowCriteriaString(String SEARCH_WINDOW_OFFSET_WITH_DATES) {
-		// TODO Auto-generated method stub
-		return null;
+	public static void setBytesSplitMultiple(long bytesSplitMultipleValue) {
+		bytesSplitMultiple = bytesSplitMultipleValue;
+		LOGGER.info("Setting bytesSplitMultiple={}", bytesSplitMultiple);
 	}
 
-	public static List<ProcessorTransactionMetadata> readOneProcessorTransactionMetadataFromJsonFile(String fileName)
-			throws IOException, JSONException {
-		List<ProcessorTransactionMetadata> processorTransactionMetadataList = new ArrayList<>();
-		try (InputStream is = new BufferedInputStream(Files.newInputStream(Paths.get(fileName)))) {
-			String processorTransactionAsJsonString = Parser.inputStreamToStringNoBomExclusion(is);
-			JSONObject processorTransactionAsJson = new JSONObject(processorTransactionAsJsonString);
-			SimpleDateFormat sdf = new SimpleDateFormat("EEE MMM dd HH:mm:ss zzz yyyy");
-
-			ProcessorTransactionMetadata metaData = Parser.parseJsonWithDateFormat(
-					processorTransactionAsJson.getString(Workflow.PROCESSOR_TRANSACTIONS_METADATA),
-					ProcessorTransactionMetadata.class, sdf);
-			processorTransactionMetadataList.add(metaData);
-
+	// maxBytesNewLineWithin: Max number of bytes on a split to parse backward to locate a new line
+	public static List<StringBuilder> checkAndSplitFile(String filePath, int splitPerMbSize, int maxBytesNewLineWithin) throws IOException {
+		boolean isFileToSplit = FileSplitUtil.isSplitFile(splitPerMbSize, filePath);
+		if (! isFileToSplit) {
+			return new ArrayList<>();
 		}
-		return processorTransactionMetadataList;
+		List<StringBuilder> splitList = splitFilePerMbPerNewLine(filePath, splitPerMbSize, maxBytesNewLineWithin);
+		LOGGER.info("filePath={}, splitList.size={}, bytesSplitMultiple={}", filePath, splitList.size(), bytesSplitMultiple);
+		return splitList;
 	}
-	
-	
-	public static List<ProcessorTransactionMetadata> readOneProcessorTransactionMetadataFromJsonString(String jsonString)
-			throws IOException, JSONException {
-		List<ProcessorTransactionMetadata> processorTransactionMetadataList = new ArrayList<>();
-		JSONObject processorTransactionAsJson = new JSONObject(jsonString);		
-//		SimpleDateFormat sdf = new SimpleDateFormat("EEE MMM dd HH:mm:ss zzz yyyy");
-		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.'000Z'");
-		ProcessorTransactionMetadata metaData = Parser.parseJsonWithDateFormat(
-				processorTransactionAsJson.getJSONObject(Workflow.PROCESSOR_TRANSACTIONS_METADATA).toString(),
-				ProcessorTransactionMetadata.class, sdf);
-		processorTransactionMetadataList.add(metaData);
-		return processorTransactionMetadataList;
-	}
-	
 
+	public static boolean isSplitFile(int splitPerMbSize, String sourceFile) throws IOException {
+		Path filePath = Paths.get(sourceFile);
+		long fileSize = filePath.toFile().length();
+		LOGGER.debug("fileSize={}", fileSize);
+		final long bytesPerSplit = bytesSplitMultiple * splitPerMbSize;
+		return fileSize >= bytesPerSplit;
+	}
+
+	// If the file was not fully split i.e had an IOException it returns empty List<StringBuilder>
+	protected static List<StringBuilder> splitFilePerMbPerNewLine(final String fileName, final int splitPerMbSize, int maxBytesNewLineWithin) {
+		List<StringBuilder> splitList = new ArrayList<>();
+		if (splitPerMbSize <= 0) {
+			return splitList;
+		}
+
+		long sourceSize;
+		Path fileNamePath = Paths.get(fileName);
+		try {
+			sourceSize = Files.size(fileNamePath);
+		} catch (IOException e) {
+			LOGGER.error("Exception file.size: fileName={}; {}", fileName, ExceptionUtils.getStackTrace(e));
+			return splitList;
+		}
+
+		final long bytesPerSplit = bytesSplitMultiple * splitPerMbSize;
+		if (sourceSize < bytesPerSplit) {
+			LOGGER.debug("Not splitting: fileName={}, sourceSize={}, bytesPerSplit={}", fileName, sourceSize, bytesPerSplit);
+			return splitList;
+		}
+		LOGGER.debug("Splitting: fileName={}, sourceSize={}, bytesPerSplit={}", fileName, sourceSize, bytesPerSplit);
+
+		int i = 0;
+		long offset = 0;
+		long numSplits = sourceSize / bytesPerSplit;
+		long remainingBytes = sourceSize % bytesPerSplit;
+		long writtenByteSize = 0;
+		long sourceSizeOrig = sourceSize;
+		long writtenByteSizeTotal = 0;
+		LOGGER.debug("fileName={}, sourceSize={}, bytesPerSplit={}, numSplits={}, remainingBytes={}, splitPerMbSize={}, maxBytesNewLineWithin={}",
+			fileName, sourceSize, bytesPerSplit, numSplits, remainingBytes, splitPerMbSize, maxBytesNewLineWithin);
+		try {
+			try (RandomAccessFile sourceFile = new RandomAccessFile(fileName, "r");
+				FileChannel sourceChannel = sourceFile.getChannel()) {
+				while (numSplits > 0) {
+					LOGGER.debug("PRE: fileName={}, i={}, sourceSize={}, offset={}, bytesPerSplit={}, numSplits={}, remainingBytes={}, writtenByteSize={}, writtenByteSizeTotal={}",
+						fileName, i, sourceSize, offset, bytesPerSplit, numSplits, remainingBytes, writtenByteSize, writtenByteSizeTotal);
+					writtenByteSize = writePartToSplitList(fileName, ++i, offset, bytesPerSplit, maxBytesNewLineWithin, sourceChannel, splitList, false);
+					writtenByteSizeTotal = writtenByteSizeTotal + writtenByteSize;
+					sourceSize = sourceSize - writtenByteSize;
+					offset = offset + writtenByteSize;
+					numSplits = sourceSize / bytesPerSplit;
+					remainingBytes = sourceSize % bytesPerSplit;
+					LOGGER.debug("POST: fileName={}, i={}, sourceSize={}, offset={}, bytesPerSplit={}, numSplits={}, remainingBytes={}, writtenByteSize={}, writtenByteSizeTotal={}",
+						fileName, i, sourceSize, offset, bytesPerSplit, numSplits, remainingBytes, writtenByteSize, writtenByteSizeTotal);
+				}
+				if (remainingBytes > 0) {
+					writtenByteSize = writePartToSplitList(fileName, ++i, offset, remainingBytes, maxBytesNewLineWithin, sourceChannel, splitList, true);
+					writtenByteSizeTotal = writtenByteSizeTotal + writtenByteSize;
+				}
+			}
+		} catch(IOException e) {
+			LOGGER.error("Exception while splitting fileName={}: msg={}", fileName, e.getMessage());
+			return splitList;
+		}
+		if (sourceSizeOrig != writtenByteSizeTotal) {
+			LOGGER.error("Done: Backing out any splitFiles; Bytes written splitFiles mismatch; fileName={}, sourceSizeOrig={}, writtenByteSizeTotal={}",
+				fileName, sourceSizeOrig, writtenByteSizeTotal);
+			return splitList;
+		} else {
+			LOGGER.debug("Done: fileName={}, sourceSizeOrig={}, writtenByteSizeTotal={}, splitList.size={}", fileName, sourceSizeOrig, writtenByteSizeTotal, splitList.size());
+		}
+		return splitList;
+	}
+
+	protected static long writePartToSplitList(String origFile, int i, long offset, long bytesPerSplit, int maxBytesNewLineWithin, FileChannel sourceChannel,
+			List<StringBuilder> splitList, boolean remaining) throws IOException {
+		LOGGER.debug("origFile={}, i={}, offset={}, bytesPerSplit={}, remaining={}", origFile, i, offset, bytesPerSplit, remaining);
+		if (! remaining) {
+			ByteBuffer buf = ByteBuffer.allocate(maxBytesNewLineWithin);
+			LOGGER.debug("origFile={}, i={}, offset={}, bytesPerSplit={}, newOffset={}",
+				origFile, i, offset, bytesPerSplit, offset + bytesPerSplit - maxBytesNewLineWithin);
+			int noOfBytesRead = sourceChannel.read(buf, offset + bytesPerSplit - maxBytesNewLineWithin);
+			if (LOGGER.isDebugEnabled()) {
+				LOGGER.debug("File break: origFile={}, i={}, remaining={}, noOfBytesRead={}, fileContent=<{}>",
+					origFile, i, remaining, noOfBytesRead, new String(buf.array(), StandardCharsets.UTF_8));
+			}
+			boolean foundNewLine = false;
+			for (int index = maxBytesNewLineWithin - 1; index >= 0; index--) {
+				byte currentByte = buf.get(index);
+				if (currentByte == '\n') {
+					LOGGER.debug("NEWLINE found: origFile={}, i={}, offset={}, bytesPerSplit={}, index={}", origFile, i, offset, bytesPerSplit, index);
+					foundNewLine = true;
+					break;
+				}
+				bytesPerSplit--;
+			}
+			LOGGER.debug("origFile={}, i={}, offset={}, bytesPerSplit={}, foundNewLine={},", origFile, i, offset, bytesPerSplit, foundNewLine);
+		}
+	
+		MappedByteBuffer buff = sourceChannel.map(FileChannel.MapMode.READ_ONLY, offset, bytesPerSplit);
+		splitList.add(new StringBuilder(StandardCharsets.UTF_8.decode(buff)));
+		return bytesPerSplit;
+	}
 }
-
-
-
-
 
 
 
@@ -616,876 +148,750 @@ public class WorkFlowUtil {
 
 
 
-public class FDSHelper {
-    private static final Logger LOGGER = LoggerFactory.getLogger(FDSHelper.class);
 
-    private static final String PROCESSOR_ID = "processorId";
 
-    public static ObjectMapper mapper = new ObjectMapper();
-	
-    public static ProcessInstance runProcess(String processKey, Map<String, Object> variables) {
-        ProcessEngine processEngine = ProcessEngines.getDefaultProcessEngine();
-        RuntimeService runtimeService = processEngine.getRuntimeService();
-        ProcessInstance pi = runtimeService.createProcessInstanceBuilder()
-        					.processDefinitionKey(processKey)
-        					.transientVariables(variables)
-        					.start();
-        return pi;
+public class FileUtil {
+	private static final String VK_PERIOD = ".";
+	private static FileUtil instance = null;
+	private static InetAddress localhost = null;
+	private static final Logger log = LoggerFactory.getLogger(FileUtil.class);
+
+	private FileUtil(){}
+
+	public synchronized static FileUtil getInstance(){
+		if(instance == null){
+			instance = new FileUtil();
+		}
+
+		if(localhost == null){
+			try {
+				localhost = InetAddress.getLocalHost();
+			} catch (UnknownHostException e) {
+				log.error("getInstance Could not get localhost. {}", ExceptionUtils.getStackTrace(e));
+			}
+		}
+
+		return instance;
+	}
+
+	/**
+	 * Use this if you are passing filenames that have spaces to unix command line programs
+	 * if input is null,  null is returned
+	 * @param input
+	 * @return
+	 */
+	public static final String addQuotesAroundName(String input) {
+		String retVal = input;
+		if(input != null) {
+			StringBuilder sb = new StringBuilder();
+			sb.append("\"").append(input).append("\"");
+			retVal =  sb.toString();
+		}
+		return retVal;
+	}
+
+	public static final List<File> getFilesByExtension(String extension, File directory) throws IOException{
+		return getFilesByExtension(extension, directory.toPath());
+	}
+	public static final List<File> getFilesByExtension(String extension, String directory) throws IOException {
+		return getFilesByExtension(extension, Paths.get(directory));
+	}
+	public static final List<File> getFilesByExtension(String extension, Path directory) throws IOException{
+		List<File> files = new ArrayList<>();
+		try(final DirectoryStream<Path> stream = Files.newDirectoryStream(directory, "*." + extension)){
+			stream.forEach(file -> files.add(file.toFile()));
+		} catch (IOException e) {
+			log.warn("getFilesByExtension {}={}, {}={} {}",
+					"extension", extension,
+					"directory", directory != null ? directory.toString() : "NULL",
+                    ExceptionUtils.getStackTrace(e));
+			throw e;
+		}
+
+		return files;
+	}
+
+
+	/**
+	 * Use this if you are passing filenames that have spaces to unix command line programs
+	 * if input is null,  null is returned
+	 * @param name
+	 * @return
+	 */
+	public static final String replaceSpaceToUnderScoreInFilename(String name) {
+		String retVal = name;
+		if(name != null && name.contains(" ")) {
+			retVal = name.replace(" ", "_");
+		}
+		return retVal;
+	}
+
+	public static final Long totalBytesAtLocation(Path location){
+		return totalBytesAtLocation(location, new ArrayList<String>());
+	}
+	public static final Long totalBytesAtLocation(Path location, List<String> extensionsToExclude){
+		final Long[] totalBytes = {0L};
+
+		try(final Stream<Path> stream = Files.list(location)){
+			stream.filter(Files::isRegularFile).forEach(file -> {
+				final Boolean[] exclude = {false};
+				extensionsToExclude.forEach(extensionToExclude ->{
+					if(file.getFileName().toString().endsWith(extensionToExclude)){
+						exclude[0] = true;
+					}
+				});
+				if(!exclude[0]){
+					totalBytes[0] += file.toFile().length();
+				}
+			});
+		}
+		catch (IOException e) {
+			log.error("totalBytesAtLocation {}={}, {}={} {}",
+					"location", location != null ? location.toString() : "NULL",
+					"extensionsToExclude", extensionsToExclude != null ? extensionsToExclude.toString() : "NULL",
+                    ExceptionUtils.getStackTrace(e));
+		}
+
+		return totalBytes[0];
+	}
+
+
+	/**
+	 * Returns the local host IP
+	 * @return
+	 */
+	public String getLocalHostIP(){
+		return localhost.getHostAddress();
+	}
+
+	/**
+	 * Returns the Local Hostname
+	 * @return
+	 */
+	public String getLocalHostName(){
+		return localhost.getHostName();
+	}
+
+	public String removeFileExtesion(String fileName){
+		String tmpFileName = fileName;
+		
+		if(fileName!=null &&
+				!StringUtils.isEmpty(fileName) &&
+				fileName.length() > 2 &&
+				fileName.contains(VK_PERIOD) ){
+			int index = fileName.lastIndexOf(VK_PERIOD);
+			tmpFileName = fileName.substring(0,index);
+		}
+		return tmpFileName;
+	}
+
+	public static String getFileNameFromContentDisposition(String contentDisposition) {
+		return contentDisposition.replaceFirst("(?i)^.*filename=\"?([^\"]+)\"?.*$", "$1");
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+====
+
+
+/**
+ * Use existing instances to create ObjectReader or ObjectWriter for purposes, otherwise create a static instance.
+ */
+public final class Parser {
+	private static final Logger LOGGER = LoggerFactory.getLogger(Parser.class);
+    public static final int PRETTY_PRINT_INDENT_FACTOR = 1;
+    public static final int PRINT_DEFAULT_IDENTATION = 0;
+    public static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    public static final ObjectMapper XML_MAPPER;
+    public static final ObjectMapper DATE_FORMAT_MAPPER = OBJECT_MAPPER.copy();
+    public static final ObjectMapper MIX_IN_MAPPER = OBJECT_MAPPER.copy();
+    static {
+        JacksonXmlModule module = new JacksonXmlModule();
+        module.setDefaultUseWrapper(false);
+        XML_MAPPER = new XmlMapper(module);
+    }
+
+    private Parser(){}
+
+    public static <T> T parseXMLFile(File xmlFile, Class<T> clazz) throws IOException {
+        String xml;
+        try (InputStream xmlFileInputStream =  new BufferedInputStream(Files.newInputStream(xmlFile.toPath()))) {
+            xml = inputStreamToString(xmlFileInputStream);
+        }
+        return parseXML(xml, clazz);
+    }
+
+    public static <T> T parseXMLFile(Path xmlFile, Class<T> clazz) throws IOException {
+        return parseXMLFile(xmlFile.toFile(), clazz);
+    }
+
+    public static <T> T parseXMLFile(String xmlFile, Class<T> clazz) throws IOException {
+        return parseXMLFile(Paths.get(xmlFile), clazz);
+    }
+
+    /*
+     * Replace ampersand not followed by # (used in ascii code number)
+     * Ascii code 38 is for ampersand
+     * Also does not overwrite xml/html codes: ( &amp; &lt; &gt; &quot; &apos;)
+     * Leaves alone anything starting with & and ending with ; with 2 to 4 chars in between
+     * So this will not edit phrases (longer than 4 chars) ending with and ampersand
+     */
+    public static <T> T parseXML(String xmlContent, Class<T> clazz) throws IOException {
+        xmlContent = xmlContent.replaceAll("&(?![^&]{2,4};)", "&#038;");
+        try {
+            return XML_MAPPER.readerFor(clazz).readValue(xmlContent);
+        } catch (Exception e) {
+            throw new IOException("xmlContent=" + xmlContent + "; " + e.getMessage());
+        }
+    }
+
+    public static <T> T parseJson(String jSONString, Class<T> clazz) throws IOException {
+        return OBJECT_MAPPER.readerFor(clazz).with(JsonParser.Feature.ALLOW_SINGLE_QUOTES)
+                .with(JsonReadFeature.ALLOW_BACKSLASH_ESCAPING_ANY_CHARACTER).readValue(jSONString);
+    }
+
+    public static <T> T parseJson(String jSONString, TypeReference<T> ref) throws IOException {
+        return OBJECT_MAPPER.readerFor(ref).with(JsonParser.Feature.ALLOW_SINGLE_QUOTES)
+                .with(JsonReadFeature.ALLOW_BACKSLASH_ESCAPING_ANY_CHARACTER).readValue(jSONString);
+    }
+
+    public static <T, V> T convertValue(V obj, Class<T> clazz) {
+        return OBJECT_MAPPER.convertValue(obj, clazz);
+    }
+
+    public static <T> T readValue(String jsonString, Class<T> clazz) throws IOException {
+        return OBJECT_MAPPER.readerFor(clazz).readValue(jsonString);
+    }
+
+    public static <T> T readValue(String jsonString, TypeReference<T> typeReference) throws JsonProcessingException {
+        return OBJECT_MAPPER.readValue(jsonString, typeReference);
+    }
+
+    public static <T> T parseJsonWithDateFormat(String jSONString, Class<T> clazz, SimpleDateFormat spf ) throws IOException {
+        return DATE_FORMAT_MAPPER.setDateFormat(spf)
+                .readerFor(clazz)
+                .with(JsonParser.Feature.ALLOW_SINGLE_QUOTES)
+                .readValue(jSONString);
+    }
+
+    public static <T> T parseJson(String jSONString, Class<T> clazz, boolean allowSingleQuotes) throws IOException {
+        ObjectReader reader = OBJECT_MAPPER.readerFor(clazz);
+        if (allowSingleQuotes) {
+            reader.with(JsonParser.Feature.ALLOW_SINGLE_QUOTES);
+        } else {
+            reader.without(JsonParser.Feature.ALLOW_SINGLE_QUOTES);
+        }
+        return reader.readValue(jSONString);
+    }
+
+    public static String toJson(Object objectToConvert) throws IOException {
+        return OBJECT_MAPPER.writer().writeValueAsString(objectToConvert);
+    }
+
+    public static String toJson(Object objectToConvert, String format, TimeZone tz) throws IOException {
+        DateFormat df = new SimpleDateFormat(format);
+        df.setTimeZone(tz);
+        return OBJECT_MAPPER.writer(df).writeValueAsString(objectToConvert);
+    }
+
+    public static String toJson(Object objectToConvert, String format) throws IOException {
+        DateFormat df = new SimpleDateFormat(format);
+        df.setTimeZone(TimeZone.getTimeZone("GMT"));
+        return OBJECT_MAPPER.writer(df).writeValueAsString(objectToConvert);
+    }
+    // method to write date as date and not timestamp based on boolean value
+    public static String toJson(Object objectToConvert, boolean value, String format) throws IOException{
+        DateFormat df = new SimpleDateFormat(format);
+        df.setTimeZone(TimeZone.getTimeZone("GMT"));
+        ObjectWriter writer = OBJECT_MAPPER.writer(df);
+        if (!value) {
+            writer.without(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+        }
+        return writer.writeValueAsString(objectToConvert);
+    }
+
+    @SuppressWarnings("rawtypes")
+    public static String toJsonWithFilters(Object objectToConvert, Class filterMixinClass, String[] fieldsToFilter) throws JsonProcessingException {
+        DateFormat df = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX");
+        df.setTimeZone(TimeZone.getTimeZone("GMT"));
+        FilterProvider filters = new SimpleFilterProvider()
+                .addFilter(
+                        "filter properties by name",
+                        SimpleBeanPropertyFilter.serializeAllExcept(fieldsToFilter)
+                );
+        return MIX_IN_MAPPER.addMixIn(Object.class, filterMixinClass).writer(filters).with(df).writeValueAsString(objectToConvert);
     }
 
 
-	    public static ProcessInstance sftpRunProcess(String processKey, String processObj) throws JsonMappingException, JsonProcessingException {
-	        Map<String, Object> variableMap = new HashMap<>();
-	        variableMap.put(ProcessKeys.PROCESS_METADATA, getProcessorMetadata(processObj));
-	        variableMap.put(Workflow.PROCESS_KEY, processKey);
-	        return runProcess(processKey, variableMap);
-	    }
-	    public static ProcessInstance zipFileRunProcess(String processKey, String processObj, String appIdentifier, String processorId) throws JsonMappingException, JsonProcessingException {
-	        Map<String, Object> variableMap = new HashMap<>();
-	        variableMap.put(ProcessKeys.PROCESS_METADATA, getProcessorMetadata(processObj));
-	        variableMap.put(Workflow.PROCESS_KEY, processKey);
-	        variableMap.put(Workflow.APP_IDENTIFIER, appIdentifier);
-	        variableMap.put(PROCESSOR_ID, processorId);
-	        return runProcess(processKey, variableMap);
-	    }
-
-	    public static ProcessInstance runProcess(String processKey, String processObj, String response) {
-	        Map<String, Object> variableMap = new HashMap<>();
-	        variableMap.put(ProcessKeys.PROCESS_METADATA, getProcessorMetadata(processObj));
-	        variableMap.put("response", getProcessorMetadata(response));
-	        variableMap.put(Workflow.PROCESS_KEY, processKey);
-	        return runProcess(processKey, variableMap);
-	    }
-
-	    public static ProcessInstance runProcess(String processKey, Map<String, Object> variableMap, GenericResponse response) {
-	        variableMap.put("response", response);
-	        variableMap.put(Workflow.PROCESS_KEY, processKey);
-	        return runProcess(processKey, variableMap);
-	    }
-
-	    public static ProcessInstance runProcessConfig(String processKey, String processObj) {
-	        Map<String, Object> variableMap = new HashMap<>();
-	        variableMap.put(ProcessKeys.PROCESS_METADATA, getProcessorMetadata("{\"config\" : " + processObj + "}"));
-	        variableMap.put(Workflow.PROCESS_KEY, processKey);
-	        return runProcess(processKey, variableMap);
-	    }
-
-	    public static ProcessInstance runProcess(String processKey, ProcessorMetaData processorMetaData) {
-	        Map<String, Object> variableMap = new HashMap<>();
-	        variableMap.put(ProcessKeys.PROCESS_METADATA, processorMetaData);
-	        variableMap.put(Workflow.PROCESS_KEY, processKey);
-	        return runProcess(processKey, variableMap);
-	    }
-	
-	    
-	    @SuppressWarnings("rawtypes")
-		public static void processTextFile(ProcessorMetaData processorMetaData) throws IOException {
-			try {
-				Map process = processorMetaData.getProcess();
-				Map config = processorMetaData.getProcessConfig();
-				
-				String processKey = (String) process.get(Workflow.PROCESS_KEY);
-				
-				var variablesWithValue = new Document().append(Workflow.PROCESSOR_METADATA, processorMetaData)
-						.append(Workflow.TEMPLATE_NAME, config.get(Workflow.TEMPLATE_NAME))
-						.append(Workflow.SPACE_ID, config.get(Workflow.SPACE_ID))
-						.append(Workflow.APP_IDENTIFIER, config.get(Workflow.APP_IDENTIFIER))
-						.append(Workflow.MATCH_CRITERIA, config.get(Workflow.MATCH_CRITERIA))
-						.append(Workflow.SEARCH_WINDOW, config.get(Workflow.SEARCH_WINDOW))
-						.append(Workflow.DOCLIB_PUT_URL, config.get(Workflow.DOCLIB_PUT_URL))
-						.append(Workflow.DOCLIB_OAUTH_URL, config.get(Workflow.DOCLIB_OAUTH_URL))
-						.append(Workflow.DOCLIB_CLIENT_ID, config.get(Workflow.DOCLIB_CLIENT_ID))
-						.append(Workflow.DOCLIB_CLIENT_SECRET, config.get(Workflow.DOCLIB_CLIENT_SECRET));
-		
-				runProcess(processKey, variablesWithValue);
-			} catch (Exception e) {
-				LOGGER.error("Error to run processTextFile workflow e={}", ExceptionUtils.getStackTrace(e));
-			}
-		}
-	   
-	    public static void sftpConvertFileToDocument(ProcessorMetaData processorMetaData) throws IOException {
-			try {
-				Map process = processorMetaData.getProcess();
-				Map config = processorMetaData.getProcessConfig();
-
-				String processKey = (String) process.get(Workflow.PROCESS_KEY);
-
-				var variablesWithValue = new Document().append(Workflow.PROCESSOR_METADATA, processorMetaData)
-						.append(Workflow.TEMPLATE_NAME, config.get(Workflow.TEMPLATE_NAME))
-						.append(Workflow.SPACE_ID, config.get(Workflow.SPACE_ID))
-						.append(Workflow.APP_IDENTIFIER, config.get(Workflow.APP_IDENTIFIER))
-						.append(Workflow.SEARCH_WINDOW, config.get(Workflow.SEARCH_WINDOW))
-						.append(Workflow.CLIENT_NAME, config.get(Workflow.CLIENT_NAME))
-						.append("process_key", processKey); 
-
-				runProcess(processKey, variablesWithValue);
-			} catch (Exception e) {
-				LOGGER.error("Error to run sftpConvertFileToDocument workflow e={}", ExceptionUtils.getStackTrace(e));
-			}
-		}
-
-	
-	    
-	    public static void retrieveAndSendEmailProcess(Map<String, Object> variables) throws IOException {
-	    	try {
-				Map hook = (Map) variables.get("hook");
-				Map action = (Map) hook.get("action");
-				Map objConfig = (Map) action.get("config");
-				String task = objConfig.get(Workflow.PROCESS_KEY).toString();
-				
-				if (ProcessKeys.RETRIEVE_AND_SEND_EMAIL_PROCESS.equalsIgnoreCase(task)) {
-					
-					var variablesWithValue = new Document()
-							.append(Workflow.HOOK_ID, variables.get("id"))
-							.append(Workflow.TEMPLATE_NAME, objConfig.get(Workflow.TEMPLATE_NAME))
-							.append(Workflow.SPACE_ID, variables.get(Workflow.SPACE_ID))
-							.append(Workflow.APP_IDENTIFIER, variables.get(Workflow.APP_IDENTIFIER))
-			                .append(Workflow.CLIENT_ID, variables.get(Workflow.CLIENTID))
-			                .append(Workflow.SEARCH_CRITERIA, objConfig.get(Workflow.SEARCH_CRITERIA))
-			                .append(Workflow.SEARCH_WINDOW, objConfig.get(Workflow.SEARCH_WINDOW))
-			                .append(Workflow.MAX_DOCUMENTS_OCCURS, objConfig.get(Workflow.MAX_DOCUMENTS_OCCURS))
-			                .append(Workflow.CLIENT_NAME, objConfig.get(Workflow.CLIENT_NAME))
-			                .append("appName", objConfig.get("appName"))
-			                .append("provSearchUrl", objConfig.get("provSearchUrl"))
-			                .append("attributeSet", objConfig.get("attributeSet"))
-			                .append("count", objConfig.get("count"))
-			                .append(Workflow.UNIQUEFIELDTOGROUPDOCS, objConfig.get(Workflow.UNIQUEFIELDTOGROUPDOCS))
-							.append(Workflow.SKIP_DOCUMENT_GROUPING, objConfig.get(Workflow.SKIP_DOCUMENT_GROUPING))
-			                .append(Workflow.PES_APP_ID, objConfig.get(Workflow.PES_APP_ID))
-			                .append(Workflow.PES_APP_SECRET, objConfig.get(Workflow.PES_APP_SECRET))
-			                .append(Workflow.PES_OAUTH_URL, objConfig.get(Workflow.PES_OAUTH_URL))
-			                .append(Workflow.PES_GRANT_TYPE, objConfig.get(Workflow.PES_GRANT_TYPE))
-			                .append("validateCorprateMPIN", objConfig.get("validateCorprateMPIN"))
-			                .append("PPCUrl", objConfig.get("PPCUrl"))
-			                .append("enableRetriveAdmissionDischargePreferences", objConfig.get("enableRetriveAdmissionDischargePreferences"))
-			                .append(Workflow.NUM_RETRIES, objConfig.get(Workflow.NUM_RETRIES))
-			                .append(Workflow.TIME_TO_WAIT, objConfig.get(Workflow.TIME_TO_WAIT))
-							.append(Workflow.PROCESS_KEY, ProcessKeys.RETRIEVE_AND_SEND_EMAIL_PROCESS);
-					
-					runProcess(task, variablesWithValue);
-				}
-			} catch (Exception ex) {
-				LOGGER.error("Error to process required field rule: {}", ex.getMessage());
-			}
-	    }
-
-	public static void sendBatchDynamicEmailRequestToPEN(Map<String, Object> variables) throws IOException {
-		try {
-			Map hook = (Map) variables.get("hook");
-			Map action = (Map) hook.get("action");
-			Map objConfig = (Map) action.get("config");
-			String task = objConfig.get(Workflow.PROCESS_KEY).toString();
-
-			if (ProcessKeys.SEND_BATCH_DYNAMIC_REQUEST_TO_PEN.equalsIgnoreCase(task)) {
-
-				var variablesWithValue = new Document()
-						.append(Workflow.HOOK_ID, variables.get("id"))
-						.append(Workflow.TEMPLATE_NAME, objConfig.get(Workflow.TEMPLATE_NAME))
-						.append(Workflow.SPACE_ID, variables.get(Workflow.SPACE_ID))
-						.append(Workflow.APP_IDENTIFIER, variables.get(Workflow.APP_IDENTIFIER))
-						.append(Workflow.CLIENT_ID, variables.get(Workflow.CLIENTID))
-						.append(Workflow.SEARCH_CRITERIA, objConfig.get(Workflow.SEARCH_CRITERIA))
-						.append(Workflow.SEARCH_WINDOW, objConfig.get(Workflow.SEARCH_WINDOW))
-						.append(Workflow.MAX_DOCUMENTS_OCCURS, objConfig.get(Workflow.MAX_DOCUMENTS_OCCURS))
-						.append(Workflow.CLIENT_NAME, objConfig.get(Workflow.CLIENT_NAME))
-						.append(Workflow.PROCESS_KEY, ProcessKeys.SEND_BATCH_DYNAMIC_REQUEST_TO_PEN)
-						.append(Workflow.PEN_APP_ID, objConfig.get(Workflow.PEN_APP_ID))
-						.append(Workflow.PEN_APP_SECRET, objConfig.get(Workflow.PEN_APP_SECRET))
-						.append(Workflow.PEN_OAUTH_URL, objConfig.get(Workflow.PEN_OAUTH_URL))
-						.append(Workflow.PEN_GRANT_TYPE, objConfig.get(Workflow.PEN_GRANT_TYPE))
-						.append(Workflow.UNIQUEFIELDTOGROUPDOCS, objConfig.get(Workflow.UNIQUEFIELDTOGROUPDOCS))
-						.append(Workflow.SKIP_DOCUMENT_GROUPING, objConfig.get(Workflow.SKIP_DOCUMENT_GROUPING))
-						.append(Workflow.NO_OF_BUSINESS_DAYS, objConfig.get(Workflow.NO_OF_BUSINESS_DAYS))
-                        .append(Workflow.NO_OF_DAYS, objConfig.get(Workflow.NO_OF_DAYS))
-                        .append(Workflow.PEN_SCOPE, objConfig.get(Workflow.PEN_SCOPE))
-						.append(Workflow.EMAIL_TERMINATION_WINDOW, objConfig.get(Workflow.EMAIL_TERMINATION_WINDOW));
-
-				runProcess(task, variablesWithValue);
-			}
-		} catch (Exception ex) {
-			LOGGER.error("Error to process required field rule: {}", ex.getMessage());
-		}
-	}
-	    
-	public static void sftpSendEmailProcess(ProcessorMetaData processorMetaData) throws IOException {
-		try {
-			Map process = processorMetaData.getProcess();
-			Map config = processorMetaData.getProcessConfig();
-
-			String processKey = (String) process.get(Workflow.PROCESS_KEY);
-
-			var variablesWithValue = new Document().append(Workflow.PROCESSOR_METADATA, processorMetaData)
-					.append(Workflow.TEMPLATE_NAME, config.get(Workflow.TEMPLATE_NAME))
-					.append(Workflow.SPACE_ID, config.get(Workflow.SPACE_ID))
-					.append(Workflow.APP_IDENTIFIER, config.get(Workflow.APP_IDENTIFIER))
-					.append(Workflow.MATCH_CRITERIA, config.get(Workflow.MATCH_CRITERIA))
-					.append(Workflow.SEARCH_WINDOW, config.get(Workflow.SEARCH_WINDOW))
-					.append(Workflow.PES_APP_ID, config.get(Workflow.PES_APP_ID))
-					.append(Workflow.PES_APP_SECRET, config.get(Workflow.PES_APP_SECRET))
-					.append(Workflow.PES_OAUTH_URL, config.get(Workflow.PES_OAUTH_URL))
-					.append(Workflow.PES_GRANT_TYPE, config.get(Workflow.PES_GRANT_TYPE))
-					.append(Workflow.CATEGORY, config.get(Workflow.CATEGORY))
-					.append(Workflow.CLIENT_NAME, config.get(Workflow.CLIENT_NAME))
-					.append("process_key", processKey); 
-
-			runProcess(processKey, variablesWithValue);
-		} catch (Exception e) {
-			LOGGER.error("Error to run sftpSendEmailProcess workflow e={}", ExceptionUtils.getStackTrace(e));
-		}
-	}	
-	
-	public static void realTimeAPISendEmailProcess(ProcessorMetaData processorMetaData, Map<String, Object> processorTransaction) throws IOException
-	{
-		try {
-			Map process = processorMetaData.getProcess();
-			Map config = processorMetaData.getProcessConfig();
-			String fileName = (String) processorTransaction.get(Workflow.FILE_NAME);
-			String filePath = (String) processorTransaction.get(Workflow.LOCATION) + "/" + fileName;
-			
-			String processKey = (String) process.get(Workflow.PROCESS_KEY);
-			
-			var variablesWithValue = new Document().append(Workflow.PROCESSOR_METADATA, processorMetaData)
-					.append(Workflow.TEMPLATE_NAME, config.get(Workflow.TEMPLATE_NAME))
-					.append(Workflow.SPACE_ID, config.get(Workflow.SPACE_ID))
-					.append(Workflow.APP_IDENTIFIER, config.get(Workflow.APP_IDENTIFIER))
-					.append(Workflow.MATCH_CRITERIA, config.get(Workflow.MATCH_CRITERIA))
-					.append(Workflow.SEARCH_WINDOW, config.get(Workflow.SEARCH_WINDOW))
-					.append(Workflow.PES_APP_ID, config.get(Workflow.PES_APP_ID))
-					.append(Workflow.PES_APP_SECRET, config.get(Workflow.PES_APP_SECRET))
-					.append(Workflow.PES_OAUTH_URL, config.get(Workflow.PES_OAUTH_URL))
-					.append(Workflow.PES_GRANT_TYPE, config.get(Workflow.PES_GRANT_TYPE))
-					.append(Workflow.CATEGORY, config.get(Workflow.CATEGORY))
-					.append(Workflow.CLIENT_NAME,config.get(Workflow.CLIENT_NAME))
-					.append(Workflow.FILE_NAME,processorTransaction.get("fileName"))
-					.append(Workflow.PROCESSOR_TRANSACTION_ID, processorTransaction.get("id"))
-					.append("filePath", filePath)
-					.append("process_key", processKey);
-
-			runProcess(processKey, variablesWithValue);
-		} catch (Exception e) {
-			LOGGER.error("Error to run realTimeAPISendEmailProcess workflow e={}", ExceptionUtils.getStackTrace(e));
-		}
-	}
-	    
-	@SuppressWarnings("rawtypes")
-	public static void processRequiredFieldRule(Map<String, Object> variables) throws IOException {
-		try {
-			Map hook = (Map) variables.get("hook");
-			Map action = (Map) hook.get("action");
-			Map objConfig = (Map) action.get("config");
-			Map objRequiredFieldRuleConfig = (Map) objConfig.get("requiredFieldRule");
-			String task = objRequiredFieldRuleConfig.get(Workflow.PROCESS_KEY).toString();
-			if (ProcessKeys.REQUIRED_FIELD_RULE_PROCESS_KEY.equalsIgnoreCase(task)) {
-				Gson gson = new Gson();
-				String json = gson.toJson(objRequiredFieldRuleConfig.get(Workflow.RULES));
-
-				ArrayList<Document> rulesList = new ArrayList<>();
-				JSONArray jsonArray = new JSONArray(json);
-
-				for (int i = 0; i < jsonArray.length(); i++) {
-					rulesList.add(Document.parse(jsonArray.getString(i)));
-				}
-
-				var variablesWithValue = new Document().append(Workflow.DOCID, variables.get(Workflow.DOCID))
-						.append(Workflow.HOOK_ID, variables.get("id"))
-						.append(Workflow.HOOK_TRANSACTION_METADATA_ID,
-								variables.get(Workflow.HOOK_TRANSACTION_METADATA_ID))
-						.append(Workflow.RULES, rulesList)
-						.append(Workflow.PROCESS_KEY, ProcessKeys.REQUIRED_FIELD_RULE_PROCESS_KEY);
-				runProcess(task, variablesWithValue);
-			}
-		} catch (Exception ex) {
-			LOGGER.error("Error to process required field rule: {}", ex.getMessage());
-		}
-	}
-
-	@SuppressWarnings("rawtypes")
-	public static void retrieveProviderEmailAddress(Map<String, Object> variables) throws IOException {
-		try {
-			Map hook = (Map) variables.get("hook");
-			Map action = (Map) hook.get("action");
-			Map objConfig = (Map) action.get("config");
-			Map objProviderEmailConfig = (Map) objConfig.get("providerEmailAddress");
-			String task = objProviderEmailConfig.get(Workflow.PROCESS_KEY).toString();
-			if (ProcessKeys.RETRIEVE_PROVIDER_EMAIL_PROCESS_KEY.equalsIgnoreCase(task)) {
-				var variablesWithValue = new Document().append(Workflow.DOCID, variables.get(Workflow.DOCID))
-						.append(Workflow.HOOK_ID, variables.get("id"))
-						.append(Workflow.HOOK_TRANSACTION_METADATA_ID,
-								variables.get(Workflow.HOOK_TRANSACTION_METADATA_ID))
-						.append(Workflow.PROVIDER_PREFERENCE_SPACE_ID_V2,
-								objProviderEmailConfig.get(Workflow.PROVIDER_PREFERENCE_SPACE_ID_V2))
-						.append(Workflow.SKIP_EFT_IND, objProviderEmailConfig.get(Workflow.SKIP_EFT_IND))
-						.append(Workflow.PROCESS_KEY, task)
-						.append(Workflow.USE_FDS_CLOUD, objProviderEmailConfig.get(Workflow.USE_FDS_CLOUD))
-						.append(Workflow.FDS_CLOUD_AUTH_URL, objProviderEmailConfig.get(Workflow.FDS_CLOUD_AUTH_URL))
-						.append(Workflow.CLOUD_CLIENT_ID, objProviderEmailConfig.get(Workflow.CLOUD_CLIENT_ID))
-						.append(Workflow.CLOUD_CLIENT_SECRET, objProviderEmailConfig.get(Workflow.CLOUD_CLIENT_SECRET))
-						.append(Workflow.FDS_CLOUD_GET_DOCUMENT_URL,
-								objProviderEmailConfig.get(Workflow.FDS_CLOUD_GET_DOCUMENT_URL))
-						.append(Workflow.CLOUD_GRANT_TYPE, objProviderEmailConfig.get(Workflow.CLOUD_GRANT_TYPE));
-				runProcess(task, variablesWithValue);
-							}
-		} catch (Exception ex) {
-			LOGGER.error("Error to process retrieve provider emailAddress: {}", ex.getMessage());
-		}
-	}
-
-	    @SuppressWarnings("rawtypes")
-	    public static void responseFileProcess(Map<String, Object> variables) throws IOException {
-	        Map hook = (Map) variables.get("hook");
-	        Map action = (Map) hook.get("action");
-	        Map objConfig = (Map) action.get("config");
-
-	        var variablesWithValue = new Document()
-	                .append(Workflow.HOOK_ID, variables.get("id"))
-	                .append(Workflow.APP_IDENTIFIER, variables.get(Workflow.APP_IDENTIFIER))
-	                .append(Workflow.CLIENT_ID, variables.get(Workflow.CLIENTID))
-	                .append(Workflow.SEARCH_CRITERIA, objConfig.get(Workflow.SEARCH_CRITERIA))
-	                .append(Workflow.SEARCH_WINDOW, objConfig.get(Workflow.SEARCH_WINDOW))
-	                .append(Workflow.TEMPLATE_ID, objConfig.get(Workflow.TEMPLATE_ID))
-	                .append(Workflow.TEMPLATE_NAME, objConfig.get(Workflow.TEMPLATE_NAME))
-	                .append(Workflow.SFTP_HOSTNAME, objConfig.get(Workflow.SFTP_HOSTNAME))
-	                .append(Workflow.SFTP_USERNAME, objConfig.get(Workflow.SFTP_USERNAME))
-	                .append(Workflow.SFTP_PW, objConfig.get(Workflow.SFTP_PW))
-	                .append(Workflow.SFTP_DIRECTORY, objConfig.get(Workflow.SFTP_DIRECTORY))
-	                .append(Workflow.SFTP_ARCHIVE_DIRECTORY, objConfig.get(Workflow.SFTP_ARCHIVE_DIRECTORY))
-	                .append(Workflow.SFTP_PW_ARC, objConfig.get(Workflow.SFTP_PW_ARC))
-	                .append(Workflow.SFTP_USERNAME_ARC, objConfig.get(Workflow.SFTP_USERNAME_ARC))
-	                .append(Workflow.SFTP_FILENAME, objConfig.get(Workflow.SFTP_FILENAME))
-	                .append(Workflow.ENVIRONMENT, objConfig.get(Workflow.ENVIRONMENT))
-	                .append(Workflow.DOCUMENT_FORMAT_FIELD, objConfig.get(Workflow.DOCUMENT_FORMAT_FIELD))
-	                .append(Workflow.DOC_UPDATE_FLAG_PATH, objConfig.get(Workflow.DOC_UPDATE_FLAG_PATH))
-	                .append(Workflow.DOC_UPDATE_FLAG_VALUE, objConfig.get(Workflow.DOC_UPDATE_FLAG_VALUE))
-	                .append(Workflow.ADD_ORIGINAL_ZIP_FILENAME, objConfig.get(Workflow.ADD_ORIGINAL_ZIP_FILENAME))
-	                .append(Workflow.FDS_DOCUMENTS_URL, objConfig.get(Workflow.FDS_DOCUMENTS_URL))
-	                .append(Workflow.FILE_FORMAT, objConfig.get(Workflow.FILE_FORMAT))
-	                .append(Workflow.PROCESS_KEY, ProcessKeys.RESPONSEFILE_PROCESS_KEY)
-	                .append(Workflow.MAX_DOCUMENTS_OCCURS, objConfig.get(Workflow.MAX_DOCUMENTS_OCCURS));
-
-	        runProcess(ProcessKeys.RESPONSEFILE_PROCESS_KEY, variablesWithValue);
-
-	    }
-	    
-	    @SuppressWarnings("rawtypes")
-	    public static void responseMessageProcess(Map<String, Object> variables) throws IOException {
-	        Map hook = (Map) variables.get("hook");
-	        Map action = (Map) hook.get("action");
-	        Map objConfig = (Map) action.get("config");
-
-	        var variablesWithValue = new Document()
-	                .append(Workflow.HOOK_ID, variables.get("id"))
-	                .append(Workflow.APP_IDENTIFIER, variables.get(Workflow.APP_IDENTIFIER))
-	                .append(Workflow.SEARCH_CRITERIA, objConfig.get(Workflow.SEARCH_CRITERIA))
-	                .append(Workflow.SEARCH_WINDOW, objConfig.get(Workflow.SEARCH_WINDOW))
-	                .append(Workflow.TEMPLATE_NAME, objConfig.get(Workflow.TEMPLATE_NAME))
-	                .append(Workflow.MAX_DOCUMENTS_OCCURS, objConfig.get(Workflow.MAX_DOCUMENTS_OCCURS))
-	                .append(Workflow.DOCUMENT_FORMAT_FIELD, objConfig.get(Workflow.DOCUMENT_FORMAT_FIELD))
-	                .append(Workflow.DOC_UPDATE_FLAG_PATH, objConfig.get(Workflow.DOC_UPDATE_FLAG_PATH))
-	                .append(Workflow.DOC_UPDATE_FLAG_VALUE, objConfig.get(Workflow.DOC_UPDATE_FLAG_VALUE))
-	                .append(Workflow.PROCESS_KEY, ProcessKeys.RESPONSE_MESSAGE_PROCESS_KEY);
-
-	        runProcess(ProcessKeys.RESPONSE_MESSAGE_PROCESS_KEY, variablesWithValue);
-
-	    }
-	    
-	    @SuppressWarnings("rawtypes")
-	    public static void responseFileProcessUSPClaims(Map<String, Object> variables) throws IOException {
-	        Map hook = (Map) variables.get("hook");
-	        Map action = (Map) hook.get("action");
-	        Map objConfig = (Map) action.get("config");
-
-	        var variablesWithValue = new Document()
-	                .append(Workflow.HOOK_ID, variables.get("id"))
-	                .append(Workflow.APP_IDENTIFIER, variables.get(Workflow.APP_IDENTIFIER))
-	                .append(Workflow.CLIENT_ID, variables.get(Workflow.CLIENTID))
-	                .append(Workflow.SEARCH_CRITERIA, objConfig.get(Workflow.SEARCH_CRITERIA))
-	                .append(Workflow.SEARCH_WINDOW, objConfig.get(Workflow.SEARCH_WINDOW))
-	                .append(Workflow.TEMPLATE_ID, objConfig.get(Workflow.TEMPLATE_ID))
-	                .append(Workflow.TEMPLATE_NAME, objConfig.get(Workflow.TEMPLATE_NAME))
-	                .append(Workflow.SFTP_HOSTNAME, objConfig.get(Workflow.SFTP_HOSTNAME))
-	                .append(Workflow.SFTP_USERNAME, objConfig.get(Workflow.SFTP_USERNAME))
-	                .append(Workflow.SFTP_PW, objConfig.get(Workflow.SFTP_PW))
-	                .append(Workflow.SFTP_DIRECTORY, objConfig.get(Workflow.SFTP_DIRECTORY))
-	                .append(Workflow.SFTP_ARCHIVE_DIRECTORY, objConfig.get(Workflow.SFTP_ARCHIVE_DIRECTORY))
-	                .append(Workflow.SFTP_PW_ARC, objConfig.get(Workflow.SFTP_PW_ARC))
-	                .append(Workflow.SFTP_USERNAME_ARC, objConfig.get(Workflow.SFTP_USERNAME_ARC))
-	                .append(Workflow.SFTP_FILENAME, objConfig.get(Workflow.SFTP_FILENAME))
-	                .append(Workflow.ENVIRONMENT, objConfig.get(Workflow.ENVIRONMENT))
-	                .append(Workflow.DOCUMENT_FORMAT_FIELD, objConfig.get(Workflow.DOCUMENT_FORMAT_FIELD))
-	                .append(Workflow.DOC_UPDATE_FLAG_PATH, objConfig.get(Workflow.DOC_UPDATE_FLAG_PATH))
-	                .append(Workflow.DOC_UPDATE_FLAG_VALUE, objConfig.get(Workflow.DOC_UPDATE_FLAG_VALUE))
-	                .append(Workflow.ADD_ORIGINAL_ZIP_FILENAME, objConfig.get(Workflow.ADD_ORIGINAL_ZIP_FILENAME))
-	                .append(Workflow.FDS_DOCUMENTS_URL, objConfig.get(Workflow.FDS_DOCUMENTS_URL))
-	                .append(Workflow.FILE_FORMAT, objConfig.get(Workflow.FILE_FORMAT))
-	                .append(Workflow.PROCESS_KEY, ProcessKeys.RESPONSEFILE_PROCESS_KEY_USP_CLAIMS)
-	                .append(Workflow.MAX_DOCUMENTS_OCCURS, objConfig.get(Workflow.MAX_DOCUMENTS_OCCURS))
-	                .append(Workflow.USPCLAIMS_REST_URL, objConfig.get(Workflow.USPCLAIMS_REST_URL))
-	                .append(Workflow.NOTIFY_API_OAUTH_URL, objConfig.get(Workflow.NOTIFY_API_OAUTH_URL))
-	                .append(Workflow.NOTIFY_API_CLIENT_ID, objConfig.get(Workflow.NOTIFY_API_CLIENT_ID))
-	                .append(Workflow.NOTIFY_API_CLIENT_SECRET, objConfig.get(Workflow.NOTIFY_API_CLIENT_SECRET))
-	                .append(Workflow.NUM_RETRIES, objConfig.get(Workflow.NUM_RETRIES))
-	                .append(Workflow.TIME_TO_WAIT, objConfig.get(Workflow.TIME_TO_WAIT));
-
-	        runProcess(ProcessKeys.RESPONSEFILE_PROCESS_KEY_USP_CLAIMS, variablesWithValue);
-
-	    }
-	    @SuppressWarnings("rawtypes")
-	    public static void retrieveAndCreateMetadataFilesProcess(Map<String, Object> variables) throws IOException {
-	        Map hook = (Map) variables.get("hook");
-	        Map action = (Map) hook.get("action");
-	        Map objConfig = (Map) action.get("config");
-
-	        var variablesWithValue = new Document()
-	                .append(Workflow.HOOK_ID, variables.get("id"))
-	                .append(Workflow.APP_IDENTIFIER, variables.get(Workflow.APP_IDENTIFIER))
-	                .append(Workflow.CLIENT_ID, variables.get(Workflow.CLIENTID))
-	                .append(Workflow.SEARCH_CRITERIA, objConfig.get(Workflow.SEARCH_CRITERIA))
-	                .append(Workflow.SEARCH_WINDOW, objConfig.get(Workflow.SEARCH_WINDOW))
-	                .append(Workflow.PROV_SEARCH_URL, objConfig.get(Workflow.PROV_SEARCH_URL))
-	                .append(Workflow.PES_GRANT_TYPE, objConfig.get(Workflow.PES_GRANT_TYPE))
-	                .append(Workflow.PROCESS_KEY, ProcessKeys.RETRIEVE_AND_SEND_METADATA_PROCESS)
-	                .append(Workflow.PROV_APP_NAME, objConfig.get(Workflow.PROV_APP_NAME))
-	                .append(Workflow.PROV_ATTRIBUTE_SET, objConfig.get(Workflow.PROV_ATTRIBUTE_SET))
-	                .append(Workflow.PES_APP_ID, objConfig.get(Workflow.PES_APP_ID))
-	                .append(Workflow.PES_APP_SECRET, objConfig.get(Workflow.PES_APP_SECRET))
-	                .append(Workflow.PES_OAUTH_URL, objConfig.get(Workflow.PES_OAUTH_URL))
-	                .append(Workflow.ADR_TYPE_CD, objConfig.get(Workflow.ADR_TYPE_CD))
-	                .append(Workflow.ST_CD, objConfig.get(Workflow.ST_CD))
-	                .append(Workflow.MAX_DOCUMENTS_OCCURS, objConfig.get(Workflow.MAX_DOCUMENTS_OCCURS))
-	                .append(Workflow.PROVIDERPROVINCE, objConfig.get(Workflow.PROVIDERPROVINCE))
-	                .append(Workflow.PROVIDERCOUNTRY, objConfig.get(Workflow.PROVIDERCOUNTRY))
-	                .append(Workflow.TEMPLATE_NAME, objConfig.get(Workflow.TEMPLATE_NAME))
-	                .append(Workflow.SFTP_HOSTNAME, objConfig.get(Workflow.SFTP_HOSTNAME))
-	                .append(Workflow.SFTP_USERNAME, objConfig.get(Workflow.SFTP_USERNAME))
-	                .append(Workflow.SFTP_PW, objConfig.get(Workflow.SFTP_PW))
-	                .append(Workflow.SFTP_DIRECTORY, objConfig.get(Workflow.SFTP_DIRECTORY))
-	                .append(Workflow.SFTP_ARCHIVE_DIRECTORY, objConfig.get(Workflow.SFTP_ARCHIVE_DIRECTORY))
-	                .append(Workflow.SFTP_USERNAME_ARC, objConfig.get(Workflow.SFTP_USERNAME_ARC))
-	                .append(Workflow.SFTP_PW_ARC, objConfig.get(Workflow.SFTP_PW_ARC));
-	        
-
-	        runProcess(ProcessKeys.RETRIEVE_AND_SEND_METADATA_PROCESS, variablesWithValue);
-
-	    }
-
-	    public static void processCleanUp(String processKey, String processorTransactionId, String appIdentifier) throws IOException {
-	        //  String task = "processCleanupFilesCreateACK";
-	        var variables = new Document()
-	                .append(Workflow.PROCESSOR_TRANSACTION_ID, processorTransactionId)
-	                .append(Workflow.APP_IDENTIFIER, appIdentifier)
-	                .append(Workflow.PROCESS_KEY, processKey);
-	        runProcess(processKey, variables);
-
-	    }
-
-
-	    private static void emailProcessorTransactionMetadataProcess() throws IOException {
-	        String task = "emailProcessorTransactionMetadataProcess";
-	        String searchWindow = "{\"start_date_offset\" : {\"time_window\" : \"30\", \"format\" : \"Days\" },\"end_date_offset\":{\"time_window\":\"0\",\"format\":\"Minutes\" } }";
-	        var variables = new Document()
-	                .append(Workflow.SEARCH_CRITERIA, "{\"configSpaceId\": 10068 }")
-	                .append(Workflow.SEARCH_WINDOW, searchWindow)
-	                .append(Workflow.EMAIL_RECEIVER, "ankur_kumar90@optum.com")
-	                .append(Workflow.EMAIL_SENDER, "test@1test.com")
-	                .append(Workflow.PROCESSOR_TRANSACTION_METADATA_FLAG_PATH, "addedToCosmosPraResponseFile")
-	                .append(Workflow.PROCESSOR_TRANSACTION_METADATA_FLAG_VALUE, "true")
-	                .append(Workflow.EMAIL_SUBJECT, "Companion File Alert")
-	                .append(Workflow.REST_CONFIG_SPACE_ID, 10068)
-	                .append(Workflow.TEMPLATE_ID, "6086b96433d354ccfdf89396")
-	                .append(Workflow.ENVIRONMENT, "test")
-	                .append(Workflow.PROCESS_KEY, ProcessKeys.EMAIL_PROCESSOR_TRANSACTION_METADATA_PROCESS_KEY);
-
-	        runProcess(task, variables);
-
-	    }
-	    
-	    public static ProcessInstance fileUnziprunProcess(String processKey, Map<String, Object> variables) {
-	        ProcessEngine processEngine = ProcessEngines.getDefaultProcessEngine();
-	        RuntimeService runtimeService = processEngine.getRuntimeService();
-	        ProcessInstance pi = runtimeService.startProcessInstanceByKey(processKey, variables);
-	        return pi;
-	    }
-	    
-	    public static void postDocumentDocLibForELGSProcess(Map<String, Object> variables){
-
-	        Map hook = (Map) variables.get("hook");
-	        Map action = (Map) hook.get("action");
-	        Map objConfig = (Map) action.get("config");
-
-	        String task = "postDocumentDocvaultForElgsProcess";
-	      
-	        if (ProcessKeys.POST_DOCUMENT_DOCLIB_FOR_ELGS_PROCESS_KEY.equalsIgnoreCase(task)) {
-
-	            var variablesWithValue = new Document()
-	                    .append(Workflow.HOOK_ID, variables.get("id"))
-	                    .append(Workflow.DOCLIB_OAUTH_URL, objConfig.get(Workflow.DOCLIB_OAUTH_URL))
-	                    .append(Workflow.DOCLIB_CLIENT_ID, objConfig.get(Workflow.DOCLIB_CLIENT_ID))
-	                    .append(Workflow.DOCLIB_CLIENT_SECRET, objConfig.get(Workflow.DOCLIB_CLIENT_SECRET))
-	                    .append(Workflow.SEARCH_CRITERIA, objConfig.get(Workflow.SEARCH_CRITERIA))
-	                    .append(Workflow.SEARCH_WINDOW, objConfig.get(Workflow.SEARCH_WINDOW))
-	                    .append(Workflow.CLIENT_ID, variables.get(Workflow.CLIENTID))
-	                    .append(Workflow.PROCESS_KEY, objConfig.get(Workflow.PROCESS_KEY))
-	                    .append(Workflow.REST_ACCESS_TOKEN, objConfig.get(Workflow.REST_ACCESS_TOKEN))
-	                    .append(Workflow.DOCLIB_REST_URL, objConfig.get(Workflow.DOCLIB_REST_URL))
-	                    .append(Workflow.SLA_TIME, objConfig.get(Workflow.SLA_TIME)) // SLA time in hours
-	                    .append(Workflow.TEMPLATE_ID, objConfig.get(Workflow.TEMPLATE_ID))
-	                    .append(Workflow.TEMPLATE_NAME, objConfig.get(Workflow.TEMPLATE_NAME))
-	                    .append(Workflow.MAX_DOCUMENTS_OCCURS, objConfig.get(Workflow.MAX_DOCUMENTS_OCCURS))
-	            		.append(Workflow.BATCH_SIZE,objConfig.get(Workflow.BATCH_SIZE));
-	          
-	            runProcess(task, variablesWithValue);
-	        }
-	    }
-	    
-	  @SuppressWarnings("rawtypes")
-	    public static void providerEmailNotificationProcess(Map<String, Object> variables) {
-
-	        Map hook = (Map) variables.get("hook");
-	        Map action = (Map) hook.get("action");
-	        Map objConfig = (Map) action.get("config");
-
-	      //  Map objproviderEmailNotificationProcessConfig = (Map) objConfig.get("providerEmailNotificationProcess");
-	      //  String task = objproviderEmailNotificationProcessConfig.get(Workflow.PROCESS_KEY).toString();
-	        String task ="providerEmailNotificationProcess";
-
-	        if (ProcessKeys.PROVIDER_EMAIL_NOTIFICATION_PROCESS_KEY.equalsIgnoreCase(task)) {
-
-	            var variablesWithValue = new Document()
-	            		.append(Workflow.HOOK_ID, variables.get("id"))
-	            		.append(Workflow.CLIENT_ID, variables.get("clientId"))
-	                    .append(Workflow.PEN_API_URL, objConfig.get(Workflow.PEN_API_URL))
-	                    .append(Workflow.APP_ID, objConfig.get(Workflow.APP_ID))
-	                    .append(Workflow.APP_SECRET, objConfig.get(Workflow.APP_SECRET))
-	                    .append(Workflow.TEMPLATE_ID, objConfig.get(Workflow.TEMPLATE_ID))
-	                    .append(Workflow.TEMPLATE_NAME, objConfig.get(Workflow.TEMPLATE_NAME))
-	                    .append(Workflow.SEARCH_CRITERIA, objConfig.get(Workflow.SEARCH_CRITERIA))
-	                    .append(Workflow.SEARCH_WINDOW, objConfig.get(Workflow.SEARCH_WINDOW))
-	                    .append(Workflow.DOCUMENT_UPDATE_FLAG_VALUE, objConfig.get(Workflow.DOCUMENT_UPDATE_FLAG_VALUE))
-	                    .append(Workflow.DOCUMENT_UPDATE_FLAG_PATH, objConfig.get(Workflow.DOCUMENT_UPDATE_FLAG_PATH))
-	                    .append(Workflow.MAX_RETRIES, objConfig.get(Workflow.MAX_RETRIES))
-	                    .append(Workflow.RETRY_SLEEP_TIME, objConfig.get(Workflow.RETRY_SLEEP_TIME))
-	                    .append(Workflow.MAX_DOCUMENTS_OCCURS, objConfig.get(Workflow.MAX_DOCUMENTS_OCCURS))
-	                    .append(Workflow.FDS_DOCUMENTS_URL, objConfig.get(Workflow.FDS_DOCUMENTS_URL))
-	                    .append(Workflow.PEN_API_MULTI_CLOUD_URL, objConfig.get(Workflow.PEN_API_MULTI_CLOUD_URL))
-	                    .append(Workflow.PEN_OAUTH_URL, objConfig.get(Workflow.PEN_OAUTH_URL))
-	                    .append(Workflow.PEN_APP_ID, objConfig.get(Workflow.PEN_APP_ID))
-	                    .append(Workflow.PEN_APP_SECRET, objConfig.get(Workflow.PEN_APP_SECRET))
-	                    .append(Workflow.PEN_GRANT_TYPE, objConfig.get(Workflow.PEN_GRANT_TYPE))
-                        .append(Workflow.PEN_SCOPE, objConfig.get(Workflow.PEN_SCOPE))
-	                    .append(Workflow.PROCESS_KEY, ProcessKeys.PROVIDER_EMAIL_NOTIFICATION_PROCESS_KEY);
-
-	            runProcess(task, variablesWithValue);
-	        }
-	    }
-	  public static void createStatusFileAndAckProcess(Map<String, Object> variables) throws IOException {
-	        Map hook = (Map) variables.get("hook");
-	        Map action = (Map) hook.get("action");
-	        Map objConfig = (Map) action.get("config");
-
-	        var variablesWithValue = new Document()
-	                .append(Workflow.HOOK_ID, variables.get("id"))
-	                .append(Workflow.APP_IDENTIFIER, variables.get(Workflow.APP_IDENTIFIER))
-	                .append(Workflow.CLIENT_ID, variables.get(Workflow.CLIENTID))
-	                .append(Workflow.SEARCH_CRITERIA, objConfig.get(Workflow.SEARCH_CRITERIA))
-	                .append(Workflow.SEARCH_WINDOW, objConfig.get(Workflow.SEARCH_WINDOW))
-	                .append(Workflow.TEMPLATE_ID, objConfig.get(Workflow.TEMPLATE_ID))
-	                .append(Workflow.TEMPLATE_NAME, objConfig.get(Workflow.TEMPLATE_NAME))
-	                .append(Workflow.SFTP_HOSTNAME, objConfig.get(Workflow.SFTP_HOSTNAME))
-	                .append(Workflow.SFTP_USERNAME, objConfig.get(Workflow.SFTP_USERNAME))
-	                .append(Workflow.SFTP_PW, objConfig.get(Workflow.SFTP_PW))
-	                .append(Workflow.SFTP_DIRECTORY, objConfig.get(Workflow.SFTP_DIRECTORY))
-	                .append(Workflow.SFTP_ARCHIVE_DIRECTORY, objConfig.get(Workflow.SFTP_ARCHIVE_DIRECTORY))
-	                .append(Workflow.SFTP_PW_ARC, objConfig.get(Workflow.SFTP_PW_ARC))
-	                .append(Workflow.SFTP_USERNAME_ARC, objConfig.get(Workflow.SFTP_USERNAME_ARC))
-	                .append(Workflow.JSON_FILE, objConfig.get(Workflow.JSON_FILE))
-	                .append(Workflow.OUTPUT_FILE_DIR, objConfig.get(Workflow.OUTPUT_FILE_DIR))
-	                .append(Workflow.OUTPUT_FILE_EXTENSION, objConfig.get(Workflow.OUTPUT_FILE_EXTENSION))
-	                .append(Workflow.ZIP_OUTPUT_FILE, objConfig.get(Workflow.ZIP_OUTPUT_FILE))
-	                .append(Workflow.SFTP_FILE_LIST, objConfig.get(Workflow.SFTP_FILE_LIST))
-	                .append(Workflow.DOC_UPDATE_FLAG_PATH, objConfig.get(Workflow.DOC_UPDATE_FLAG_PATH))
-	                .append(Workflow.DOC_UPDATE_FLAG_VALUE, objConfig.get(Workflow.DOC_UPDATE_FLAG_VALUE))
-	                .append(Workflow.FDS_DOCUMENTS_URL, objConfig.get(Workflow.FDS_DOCUMENTS_URL))
-	                .append(Workflow.PROCESS_KEY, ProcessKeys.STATUSFILE_PROCESS_KEY);
-
-	        runProcess(ProcessKeys.STATUSFILE_PROCESS_KEY, variablesWithValue);
-	    }
-	  private static Map<String, Object> getProcess(String processObj) {
-	        return org.bson.Document.parse(processObj);
-	    }
-
-	    private static ProcessorMetaData getProcessorMetadata(String processObj) {
-	        ProcessorMetaData processor = new ProcessorMetaData();
-	        processor.setProcess(getProcess(processObj));
-	        processor.setStatus(MetaDataStatus.ACTIVE);
-	        return processor;
-	    }
-
-
-	    @SuppressWarnings("rawtypes")
-	    public static void bounceEmailWorkflow(Map<String, Object> variables) {
-	        Map bounceEmailHook = (Map) variables.get("hook");
-	        Map hook = (Map) bounceEmailHook.get("hook");
-	        Map action = (Map) hook.get("action");
-	        Map config = (Map) action.get("config");
-
-	        DocumentMetaData bounceEmailDoc = mapper.convertValue(variables.get("document"), DocumentMetaData.class);
-
-	        var variablesWithValue = new Document()
-					.append(Workflow.HOOK_ID, bounceEmailHook.get("id"))
-					.append(Workflow.CLIENT_ID, bounceEmailHook.get(Workflow.CLIENTID))
-					.append(Workflow.DOCUMENT, bounceEmailDoc)
-	                .append(APP_ID, config.get(APP_ID))
-	                .append(APP_SECRET, config.get(APP_SECRET))
-	                .append(Workflow.FDS_CLOUD_GET_ATTACHMENT_URL, config.get(Workflow.FDS_CLOUD_GET_ATTACHMENT_URL))
-	                .append(Workflow.FDS_CLOUD_AUTH_URL, config.get(Workflow.FDS_CLOUD_AUTH_URL))
-	                .append(Workflow.CLOUD_CLIENT_ID, config.get(Workflow.CLOUD_CLIENT_ID))
-	                .append(Workflow.CLOUD_CLIENT_SECRET, config.get(Workflow.CLOUD_CLIENT_SECRET))
-	                .append(Workflow.CLOUD_GRANT_TYPE, config.get(Workflow.CLOUD_GRANT_TYPE))
-	                .append(Workflow.TEMPLATE_NAME, config.get(Workflow.TEMPLATE_NAME))
-					.append(Workflow.SEARCH_WINDOW, config.get(Workflow.SEARCH_WINDOW))
-	                .append(SFTP_USERNAME, config.get(SFTP_USERNAME))
-	                .append(SFTP_PW, config.get(SFTP_PW))
-	                .append(SFTP_USERNAME_ARC, config.get(SFTP_USERNAME_ARC))
-	                .append(SFTP_PW_ARC, config.get(SFTP_PW_ARC))
-	                .append(SFTP_DIRECTORY, config.get(SFTP_DIRECTORY))
-	                .append(SFTP_HOSTNAME, config.get(SFTP_HOSTNAME))
-	                .append(SFTP_ARCHIVE_DIRECTORY, config.get(SFTP_ARCHIVE_DIRECTORY))
-	                .append(SPACE_ID, config.get(SPACE_ID))
-	                .append(MAX_DOCUMENTS_OCCURS, config.get(MAX_DOCUMENTS_OCCURS))
-	                .append(START_DATE_IN_DAYS, config.get(START_DATE_IN_DAYS))
-	                .append(ADDRESS_BLOCK_X, config.get(ADDRESS_BLOCK_X))
-	                .append(ADDRESS_BLOCK_Y, config.get(ADDRESS_BLOCK_Y))
-	                .append(IDENTIFIER_FONT_SIZE, config.get(IDENTIFIER_FONT_SIZE))
-	                .append(ORIGINAL_PRINT_TRAIL, config.get(ORIGINAL_PRINT_TRAIL))
-	                .append(RECEIVER_IDENTIFIER, config.get(RECEIVER_IDENTIFIER))
-	                .append(SKIP_MANIPULATE_PDF_FILE, config.get(SKIP_MANIPULATE_PDF_FILE))
-	                .append(CREATE_ORIGINAL_COMPANION_FILE, config.get(CREATE_ORIGINAL_COMPANION_FILE))
-	                .append(BOUNCE_EMAIL_CHECK_EFT_IND, config.get(BOUNCE_EMAIL_CHECK_EFT_IND))
-	                .append(DOCUMENT_FORMAT_FIELD, config.get(DOCUMENT_FORMAT_FIELD))
-	                .append(WRITE_ENCRYPTED_PDF, config.get(WRITE_ENCRYPTED_PDF))
-	                .append(Workflow.SKIP_SEND_TO_SHUTTERFLY, config.get(Workflow.SKIP_SEND_TO_SHUTTERFLY))
-	                .append(Workflow.PROCESS_KEY, ProcessKeys.BOUNCE_PROCESS_KEY);
-
-	        runProcess(ProcessKeys.BOUNCE_PROCESS_KEY, variablesWithValue);
-	    }
-	    
-	    @SuppressWarnings("rawtypes")
-	    public static void storageErrorShutterflyWorkflow(Map<String, Object> variables) {
-	    	Map hook = (Map) variables.get("hook");
-	        Map action = (Map) hook.get("action");
-	        Map objConfig = (Map) action.get("config");
-
-	        var variablesWithValue = new Document()
-	        		.append(Workflow.HOOK_ID, variables.get("id"))
-	                .append(Workflow.APP_ID, objConfig.get(Workflow.APP_ID))
-	                .append(Workflow.APP_SECRET, objConfig.get(Workflow.APP_SECRET))
-	                .append(Workflow.CLIENT_ID, variables.get(Workflow.CLIENTID))                
-	                .append(Workflow.TEMPLATE_NAME, objConfig.get(Workflow.TEMPLATE_NAME))
-	                .append(Workflow.SEARCH_CRITERIA, objConfig.get(Workflow.SEARCH_CRITERIA))
-	                .append(Workflow.SEARCH_WINDOW, objConfig.get(Workflow.SEARCH_WINDOW))
-	                .append(Workflow.SPACE_ID, objConfig.get(Workflow.SPACE_ID))
-	                .append(Workflow.SKIP_MANIPULATE_PDF_FILE, objConfig.get(Workflow.SKIP_MANIPULATE_PDF_FILE))
-	                .append(Workflow.ADDRESS_BLOCK_X, objConfig.get(Workflow.ADDRESS_BLOCK_X))
-	                .append(Workflow.ADDRESS_BLOCK_Y, objConfig.get(Workflow.ADDRESS_BLOCK_Y))
-	                .append(Workflow.IDENTIFIER_FONT_SIZE, objConfig.get(Workflow.IDENTIFIER_FONT_SIZE))
-	                .append(Workflow.RECEIVER_IDENTIFIER, objConfig.get(Workflow.RECEIVER_IDENTIFIER))
-	                .append(SFTP_USERNAME, objConfig.get(Workflow.SFTP_USERNAME))
-	                .append(SFTP_PW, objConfig.get(SFTP_PW))
-	                .append(SFTP_USERNAME_ARC, objConfig.get(Workflow.SFTP_USERNAME_ARC))
-	                .append(SFTP_PW_ARC, objConfig.get(Workflow.SFTP_PW_ARC))
-	                .append(SFTP_DIRECTORY, objConfig.get(Workflow.SFTP_DIRECTORY))
-	                .append(SFTP_HOSTNAME, objConfig.get(SFTP_HOSTNAME))
-	                .append(SFTP_ARCHIVE_DIRECTORY, objConfig.get(SFTP_ARCHIVE_DIRECTORY))
-	                .append(Workflow.DOCUMENT_UPDATE_FLAG_PATH, objConfig.get(Workflow.DOCUMENT_UPDATE_FLAG_PATH))
-	                .append(Workflow.DOCUMENT_UPDATE_FLAG_VALUE, objConfig.get(Workflow.DOCUMENT_UPDATE_FLAG_VALUE))
-	                .append(Workflow.FDS_DOCUMENT_URL, objConfig.get(Workflow.FDS_DOCUMENT_URL))
-	                .append(Workflow.MAX_DOCUMENTS_OCCURS, objConfig.get(Workflow.MAX_DOCUMENTS_OCCURS))
-	                .append(Workflow.CREATE_ORIGINAL_COMPANION_FILE, objConfig.get(Workflow.CREATE_ORIGINAL_COMPANION_FILE))
-	                .append(Workflow.PROCESS_KEY, ProcessKeys.STORAGE_ERROR_SHUTTERFLY_PROCESS_KEY);
-
-	        runProcess(ProcessKeys.STORAGE_ERROR_SHUTTERFLY_PROCESS_KEY, variablesWithValue);
-	    }
-
-	    @SuppressWarnings("rawtypes")
-	    public static void shutterflyWorkflow(Map<String, Object> variables) {
-	        Map hook = (Map) variables.get("hook");
-	        Map action = (Map) hook.get("action");
-	        Map objConfig = (Map) action.get("config");
-
-	        var variablesWithValue = new Document()
-	        		.append(Workflow.HOOK_ID, variables.get("id"))
-	                .append(Workflow.APP_ID, objConfig.get(Workflow.APP_ID))
-	                .append(Workflow.APP_SECRET, objConfig.get(Workflow.APP_SECRET))
-	                .append(Workflow.CLIENT_ID, variables.get(Workflow.CLIENTID))
-	                .append(Workflow.FDS_CLOUD_AUTH_URL, objConfig.get(Workflow.FDS_CLOUD_AUTH_URL))
-	                .append(Workflow.CLOUD_CLIENT_ID, objConfig.get(Workflow.CLOUD_CLIENT_ID))
-	                .append(Workflow.CLOUD_CLIENT_SECRET, objConfig.get(Workflow.CLOUD_CLIENT_SECRET))
-	                .append(Workflow.CLOUD_GRANT_TYPE, objConfig.get(Workflow.CLOUD_GRANT_TYPE))
-	                .append(Workflow.FDS_CLOUD_GET_ATTACHMENT_URL, objConfig.get(Workflow.FDS_CLOUD_GET_ATTACHMENT_URL))	                
-	                .append(Workflow.TEMPLATE_NAME, objConfig.get(Workflow.TEMPLATE_NAME))
-	                .append(Workflow.SEARCH_CRITERIA, objConfig.get(Workflow.SEARCH_CRITERIA))
-	                .append(Workflow.SEARCH_WINDOW, objConfig.get(Workflow.SEARCH_WINDOW))
-	                .append(Workflow.SPACE_ID, objConfig.get(Workflow.SPACE_ID))
-	                .append(Workflow.SKIP_MANIPULATE_PDF_FILE, objConfig.get(Workflow.SKIP_MANIPULATE_PDF_FILE))
-	                .append(Workflow.ADDRESS_BLOCK_X, objConfig.get(Workflow.ADDRESS_BLOCK_X))
-	                .append(Workflow.ADDRESS_BLOCK_Y, objConfig.get(Workflow.ADDRESS_BLOCK_Y))
-	                .append(Workflow.IDENTIFIER_FONT_SIZE, objConfig.get(Workflow.IDENTIFIER_FONT_SIZE))
-	                .append(Workflow.RECEIVER_IDENTIFIER, objConfig.get(Workflow.RECEIVER_IDENTIFIER))
-	                .append(SFTP_USERNAME, objConfig.get(Workflow.SFTP_USERNAME))
-	                .append(SFTP_PW, objConfig.get(SFTP_PW))
-	                .append(SFTP_USERNAME_ARC, objConfig.get(Workflow.SFTP_USERNAME_ARC))
-	                .append(SFTP_PW_ARC, objConfig.get(Workflow.SFTP_PW_ARC))
-	                .append(SFTP_DIRECTORY, objConfig.get(Workflow.SFTP_DIRECTORY))
-	                .append(SFTP_HOSTNAME, objConfig.get(SFTP_HOSTNAME))
-	                .append(SFTP_ARCHIVE_DIRECTORY, objConfig.get(SFTP_ARCHIVE_DIRECTORY))
-	                .append(Workflow.DOCUMENT_UPDATE_FLAG_PATH, objConfig.get(Workflow.DOCUMENT_UPDATE_FLAG_PATH))
-	                .append(Workflow.DOCUMENT_UPDATE_FLAG_VALUE, objConfig.get(Workflow.DOCUMENT_UPDATE_FLAG_VALUE))
-	                .append(Workflow.FDS_DOCUMENT_URL, objConfig.get(Workflow.FDS_DOCUMENT_URL))
-	                .append(Workflow.MAX_DOCUMENTS_OCCURS, objConfig.get(Workflow.MAX_DOCUMENTS_OCCURS))
-	                .append(Workflow.CREATE_ORIGINAL_COMPANION_FILE, objConfig.get(Workflow.CREATE_ORIGINAL_COMPANION_FILE))
-	                .append(Workflow.PROCESS_KEY, ProcessKeys.SHUTTERFLY_PROCESS_KEY);
-
-	        runProcess(ProcessKeys.SHUTTERFLY_PROCESS_KEY, variablesWithValue);
-	    }
-
-	    @SuppressWarnings("rawtypes")
-		public static void matchAndMergeWorkflow(Map<String, Object> variables) {
-	        Map hook = (Map) variables.get("hook");
-	        Map action = (Map) hook.get("action");
-	        Map objConfig = (Map) action.get("config");
-	        var variablesWithValue = new Document()
-	                .append(Workflow.HOOK_ID, variables.get("id"))
-	                .append(Workflow.CLIENT_ID, variables.get(Workflow.CLIENTID))
-	                .append(Workflow.APP_IDENTIFIER, variables.get(Workflow.APP_IDENTIFIER))
-	                .append(Workflow.TEMPLATE_ID, objConfig.get(Workflow.TEMPLATE_ID))
-	                .append(Workflow.TEMPLATE_NAME, objConfig.get(Workflow.TEMPLATE_NAME))
-	                .append(Workflow.SEARCH_CRITERIA, objConfig.get(Workflow.SEARCH_CRITERIA))
-	                .append(Workflow.SEARCH_WINDOW, objConfig.get(Workflow.SEARCH_WINDOW))
-	                .append(Workflow.MATCH_CRITERIA, objConfig.get(Workflow.MATCH_CRITERIA))
-	                .append(Workflow.TEMPLATE_ID, objConfig.get(Workflow.TEMPLATE_ID))
-	                .append(Workflow.DOCUMENT_UPDATE_FLAG_PATH, objConfig.get(Workflow.DOCUMENT_UPDATE_FLAG_PATH))
-	                .append(Workflow.DOCUMENT_UPDATE_FLAG_VALUE, objConfig.get(Workflow.DOCUMENT_UPDATE_FLAG_VALUE))
-	                .append(Workflow.EFT_IND, objConfig.get(Workflow.EFT_IND))
-	                .append(Workflow.PROCESS_KEY, ProcessKeys.MATCH_AND_MERGE_PROCESS_KEY);
-	        runProcess(ProcessKeys.MATCH_AND_MERGE_PROCESS_KEY, variablesWithValue);
-	    }
-
-	    @SuppressWarnings("rawtypes")
-	    public static void emailProcessorTransactionMetadataWorkflow(Map<String, Object> variables) {
-	        Map hook = (Map) variables.get("hook");
-	        Map action = (Map) hook.get("action");
-	        Map objConfig = (Map) action.get("config");
-	        var variablesWithValue = new Document()
-	                .append(Workflow.HOOK_ID, variables.get("id"))
-	                .append(Workflow.SEARCH_CRITERIA, objConfig.get(Workflow.SEARCH_CRITERIA))
-	                .append(Workflow.SEARCH_WINDOW, objConfig.get(Workflow.SEARCH_WINDOW))
-	                .append(Workflow.TEMPLATE_ID, objConfig.get(Workflow.TEMPLATE_ID))
-	                .append(Workflow.TEMPLATE_NAME, objConfig.get(Workflow.TEMPLATE_NAME))
-	                .append(Workflow.EMAIL_SENDER, objConfig.get(Workflow.EMAIL_SENDER))
-	                .append(Workflow.EMAIL_RECEIVER, objConfig.get(Workflow.EMAIL_RECEIVER))
-	                .append(Workflow.EMAIL_SUBJECT, objConfig.get(Workflow.EMAIL_SUBJECT))
-	                .append(Workflow.ENVIRONMENT, objConfig.get(Workflow.ENVIRONMENT))
-	                .append(Workflow.PROCESSOR_TRANSACTION_METADATA_FLAG_PATH, objConfig.get(Workflow.PROCESSOR_TRANSACTION_METADATA_FLAG_PATH))
-	                .append(Workflow.PROCESSOR_TRANSACTION_METADATA_FLAG_VALUE, objConfig.get(Workflow.PROCESSOR_TRANSACTION_METADATA_FLAG_VALUE))
-	                .append(Workflow.PROCESS_KEY, ProcessKeys.EMAIL_PROCESSOR_TRANSACTION_METADATA_PROCESS_KEY);
-	        runProcess(ProcessKeys.EMAIL_PROCESSOR_TRANSACTION_METADATA_PROCESS_KEY, variablesWithValue);
-	    }
-
-	@SuppressWarnings("rawtypes")
-	public static void corpMPIN(Map<String, Object> variables) {
-		try {
-
-			Map hook = (Map) variables.get("hook");
-			Map action = (Map) hook.get("action");
-			Map objConfig = (Map) action.get("config");
-			Map objCorpMPINConfig = (Map) objConfig.get("corporateMPIN");
-			String task = objCorpMPINConfig.get(Workflow.PROCESS_KEY).toString();
-
-			if (ProcessKeys.RETRIEVE_CORPORATE_MPIN_PROCESS_KEY.equalsIgnoreCase(task)) {
-				Map<String, Object> variablesWithValue = new HashMap<String, Object>();
-				variablesWithValue.put(Workflow.APP_IDENTIFIER, variables.get(Workflow.APP_IDENTIFIER));
-				variablesWithValue.put("appName", objCorpMPINConfig.get("appName"));
-				variablesWithValue.put("attributeSet", objCorpMPINConfig.get("attributeSet"));
-				variablesWithValue.put("provSearchUrl", objCorpMPINConfig.get("provSearchUrl"));
-				variablesWithValue.put(Workflow.HOOK_ID, variables.get("id"));
-				variablesWithValue.put("count", objCorpMPINConfig.get("count"));
-				variablesWithValue.put(Workflow.SPACE_ID, variables.get(Workflow.SPACE_ID));
-				variablesWithValue.put(Workflow.DOCID, variables.get(Workflow.DOCID));
-				variablesWithValue.put(Workflow.PES_APP_ID, objCorpMPINConfig.get(Workflow.PES_APP_ID));
-				variablesWithValue.put(Workflow.PES_APP_SECRET, objCorpMPINConfig.get(Workflow.PES_APP_SECRET));
-				variablesWithValue.put(Workflow.PES_OAUTH_URL, objCorpMPINConfig.get(Workflow.PES_OAUTH_URL));
-				variablesWithValue.put(Workflow.PES_GRANT_TYPE, objCorpMPINConfig.get(Workflow.PES_GRANT_TYPE));
-				variablesWithValue.put("validateCorprateMPIN", objCorpMPINConfig.get("validateCorprateMPIN"));
-				variablesWithValue.put(Workflow.PROCESS_KEY, ProcessKeys.RETRIEVE_CORPORATE_MPIN_PROCESS_KEY);
-			    runProcess(ProcessKeys.RETRIEVE_CORPORATE_MPIN_PROCESS_KEY, variablesWithValue);
-
-			}
-		} catch (Exception ex) {
-			LOGGER.error("Error to process corporate mpin: {}", ex.getMessage());
-		}
-	}
-		
-		@SuppressWarnings("rawtypes")
-		public static void retrieveCorporateMPINv2Process(Map<String, Object> variables) {
-
-		    Map hook = (Map) variables.get("hook");
-		    Map action = (Map) hook.get("action");
-		    Map objConfig = (Map) action.get("config");
-		    String task = "retrieveCorporateMPINv2Process";
-		    if (ProcessKeys.RETRIEVE_CORPORATE_MPIN_PROCESS_KEY.equalsIgnoreCase(task)) {
-
-		        var variablesWithValue = new Document()
-		                .append(Workflow.HOOK_ID, variables.get("id"))
-		                .append(Workflow.APP_ID, objConfig.get(Workflow.APP_ID))
-		                .append(Workflow.APP_SECRET, objConfig.get(Workflow.APP_SECRET))
-		                .append(Workflow.SPACE_ID, variables.get(Workflow.SPACE_ID))
-		                .append(Workflow.OAUTH_URL, objConfig.get(Workflow.OAUTH_URL))
-		                .append(Workflow.GRANT_TYPE, objConfig.get(Workflow.GRANT_TYPE))
-		                .append(Workflow.OAUTH_TOKEN, objConfig.get(Workflow.OAUTH_TOKEN))
-		                .append(Workflow.PROV_APP_NAME, objConfig.get(Workflow.PROV_APP_NAME))
-		                .append(Workflow.PROV_ATTRIBUTE_SET, objConfig.get(Workflow.PROV_ATTRIBUTE_SET))
-		                .append(Workflow.PROV_COUNT, objConfig.get(Workflow.PROV_COUNT))
-		                .append(Workflow.PROV_SEARCH_URL, objConfig.get(Workflow.PROV_SEARCH_URL))
-		                .append(Workflow.PROV_PROCESS_KEY, objConfig.get(Workflow.PROV_PROCESS_KEY))
-		                .append(Workflow.DOCID, variables.get("docId"))
-		                .append(Workflow.PROCESS_KEY, ProcessKeys.RETRIEVE_CORPORATE_MPIN_PROCESS_KEY);
-		        runProcess(task, variablesWithValue);
-		    }
-		}
-		
-//		@SuppressWarnings("rawtypes")
-//		public static void retrieveCorporateMPINv2EhCacheLoadTestProcess(Map<String, Object> variables) {
-//		    Map hook = (Map) variables.get("hook");
-//		    Map action = (Map) hook.get("action");
-//		    Map objConfig = (Map) action.get("config");
-//		    String task = "retrieveCorporateMPINv2EhCacheLoadTestProcess";
-//		        var variablesWithValue = new Document()
-//		                .append("oauthTokenCache", variables.get("oauthTokenCache"))
-//		                .append("randomMax", variables.get("randomMax"))
-//		                .append("loopMax", variables.get("loopMax"))
-//		                .append("statistics", variables.get("statistics"))
-//		                .append("removeAll", variables.get("removeAll"))
-//		                .append("getMpinFromSvcs", variables.get("getMpinFromSvcs"))
-//		                .append("useMpinPesTps", variables.get("useMpinPesTps"))
-//		                .append(Workflow.PES_APP_ID, variables.get(Workflow.PES_APP_ID))
-//		                .append(Workflow.PES_APP_SECRET, variables.get(Workflow.PES_APP_SECRET))
-//		                .append(Workflow.PES_OAUTH_URL, variables.get(Workflow.PES_OAUTH_URL))
-//		                .append(Workflow.PES_GRANT_TYPE, variables.get(Workflow.PES_GRANT_TYPE))
-//		                .append(Workflow.SPACE_ID, variables.get(Workflow.SPACE_ID))
-//		                .append(Workflow.HOOK_ID, variables.get("id"))
-//		                .append(Workflow.APP_ID, objConfig.get(Workflow.APP_ID))
-//		                .append(Workflow.APP_SECRET, objConfig.get(Workflow.APP_SECRET))
-//		                .append(Workflow.OAUTH_URL, objConfig.get(Workflow.OAUTH_URL))
-//		                .append(Workflow.GRANT_TYPE, objConfig.get(Workflow.GRANT_TYPE))
-//		                .append(Workflow.OAUTH_TOKEN, objConfig.get(Workflow.OAUTH_TOKEN))
-//		                .append(Workflow.PROV_APP_NAME, objConfig.get(Workflow.PROV_APP_NAME))
-//		                .append(Workflow.PROV_ATTRIBUTE_SET, objConfig.get(Workflow.PROV_ATTRIBUTE_SET))
-//		                .append(Workflow.PROV_COUNT, objConfig.get(Workflow.PROV_COUNT))
-//		                .append(Workflow.PROV_SEARCH_URL, objConfig.get(Workflow.PROV_SEARCH_URL))
-//		                .append(Workflow.PROV_PROCESS_KEY, objConfig.get(Workflow.PROV_PROCESS_KEY))
-//		                .append(Workflow.DOCID, variables.get("docId"))
-//		                .append(Workflow.PROCESS_KEY, "retrieveCorporateMPINv2EhCacheLoadTestProcess");
-//		        runProcess(task, variablesWithValue);
+    public static String xmltoJson(boolean prettyPrint, String xml) {
+        var xmlJSONObj = XML.toJSONObject(xml);
+        return xmlJSONObj.toString((prettyPrint)?PRETTY_PRINT_INDENT_FACTOR: PRINT_DEFAULT_IDENTATION);
+    }
+
+    public static String toXML(Object objectToConvert) throws JsonProcessingException {
+        return XML_MAPPER.writeValueAsString(objectToConvert);
+    }
+
+    public static String inputStreamToString(InputStream is) throws IOException {
+        try (InputStreamReader isr = detectAndExcludeBOM(is)) {
+            var sb = new StringBuilder();
+            String line;
+            var br = new BufferedReader(isr);
+            while ((line = br.readLine()) != null) {
+                sb.append(line);
+            }
+            br.close();
+            return sb.toString();
+        }
+    }
+    
+    public static String inputStreamToStringNoBomExclusion(InputStream is) throws IOException {
+        try (InputStreamReader isr = new InputStreamReader(is)) {
+            var sb = new StringBuilder();
+            String line;
+            var br = new BufferedReader(isr);
+            while ((line = br.readLine()) != null) {
+                sb.append(line);
+            }
+            br.close();
+            return sb.toString();
+        }
+    }
+
+    protected static InputStreamReader detectAndExcludeBOM(InputStream is) throws IOException{
+        BOMInputStream bomIn = new BOMInputStream(is, ByteOrderMark.UTF_8, ByteOrderMark.UTF_16LE, ByteOrderMark.UTF_16BE);
+        if (! bomIn.hasBOM()) {
+            return new InputStreamReader(bomIn);
+        }
+        if (bomIn.hasBOM(ByteOrderMark.UTF_8)) {
+            return new InputStreamReader(bomIn);
+        }
+        if (bomIn.hasBOM(ByteOrderMark.UTF_16BE)) {
+            LOGGER.debug("BOM: UTF-16BE");
+            return new InputStreamReader(bomIn, StandardCharsets.UTF_16BE);
+        }
+        if (bomIn.hasBOM(ByteOrderMark.UTF_16LE)) {
+            LOGGER.debug("BOM: UTF-16LE");
+            return new InputStreamReader(bomIn, StandardCharsets.UTF_16LE);
+        }
+        LOGGER.error("BOM: NOT UTF-8 or UTF-16");
+        throw new IOException("BOM: Exists and not UTF-8 or UTF-16");
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+===
+
+
+
+public class PdfUtil {
+
+    private final float fontSize;
+    private final double xCoordinate;
+    private final double yCoordinate;
+    private final String pdfFile;
+    private final String outputPdf;
+    private final String receiverAddressIdentifier;
+
+    private PdfUtil(PdfUtilBuilder pdfUtilBuilder) {
+
+        this.xCoordinate = pdfUtilBuilder.xCoordinate;
+        this.yCoordinate = pdfUtilBuilder.yCoordinate;
+        this.fontSize = pdfUtilBuilder.fontSize;
+        this.receiverAddressIdentifier = pdfUtilBuilder.receiverAddressIdentifier;
+        this.pdfFile = pdfUtilBuilder.pdfFile;
+        this.outputPdf = pdfUtilBuilder.outputPdf;
+    }
+
+    public static class PdfUtilBuilder {
+        private float fontSize;
+        private double xCoordinate;
+        private double yCoordinate;
+        private String pdfFile;
+        private String outputPdf;
+        private String receiverAddressIdentifier;
+
+        public PdfUtilBuilder setFontSize(float fontSize) {
+            this.fontSize = fontSize;
+            return this;
+        }
+
+        public PdfUtilBuilder setxCoordinate(double xCoordinate) {
+            this.xCoordinate = xCoordinate;
+            return this;
+        }
+
+        public PdfUtilBuilder setyCoordinate(double yCoordinate) {
+            this.yCoordinate = yCoordinate;
+            return this;
+        }
+
+        public PdfUtilBuilder setPdfFile(String pdfFile) {
+            this.pdfFile = pdfFile;
+            return this;
+        }
+
+        public PdfUtilBuilder setOutputPdf(String outputPdf) {
+            this.outputPdf = outputPdf;
+            return this;
+        }
+
+        public PdfUtilBuilder setReceiverAddressIdentifier(String receiverAddressIdentifier) {
+            this.receiverAddressIdentifier = receiverAddressIdentifier;
+            return this;
+        }
+
+        public PdfUtil build() {
+            return new PdfUtil(this);
+        }
+
+        public String getReceiverAddressIdentifier() {
+            return receiverAddressIdentifier;
+        }
+    }
+
+    public void writeOnPdf() throws IOException  {
+            try ( PDDocument document = Loader.loadPDF(new File(pdfFile))) {
+                PDPageTree pages = document.getPages();
+                PDPage firstPage = pages.get(0);
+                PDRectangle rectangle = firstPage.getMediaBox();
+
+                if (rectangle.getHeight() >= rectangle.getWidth()) {
+                    portrait(document, pages);
+                } else {
+                    landscape(document, pages);
+                }
+                document.save(outputPdf);
+            } catch (IOException e) {
+                throw new IOException("IOException on input file " + pdfFile, e);
+                      }
+    }
+
+    public void writeOnEncryptedPdf() throws IOException {
+        var encryptedPdf = new File(pdfFile);
+        PDDocument document = Loader.loadPDF(encryptedPdf);
+        document.setAllSecurityToBeRemoved(true);
+        document.save(encryptedPdf);
+        document.close();
+        writeOnPdf();
+    }
+
+    public void portrait(PDDocument document, PDPageTree pages) throws IOException {
+
+    	PDFont font = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
+        float fontSize = 8;
+
+        double pdfPageHeight = pages.get(0).getMediaBox().getHeight();
+        double pdfPageWidth = pages.get(0).getMediaBox().getWidth();
+
+        int upperRightX = (int) Math.ceil(pdfPageWidth - 190);
+        int upperRightY = (int) Math.ceil(pdfPageHeight - (pdfPageHeight - 6));
+
+        int lowerLeftX = (int) Math.ceil(pdfPageWidth - 40);
+        int lowerLeftY = (int) Math.ceil(pdfPageHeight - (pdfPageHeight - 26));
+
+        for (var i = 0; i <= pages.getCount(); i++) {
+            PDPage page = pages.get(0);
+            try(PDPageContentStream contentStream = new PDPageContentStream(document, page, PDPageContentStream.AppendMode.APPEND, true, true)) {
+
+                contentStream.beginText();
+                contentStream.setFont(font, fontSize);
+                contentStream.newLineAtOffset((int) Math.ceil(xCoordinate * 79), (int) Math.ceil(yCoordinate * 414.10));
+                contentStream.showText(receiverAddressIdentifier);
+                contentStream.endText();
+
+                    PDRectangle rect = new PDRectangle(lowerLeftX, lowerLeftY, upperRightX - lowerLeftX, upperRightY - lowerLeftY);
+                    contentStream.setNonStrokingColor(1, 1, 1);
+                    contentStream.addRect(rect.getLowerLeftX(), rect.getLowerLeftY(), rect.getWidth(), rect.getHeight());
+                    contentStream.fillAndStroke();
+                }
+            }
+    }
+
+    public void landscape(PDDocument document, PDPageTree pages) throws IOException {
+
+        PDFont font = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
+        float fontSize = 8;
+
+        double pdfPageHeight = pages.get(0).getMediaBox().getHeight();
+        double pdfPageWidth = pages.get(0).getMediaBox().getWidth();
+
+        int upperRightX = (int) Math.ceil(pdfPageWidth - 190);
+        int upperRightY = (int) Math.ceil(pdfPageHeight - (pdfPageHeight - 6));
+
+        int lowerLeftX = (int) Math.ceil(pdfPageWidth - 40);
+        int lowerLeftY = (int) Math.ceil(pdfPageHeight - (pdfPageHeight - 26));
+
+        for (var i = 0; i <= pages.getCount(); i++) {
+            PDPage page = pages.get(0);
+            try(PDPageContentStream contentStream = new PDPageContentStream(document, page, PDPageContentStream.AppendMode.APPEND, true, true)) {
+
+                contentStream.beginText();
+                contentStream.setFont(font, fontSize);
+                contentStream.newLineAtOffset((int) Math.ceil((xCoordinate - .1) * 80), (int) Math.ceil((yCoordinate - .1) * 414.10 - 139));
+                contentStream.showText(receiverAddressIdentifier);
+                contentStream.endText();
+
+                PDRectangle rect = new PDRectangle(lowerLeftX, lowerLeftY, upperRightX - lowerLeftX, upperRightY - lowerLeftY);
+                contentStream.setNonStrokingColor(1, 1, 1);
+                contentStream.addRect(rect.getLowerLeftX(), rect.getLowerLeftY(), rect.getWidth(), rect.getHeight());
+                contentStream.fillAndStroke();
+            }
+        }
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+===
+
+
+
+
+
+public class ProcessorTaskUtil {
+    private ProcessorTaskUtil() {throw new AssertionError("cannot instantiate");}
+
+    public static void addMessageToProcessorExecutionRecordToProcessorTransaction(
+            ProcessorTransactionCore processorTransaction, ProcessorExecutionRecord executionRecord,
+            Map<String, String> message) {
+        executionRecord.setDateModified(new Date());
+        executionRecord.addMessage(message);
+        processorTransaction.addProcessorExecutionRecord(executionRecord);
+    }
+
+    public static void addMessageToProcessorExecutionRecordToProcessorFileTask(
+            ProcessorService processorService, ProcessorFileTask processorFileTask,
+            ProcessorExecutionRecord executionRecord, Map<String, String> message) {
+        executionRecord.setDateModified(new Date());
+        executionRecord.addMessage(message);
+        processorFileTask.addProcessorExecutionRecord(executionRecord);
+        processorService.updateProcessorFileTask(processorFileTask);
+
+    }
+
+    public static String getFileName(String documentId, String appIdentifier, ProcessorFileTaskService processorFileTaskService, ProcessorsService processorsService) {
+        var zipFileName = "";
+        var processorFileTask = processorFileTaskService.getProcessorFileTaskForTargetId(documentId, "documents", appIdentifier);
+        if (processorFileTask != null) {
+            var processorTransaction = processorsService.getProcessorTransactionById(processorFileTask.getProcessorTransactionId());
+            zipFileName = processorTransaction.getFileName();
+        }
+        return zipFileName;
+    }
+
+    public static void addMessageToProcessorExecutionRecordToProcessorTransactionMetadata(
+            ProcessorTransactionMetadata processorTransactionMetadata, ProcessorExecutionRecord executionRecord,
+            Map<String, String> message) {
+        executionRecord.setDateModified(new Date());
+        executionRecord.addMessage(message);
+        processorTransactionMetadata.addProcessorExecutionRecord(executionRecord);
+    }
+
+    public static void addMessageToProcessorExecutionRecord(
+            ProcessorExecutionRecord executionRecord, Map<String, String> message) {
+        executionRecord.setDateModified(new Date());
+        executionRecord.addMessage(message);
+    }
+
+    public static void addMiscellaneousToProcessorExecutionRecord(
+            ProcessorFileTask processorFileTask, ProcessorExecutionRecord executionRecord) {
+
+        executionRecord.setClientId(processorFileTask.getClientId());
+        executionRecord.setSpaceId(processorFileTask.getConfigSpaceId());
+    }
+
+    public static ProcessorExecutionRecord createProcessorExecutionRecord(String description) {
+        var processorExecutionRecord = createBlankAudit();
+        processorExecutionRecord.setDescription(description);
+
+        return processorExecutionRecord;
+    }
+
+    public static boolean validateCriteriaMatch(String expression, Map<String, Object> rootNodeMap) {
+        Boolean result = false;
+        try {
+            result = (Boolean) MVEL.eval(expression, rootNodeMap);
+
+        } catch (PropertyAccessException ex) {
+            result = false;
+        }
+        return result;
+    }
+
+    public static boolean findDuplicateError(String errormsg, Set<String> errorList) {
+        return errorList.stream().anyMatch(o -> o.contains(errormsg));
+    }
+
+    public static ProcessorExecutionRecord createProcessorExecutionRecord(String description,
+                                                                          ProcessorTransactionCore processorTransaction) {
+        var processorExecutionRecord = createBlankAudit();
+        processorExecutionRecord.setDescription(description);
+        processorExecutionRecord.setClientId(processorTransaction.getClientId());
+        processorExecutionRecord.setSpaceId(processorTransaction.getConfigSpaceId());
+
+        return processorExecutionRecord;
+    }
+
+    public static ProcessorExecutionRecord createProcessorExecutionRecord(String description, Map<String, String> message) {
+        var processorExecutionRecord = createProcessorExecutionRecord(description);
+        processorExecutionRecord.addMessage(message);
+        return processorExecutionRecord;
+    }
+
+    public static void updateFileMetrics(ProcessorFileTask processorFileTask, File fileToProcess,
+                                         ProcessorFileTaskService processorFileTaskService) {
+        // Updating metric information
+        var fileInfo = Utilities.getFileInformation(fileToProcess);
+        processorFileTask.setFileSize((Long) fileInfo.get("size"));
+        processorFileTask.setFileType((String) fileInfo.get("type"));
+
+        processorFileTaskService.updateProcessorFileTask(processorFileTask);
+    }
+
+//	public static  void updateFileMetrics(CsvProcessorTransaction csvProcessorTransaction, File fileToProcess,
+//			CsvProcessorService csvProcessorService) {
+//		csvProcessorTransaction.setJsonFileName(fileToProcess.getName());
+//		csvProcessorService.updateCsvProcessorTransactionMetaData(csvProcessorTransaction);
+//	}
+
+    public static void updateServerMetrics(ProcessorFileTask processorFileTask, ProcessorFileTaskService processorFileTaskService) {
+        processorFileTask.setProcessedByHost(FileUtil.getInstance().getLocalHostName());
+
+        processorFileTaskService.updateProcessorFileTask(processorFileTask);
+    }
+
+//	public static  void updateServerMetrics(CsvProcessorTransaction csvProcessorTransaction,
+//			CsvProcessorService csvProcessorService) {
+//		csvProcessorService.updateCsvProcessorTransactionMetaData(csvProcessorTransaction);
+//	}
+
+    public static void updateProcessFileTaskWithExecutionRecord(ProcessorFileTaskService processorFileTaskService,
+                                                                ProcessorFileTask processorFileTask, ProcessorExecutionRecord executionRecord) {
+        processorFileTask.addProcessorExecutionRecord(executionRecord);
+        processorFileTaskService.updateProcessorFileTask(processorFileTask);
+    }
+
+    public static void updateProcessFileTaskWithExecutionRecord(ProcessorFileTaskService processorFileTaskService,
+                                                                ProcessorFileTask processorFileTask, ProcessorExecutionRecord executionRecord,
+                                                                Map<String, String> message) {
+        addMessageToProcessorExecutionRecord(executionRecord, message);
+        addMiscellaneousToProcessorExecutionRecord(processorFileTask, executionRecord);
+        updateProcessFileTaskWithExecutionRecord(processorFileTaskService, processorFileTask, executionRecord);
+    }
+
+    public static void updateProcessTransactionWithExecutionRecord(ProcessorService processorService,
+                                                                   ProcessorTransaction processorTransaction, ProcessorExecutionRecord executionRecord) {
+        processorTransaction.addProcessorExecutionRecord(executionRecord);
+        processorService.updateProcessorTransactionMetaData(processorTransaction);
+    }
+
+    public static void updateProcessTransactionWithExecutionRecord(ProcessorService processorService,
+                                                                   ProcessorTransaction processorTransaction, ProcessorExecutionRecord executionRecord,
+                                                                   Map<String, String> message) {
+        addMessageToProcessorExecutionRecord(executionRecord, message);
+        updateProcessTransactionWithExecutionRecord(processorService, processorTransaction, executionRecord);
+    }
+
+//	public static  void updateProcessTransactionWithExecutionRecord(CsvProcessorService csvProcessorService,
+//			ProcessorTransactionCore processorTransaction, ProcessorExecutionRecord executionRecord) {
+//		processorTransaction.addProcessorExecutionRecord(executionRecord);
+//		if (processorTransaction instanceof CsvProcessorTransaction) {
+//			csvProcessorService.updateCsvProcessorTransactionMetaData((CsvProcessorTransaction) processorTransaction);
 //		}
+//	}
+
+//	public static  void updateProcessTransactionWithUnprocessedRecord(CsvProcessorService csvProcessorService,
+//			ProcessorTransactionCore processorTransaction, List<UnprocessedRecord> unprocessedRecord) {
+//		processorTransaction.setUnprocessedRecordList(unprocessedRecord);
+//		if (processorTransaction instanceof CsvProcessorTransaction) {
+//			csvProcessorService.updateCsvProcessorTransactionMetaData((CsvProcessorTransaction) processorTransaction);
+//		}
+//	}
+
+//	public static  void updateProcessTransactionWithExecutionRecord(CsvProcessorService csvProcessorService,
+//			ProcessorTransactionCore processorTransaction, ProcessorExecutionRecord executionRecord,
+//			Map<String, String> message) {
+//		addMessageToProcessorExecutionRecord(executionRecord, message);
+//		updateProcessTransactionWithExecutionRecord(csvProcessorService, processorTransaction, executionRecord);
+//	}
+
+    private static ProcessorExecutionRecord createBlankAudit() {
+        var processorExecutionRecord = new ProcessorExecutionRecord();
+        processorExecutionRecord.setServerName(FileUtil.getInstance().getLocalHostName());
+        processorExecutionRecord.setServerIp(FileUtil.getInstance().getLocalHostIP());
+        processorExecutionRecord.setDateCreated(new Date());
+        processorExecutionRecord.setDateModified(processorExecutionRecord.getDateCreated());
+        return processorExecutionRecord;
+    }
+
+    public static ProcessorExecutionRecord createRecordWithDelegateName(Class<?> clazz) {
+        var processorExecutionRecord = new ProcessorExecutionRecord();
+        processorExecutionRecord.setActivitiProcessKey(clazz.getSimpleName());
+        processorExecutionRecord.setDateActivitiJobCompleted(new Date());
+        return processorExecutionRecord;
+    }
+
 }
 
