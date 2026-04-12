@@ -1,549 +1,194 @@
 
 
-public class HookTransactionUtil {
-
-	private HookTransactionUtil() {
-		throw new AssertionError("no instance should be created");
-	}
-
-	public static HookTransactionMetaData createHookTransaction(DocumentMetaData documentMetaDataObject,
-			Map<String, String> hookExecutionMessage, String processName) {
-
-		var hookTransactionMetaData = new HookTransactionMetaData().setSpaceId(documentMetaDataObject.getSpaceId())
-				.setClientId(documentMetaDataObject.getClientId())
-				.setAppIdentifier(documentMetaDataObject.getAppIdentifier()).setStatus(Workflow.HOOK_STATUS_ACTIVE)
-				.setDateCreated(new Date()).setDateModified(new Date())
-				.setHookRecordType(Workflow.HOOK_RECORD_TYPE_TRANSACTION).setTargetId(documentMetaDataObject.getId())
-				.setTargetType(Workflow.DOCUMENTS_COLLECTION);
-
-		HookExecutionRecordMetaData hookExecutionRecordMetaData = new HookExecutionRecordMetaData();
-		hookExecutionRecordMetaData.setAppIdentifier(documentMetaDataObject.getAppIdentifier());
-		hookExecutionRecordMetaData.setDateCreated(new Date());
-		hookExecutionRecordMetaData.setClientId(documentMetaDataObject.getClientId());
-		hookExecutionRecordMetaData.setSpaceId(documentMetaDataObject.getSpaceId());
-		hookExecutionRecordMetaData.setActivitiProcessKey(processName);
-		hookExecutionRecordMetaData.addMessage(hookExecutionMessage);
-		hookTransactionMetaData.setHookExecutionList(List.of(hookExecutionRecordMetaData));
-
-		return hookTransactionMetaData;
-	}
-
-	public static HookTransactionMetaData createCronHookTransaction(
-			HookExecutionRecordMetaData hookExecutionRecordMetaData) {
-
-		var hookTransactionMetaData = new HookTransactionMetaData().setSpaceId(hookExecutionRecordMetaData.getSpaceId())
-				.setStatus(Workflow.HOOK_STATUS_ACTIVE).setDateCreated(new Date()).setDateModified(new Date())
-				.setHookRecordType(Workflow.HOOK_RECORD_TYPE_TRANSACTION)
-				.setClientId(hookExecutionRecordMetaData.getClientId())
-				.setTargetId(hookExecutionRecordMetaData.getHookId()).setTargetType(Workflow.HOOK);
-		hookTransactionMetaData.setHookExecutionList(List.of(hookExecutionRecordMetaData));
-
-		return hookTransactionMetaData;
-	}
-
-	public static HookExecutionRecordMetaData getHookExecutionRecord(Map<String, String> hookExecutionRecord,
-			Map<String, String> hookExecutionMessage, String processName) {
-		HookExecutionRecordMetaData hookExecutionRecordMetaData = new HookExecutionRecordMetaData();
-		hookExecutionRecordMetaData.setAppIdentifier(hookExecutionRecord.get(Workflow.APP_IDENTIFIER));
-		hookExecutionRecordMetaData.setHookId(hookExecutionRecord.get(Workflow.HOOK_ID));
-		hookExecutionRecordMetaData.setDateCreated(new Date());
-		hookExecutionRecordMetaData.setSpaceId(Integer.parseInt(hookExecutionRecord.get(Workflow.SPACE_ID)));
-		hookExecutionRecordMetaData.setActivitiProcessKey(processName);
-		hookExecutionRecordMetaData.addMessage(hookExecutionMessage);
-
-		return hookExecutionRecordMetaData;
-	}
+@Service("ConvertFileToDocumentMetaData")
+public class ConvertFileToDocumentMetaData extends OptumJavaDelegateBase {
 	
-	public static HookTransactionMetaData createHookTransactionWithHookId(DocumentMetaData documentMetaDataObject,
-			Map<String, String> hookExecutionMessage, String processName, String hookId) {
-
-		var hookTransactionMetaData = new HookTransactionMetaData().setSpaceId(documentMetaDataObject.getSpaceId())
-				.setClientId(documentMetaDataObject.getClientId())
-				.setAppIdentifier(documentMetaDataObject.getAppIdentifier()).setStatus(Workflow.HOOK_STATUS_ACTIVE)
-				.setDateCreated(new Date()).setDateModified(new Date())
-				.setHookRecordType(Workflow.HOOK_RECORD_TYPE_TRANSACTION).setTargetId(documentMetaDataObject.getId())
-				.setTargetType(Workflow.DOCUMENTS_COLLECTION);
-
-		HookExecutionRecordMetaData hookExecutionRecordMetaData = new HookExecutionRecordMetaData();
-		hookExecutionRecordMetaData.setAppIdentifier(documentMetaDataObject.getAppIdentifier());
-		hookExecutionRecordMetaData.setDateCreated(new Date());
-		hookExecutionRecordMetaData.setClientId(documentMetaDataObject.getClientId());
-		hookExecutionRecordMetaData.setSpaceId(documentMetaDataObject.getSpaceId());
-		hookExecutionRecordMetaData.setActivitiProcessKey(processName);
-		hookExecutionRecordMetaData.addMessage(hookExecutionMessage);
-		hookExecutionRecordMetaData.setHookId(hookId);
-		hookTransactionMetaData.setHookExecutionList(List.of(hookExecutionRecordMetaData));
-
-		return hookTransactionMetaData;
-	}
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-==
-
-
-
-@Component
-public class CsvToJsonUtil {
-	private static final Logger LOG = LoggerFactory.getLogger(CsvToJsonUtil.class);
-	private static final String OUTPUT_JSON_FILE_NAME_SUFFIX = ".json";
-	private static final String OUTPUT_TEXT_FILE_NAME_SUFFIX = ".txt";
-	private static final String START_OF_FILE = "start";
-	private static final String END_OF_FILE = "end";
-	private static final int STRICT_JSON_YES = 1;
-	private static final int STRICT_JSON_NO = 0;
-	
-	private String templateName = "";
-	
-	public void setTemplateName(String template) {
-		templateName = template;
-	}
-
-	public void writetoFileUsingTemplate(String outputFileName, String jsonFile, String startOrEnd, int strictJsonFlag) throws FSDataException, IOException {
-		LOG.info("outputFileName={}, jsonFile={}, startOrEnd={}, strictJsonFlag={}", outputFileName, jsonFile, startOrEnd, strictJsonFlag);
-		try (FileWriter fw = new FileWriter(outputFileName, true);
-				BufferedWriter bw = new BufferedWriter(fw);
-				PrintWriter out = new PrintWriter(bw)) {
-			if (START_OF_FILE.equals(startOrEnd) && strictJsonFlag == STRICT_JSON_YES) {
-				out.write("[");
-			}
-			if (jsonFile != null) {
-				LOG.info("csv jsonFile={}", jsonFile);
-				if(StringUtils.isEmpty(templateName)) {
-					LOG.info("csv templateName is empty: Defaulting to CosmosPRACompanion"); //This should probably throw an exception
-					templateName="CosmosPRACompanion";
-				} else {
-					LOG.info("csv templateName is not empty; templateName={}", templateName);
-				}
-				
-				String json = TemplateFactory.getInstance(templateName).convertWithTemplate(jsonFile);
-				LOG.debug("json={}", json);
-				String processedJson = json.replaceAll("(,)?\"([^\"]*)\":\"\"", "");
-				LOG.debug("processedJson={}", processedJson);
-				out.write(processedJson);
-				out.flush();
-			}
-			if (strictJsonFlag == STRICT_JSON_NO) {
-				out.write("\n");
-			} else if (strictJsonFlag == STRICT_JSON_YES) {
-				if (END_OF_FILE.equals(startOrEnd)) {
-					out.write("]");
-				} else {
-					out.write(",");
-				}
-			}
-			out.flush();
-		} catch (IOException e) {
-			LOG.error("writetoFileUsingTemplate Output File Not found {}", e.getMessage());
-			throw e;
-		}
-	}
-
-	public String convertCsvToJson(String locationDirectory, String csvFileName, char delimit, int strictJsonFlag, List<UnprocessedRecord> unprocessedRecords) throws IOException, FSDataException { 
-		LOG.info("locationDirectory={}, csvFileName={}, strictJsonFlag={}", locationDirectory, csvFileName, strictJsonFlag);
-
-		String jsonFileName = createJsonFileName(locationDirectory,csvFileName, strictJsonFlag);
-		LOG.info("JSON jsonFileName={}", jsonFileName);
-		writetoFileUsingTemplate(jsonFileName, locationDirectory + "/" + csvFileName, "NA", strictJsonFlag);
-		int index = jsonFileName.lastIndexOf("/");
-		LOG.info("Returning jsonFileName={}", jsonFileName);
-		return jsonFileName.substring(index + 1);
-
-		/*
-
-		try (InputStream file = new BufferedInputStream(Files.newInputStream(Paths.get(locationDirectory+"/"+ csvFileName)));
-				InputStreamReader reader = new InputStreamReader(file);
-				BufferedReader bufferedReader = new BufferedReader( reader );
-				CSVParser csvParser = new CSVParser(reader, CSVFormat.DEFAULT.withDelimiter(delimit));) {
-			ObjectMapper mapper = new ObjectMapper();
-			mapper.enable(SerializationFeature.INDENT_OUTPUT);
-			mapper.setSerializationInclusion(Include.NON_NULL);
-			Iterable<CSVRecord> csvRecords = csvParser.getRecords();
-
-			Iterator<CSVRecord> csvRecordItr = csvRecords.iterator();
-			List<String> fieldNames = new ArrayList<>();
-			if (csvRecordItr.hasNext()) {
-				CSVRecord rec = csvRecordItr.next();
-				Iterator<String> columnItr = rec.iterator();
-				for (int i = 0; columnItr.hasNext(); i++) {
-					columnItr.next();
-					String column = rec.get(i);
-					if (StringUtils.isBlank(column)) {
-						break;
-					}
-					fieldNames.add(column);
-				}
-			}
-
-			// Iterate rows from 2nd row and build object with header column
-			// names of first row
-			boolean start = true;
-			jsonFileName = createJsonFileName(locationDirectory,csvFileName, strictJsonFlag);
-			LOG.info("JSON file - {}", jsonFileName);
-			int rowCounter = 1;
-			while (csvRecordItr.hasNext()) {
-				CSVRecord csvRecord = csvRecordItr.next();
-				try{
-					Map<String, String> modelMap = new LinkedHashMap<>();
-					// Accessing Values by Column Index
-					for (int i = 0; i < fieldNames.size(); i++) {
-						String rec = csvRecord.get(i);
-						if(StringUtils.isNotBlank(rec)){
-							String repl = rec.replaceAll("(\\r|\\n|\\r\\n)+", "");
-							String repl2 = repl.replaceAll("\"", "\\'");
-							modelMap.put(fieldNames.get(i), repl2);
-						}
-					}
-					String jsonRecordStr = mapper.writeValueAsString(modelMap);
-					LOG.info("Record JSON - {}", jsonRecordStr);
-					if (csvRecordItr.hasNext()) {
-						writetoFileUsingTemplate(jsonFileName, jsonRecordStr, start ? START_OF_FILE : "NA", strictJsonFlag);
-					} else {
-						writetoFileUsingTemplate(jsonFileName, jsonRecordStr, END_OF_FILE, strictJsonFlag);
-					}
-					start = false;
-				} catch(ArrayIndexOutOfBoundsException | FSDataException | IOException e) {
-					UnprocessedRecord unprocessedRecord=new UnprocessedRecord(csvRecord.toString(),rowCounter);
-					HashMap<String, String> message = new HashMap<>();
-					message.put("error", ExceptionUtils.getStackTrace(e));
-					unprocessedRecord.addMessage(message);	
-					unprocessedRecords.add(unprocessedRecord);   
-				}
-				rowCounter++;
-			}
-		}
-		int index = jsonFileName.lastIndexOf("/");
-		return jsonFileName.substring(index + 1);
-		*/
-	}
-
-	String createJsonFileName(String locationDirectory, String csvFileName, int strictJsonFlag) {
-		String[] parts = csvFileName.split("\\.");
-		String fileName = parts[0];
-		String jsonFileName;
-		if (strictJsonFlag == STRICT_JSON_YES) {
-			jsonFileName = fileName + OUTPUT_JSON_FILE_NAME_SUFFIX;
-		}
-		else {
-			jsonFileName = fileName + "_json" + OUTPUT_TEXT_FILE_NAME_SUFFIX;
-		}
-		return locationDirectory+ File.separator + jsonFileName;
-	}
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-====
-
-
-
-public class UHCWestFixedWidthHelper implements Helper<Object> {
-
-	private static final Logger LOGGER = LoggerFactory.getLogger(UHCWestFixedWidthHelper.class);
-	private static final String LEFT = "L";
-	private static final String RIGHT = "R";
-	String mpinResult = null;
-	String mpinValue = null;
-
-	@Override
-	public CharSequence apply(Object context, Options options) throws IOException {
-
-		try {
-			mpinValue = (context == null) ? "" : context.toString();
-
-			String lengthChar = Optional.ofNullable(options.param(0)).map(obj -> obj.toString())
-					.orElse(StringUtils.EMPTY);
-
-			String paddingString = Optional.ofNullable(options.param(1)).map(obj -> obj.toString())
-					.orElse(StringUtils.EMPTY);
-
-			String align = Optional.ofNullable(options.param(2)).map(obj -> obj.toString()).orElse(StringUtils.EMPTY);
-
-			String truncDirection = Optional.ofNullable(options.param(3)).map(obj -> obj.toString())
-					.orElse(StringUtils.EMPTY);
-
-			if (StringUtils.isEmpty(mpinValue)) {
-				return mpinResult;
-			} else {
-
-				int length = Integer.parseInt(lengthChar);
-
-				if (mpinValue.length() > length) {
-
-					mpinResult = truncDirection(length, truncDirection);
-
-				} else if (mpinValue.length() == length) {
-
-					mpinResult = mpinValue;
-
-				} else {
-
-					if (!StringUtils.isEmpty(paddingString)) {
-						char paddingChar = (!StringUtils.isEmpty(paddingString)) ? paddingString.charAt(0): Character.MIN_VALUE;
-						mpinResult = addPadding(length, paddingChar, align);
-					} else {
-						mpinResult = mpinValue;
-					}
-
-				}
-				return mpinResult;
-
-			}
-		} catch (NumberFormatException e) {
-			LOGGER.warn("apply Number Format Exception {}={}, {}={} {}", "mpinValue", mpinValue, "mpinResult",
-					mpinResult, ExceptionUtils.getStackTrace(e));
-			return mpinResult;
-		} catch (Exception e) {
-			LOGGER.warn("apply truncate {}={}, {}={} {}", "mpinValue", mpinValue, "mpinResult", mpinResult,
-					ExceptionUtils.getStackTrace(e));
-			return mpinResult;
-		}
-	}
-
-	private String truncDirection(int length, String truncDirection) {
-		if (truncDirection.equalsIgnoreCase(LEFT)) {
-			mpinResult = StringUtils.right(mpinValue, length);
-		} else if (truncDirection.equalsIgnoreCase(RIGHT)) {
-			mpinResult = StringUtils.left(mpinValue, length);
-		}
-		return mpinResult;
-	}
-
-	private String addPadding(int length, char paddingChar, String align) {
-		if (align.equalsIgnoreCase(LEFT)) {
-			mpinResult = Strings.padStart(mpinValue, length, paddingChar);
-		} else if (align.equalsIgnoreCase(RIGHT)) {
-			mpinResult = Strings.padEnd(mpinValue, length, paddingChar);
-		}
-		return mpinResult;
-	}
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-===
-
-
-
-public class SwitchCaseHelper implements Helper<Object> {
-	SwitchCase switchCase;
-
-	public SwitchCaseHelper(SwitchCase switchCase){
-		this.switchCase = switchCase;
-	}
-
-	@Override
-	public CharSequence apply(Object value, Options options) throws IOException {
-		this.switchCase.setValue(value);
-		this.switchCase.setSwitchBreak(false);
-		return options.fn();
-	}
-
-	public static class Case implements Helper<Object> {
-		private static final String BREAK = "break";
-		SwitchCase switchCase;
-
-		public Case(SwitchCase switchCase){
-			this.switchCase = switchCase;
-		}
-
-		@Override
-		public CharSequence apply(Object value, Options options) throws IOException {
-			if(switchCase.isSwitchBreak()){
-				return options.inverse();
-			}
-
-			boolean breaks = Optional.ofNullable(options.hash(BREAK))
-					.filter(context -> context instanceof Boolean)
-					.map(context -> ((Boolean) context).booleanValue())
-					.orElse(true);
-
-			if (switchCase.getValue().equals(value)) {
-				switchCase.setSwitchBreak(breaks);
-				return options.fn(this);
-			}else{
-				return options.inverse();
-			}
-		}
-	}
-
-	public static class Default implements Helper<Object> {
-		SwitchCase switchCase;
-
-		public Default(SwitchCase switchCase){
-			this.switchCase = switchCase;
-		}
-
-		@Override
-		public CharSequence apply(Object value, Options options) throws IOException {
-			return (switchCase.isSwitchBreak())?  options.inverse() : options.fn();
-		}
-	}
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-==
-
-
-
-public class DocumentUtil {
+	private static final Logger LOGGER = LoggerFactory.getLogger(ConvertFileToDocumentMetaData.class);
 	
 	@Autowired
-	private ConfigData config;
+	DocumentMetaDataService documentMetaDataService;
 	
-	public static void updateDateModified(DocumentMetaData doc) {
-		doc.setDateModified(new Date());
-	}
+	@Autowired
+	ProcessorsService processorsService;
 	
-	public static void updateDocumentMetaDataRevisions(DocumentMetaData doc) {
-		DocumentRevision revision = createRevision(doc, String.valueOf(doc.getSpaceId()));
-		List<DocumentRevision> revisionList = doc.getRevisions();
-		if (revisionList != null) {
-			revisionList.add(revision);
-		} else {
-			revisionList = new ArrayList<>();
-			revisionList.add(revision);
-			doc.setRevisions(revisionList);
-		}
-	}
-	
-	public static DocumentRevision createRevision(DocumentMetaData doc, String spaceId) {
+	@Autowired
+	ProcessorService processorService;
 
-		// routine to take DocumentMetaData and create a document revision Entry
-		// for it
-		DocumentRevision revisionEntry = new DocumentRevision();
-		if (doc.getExternalId() != null) {
-			revisionEntry.setExternalId(doc.getExternalId());
-		}
-		revisionEntry.setAppIdentifier(doc.getAppIdentifier());
-		revisionEntry.setClientId(doc.getClientId());
-		revisionEntry.setDateCreated(doc.getDateCreated());
-		revisionEntry.setDateModified(doc.getDateModified());
-		revisionEntry.setStatus(doc.getStatus());
-		revisionEntry.setSpaceId(spaceId);
-		revisionEntry.setTransactionId(doc.getTransactionId());
-		
-		if (doc.getMetadata() != null) {
-			Document metadata = new org.bson.Document();
-			doc.getMetadata().forEach((key, value) -> {
-				metadata.append(key, value);
-			});
-			revisionEntry.setMetadata(metadata);
-		}
-		if (doc.getDocumentAttachments() != null && !doc.getDocumentAttachments().isEmpty()) {
-			revisionEntry.setDocumentAttachments(doc.getDocumentAttachments());
-		}
-		if (doc.getErrorMessage() != null && !doc.getErrorMessage().isEmpty()) {
-			revisionEntry.setErrorMessage(doc.getErrorMessage());
-		}
-		return revisionEntry;
+	@Autowired
+	private SftpUtil sftpUtil;
 
-	}
-	
-	public void appendDefaultValuesWithSpaceId(DocumentMetaData documentMetaData, int spaceId) {
-		documentMetaData.setTransactionId(UUID.randomUUID().toString());
-        documentMetaData.setStatus(MetaDataStatus.AVAILABLE);
-        var clientId = config.getCredentials(spaceId).get("clientId").toString();
-		var appIdentifier = config.getCredentials(spaceId).get("appIdentifier").toString();
-		
-		documentMetaData.setSpaceId(spaceId);
-		documentMetaData.setClientId(Integer.parseInt(clientId));
-		documentMetaData.setAppIdentifier(appIdentifier);
-	}
-	
-    public void appendDefaultValues(DocumentMetaData documentMetaData) {
-        documentMetaData.setTransactionId(UUID.randomUUID().toString());
-        documentMetaData.setStatus(MetaDataStatus.AVAILABLE);
-        if (documentMetaData.getSpaceId() == 0) {
-            throw new NullPointerException("spaceId cannot be null");
-        }
+	@Value("${SplitPerMbSize:4}")
+	protected int splitPerMbSize;
 
-        var clientId = config.getCredentials(documentMetaData.getSpaceId()).get("clientId").toString();
-		var appIdentifier = config.getCredentials(documentMetaData.getSpaceId()).get("appIdentifier").toString();
-		
-		
-		documentMetaData.setClientId(Integer.parseInt(clientId));
-		documentMetaData.setAppIdentifier(appIdentifier);
+	@Value("${SplitFileMaxBytesNewLineWithin:1024}")
+	protected int splitFileMaxBytesNewLineWithin;
+
+	private static final String OUTCOME_KEY = "outcome";
+    private static final String ERROR_KEY = "error";
+    private static final String HOST_NAME_SOURCE = "host_name_source";
+    private static final String USER_NAME_SOURCE = "username_source";
+    private static final String USER_CREDENTIALS_SOURCE = "pw_source";
+    private static final String FTP_ARCHIVE_DIR = "ftp_archivedir";
+    private static final int SFTP_PORT = 22;
+	
+	private static final List<String> REQ_VARS = Arrays.asList(
+            Workflow.TEMPLATE_NAME, Workflow.FILE_PATH, Workflow.SPACE_ID, Workflow.APP_IDENTIFIER
+    );
+    
+    public ConvertFileToDocumentMetaData() {
+        super(REQ_VARS);
     }
+	
+	@Override
+    public void doExecute(DelegateExecution execution) {
+		// convert text file to documentMetaData
+		LOGGER.debug("ConvertFileToDocumentMetaData-->doExecute-->ENTER");
+		// filePath to AP text file in ingest
+		String filePath = execution.getVariable(Workflow.FILE_PATH, String.class);
+		try {
+			String processorTransactionId = execution.getVariable("processorTransactionId", String.class);
+			String appIdentifier = execution.getVariable("appIdentifier", String.class);
+			var processorTransaction = processorsService.getTransactionProcessor(appIdentifier.trim(),
+					processorTransactionId.trim(), "");
+			processorTransaction.setProcessedByHost(FileUtil.getInstance().getLocalHostName());
+			processorTransaction.setStartTime();
+			processorTransaction.setStatus(MetaDataStatus.IN_PROCESS);
+			processorsService.updateProcessorTransactionMetaData(processorTransaction);
+
+			String templateName = execution.getVariable(Workflow.TEMPLATE_NAME, String.class);
+			String fileName = execution.getVariable(Workflow.FILE_NAME, String.class);
+			Integer spaceId = execution.getVariable(Workflow.SPACE_ID, Integer.class);
+
+			ProcessorExecutionRecord executionRecord = ProcessorTaskUtil.createProcessorExecutionRecord("Converting file to documents with string template", processorTransaction);
+			HashMap<String,String> message = new HashMap<>();
+
+			boolean done = false;
+			boolean logSplit = false;
+			String documentMetaDataListStr = null;
+			List<DocumentMetaData> insertedDocList = new ArrayList<>();
+			TemplateHandler templateHandler = TemplateFactory.getInstance(templateName);
+			if (templateHandler != null && templateName.equals(Templates.OPTUM_PAY_NUMBER_DOCUMENT.getTemplate())) {
+				logSplit = true;
+				((OptumPayNumberDocumentTemplate) templateHandler).setSplitPerMbSize(splitPerMbSize);
+				((OptumPayNumberDocumentTemplate) templateHandler).setSplitFileMaxBytesNewLineWithin(splitFileMaxBytesNewLineWithin);
+			}
+			while (! done) {
+				try {
+					if (templateHandler == null ) {
+						throw new NullPointerException("templateName=" + templateName + ", templateHandler == null");
+					}
+					documentMetaDataListStr = templateHandler.convertWithTemplateFromFilePath(filePath);
+				} catch (Exception e) {
+					LOGGER.error("ConvertFileToDocumentMetaData --> unable to convert file with string template, file={}, templateName={}, e={}", 
+						filePath, templateName, ExceptionUtils.getStackTrace(e));
+
+					// update processorTransaction with error log
+					message.put(OUTCOME_KEY, "Unable to convert file with string template");
+					message.put(ERROR_KEY, e.toString());
+					var processorError = new ProcessorError(ProcessorErrorCode.UNABLE_TO_CONVERT_WITH_STRING_TEMPLATE);
+					processorError.setFileName(fileName);
+					processorTransaction.getSummary().addError(processorError);
+					processorTransaction.setStatus(MetaDataStatus.FATAL_ERROR);
+					ProcessorTaskUtil.updateProcessTransactionWithExecutionRecord(processorService, processorTransaction, executionRecord, message);
+					setExitNow(execution);
+					return;
+				}
+
+				// convert json string to List<DocumentMetaData>
+				List<DocumentMetaData> documentMetaDataList = null;
+				try {
+					documentMetaDataList = WorkFlowUtil.readDocumentsFromJsonString(documentMetaDataListStr);
+					if (logSplit) {
+						LOGGER.info("documentMetaDataList.size={}", documentMetaDataList.size());
+					}
+				} catch (JSONException | IOException e) {
+					LOGGER.error("ConvertFileToDocumentMetaData --> unable to convert json string to documentMetaDataList, e={}", ExceptionUtils.getStackTrace(e));
+
+					// update processorTransaction with error log
+					message.put(OUTCOME_KEY, "Unable to convert json string to List<DocumentMetaData>");
+					message.put(ERROR_KEY, e.toString());
+					var processorError = new ProcessorError(ProcessorErrorCode.UNABLE_TO_CONVERT_WITH_STRING_TEMPLATE);
+					processorError.setFileName(fileName);
+					processorTransaction.getSummary().addError(processorError);
+					processorTransaction.setStatus(MetaDataStatus.FATAL_ERROR);
+					ProcessorTaskUtil.updateProcessTransactionWithExecutionRecord(processorService, processorTransaction, executionRecord, message);
+					return;
+				}
+
+				// insert List<DocumentMetaData> into mongodb and get list of documentIds
+				if (CollectionUtils.isEmpty(documentMetaDataList)) {
+					LOGGER.warn("ConvertFileToDocumentMetaData-->doExecute-->documentMetaDataList is null or empty");
+					setExitNow(execution);
+					return;
+				}
+
+				// batch insert documents into mongodb
+				List<List<DocumentMetaData>> partitionedList = ListUtils.partition(documentMetaDataList, 1000);
+
+				for (List<DocumentMetaData> subList : partitionedList) {
+					insertedDocList.addAll(documentMetaDataService.insertMultiDocumentsWithSpaceId(subList, spaceId));
+					LOGGER.debug("doExecute batch of documents inserted to mongodb: subList.size={}, partitionedList.size={}", subList.size(), partitionedList.size());
+				}
+				if (logSplit) {
+					LOGGER.info("insertedDocList.size={}", insertedDocList.size());
+				}
+
+				if (templateName.equals(Templates.OPTUM_PAY_NUMBER_DOCUMENT.getTemplate())) {
+					done = ((OptumPayNumberDocumentTemplate) templateHandler).isDone();
+					if (done) {
+						templateHandler = null;
+					}
+				} else {
+					done = true;
+				}
+			}
+			documentMetaDataListStr = null;
+			List<String> docIds = new ArrayList<>();
+			insertedDocList.forEach(doc -> docIds.add(doc.getId()));
+			execution.setTransientVariable("documentIds", docIds);
+			execution.setTransientVariable("documentMetaDataList", insertedDocList);
+			LOGGER.info("ConvertFileToDocumentMetaData --> file converted to documents with string template, filePath={}, # of documentIds={}", filePath, docIds.size());
+
+			// update processorTransaction
+			processorTransaction.setDocumentIds(docIds);
+			message.put(OUTCOME_KEY, "File converted with string template");
+			processorTransaction.setStatus(MetaDataStatus.COMPLETE);
+			ProcessorTaskUtil.updateProcessTransactionWithExecutionRecord(processorService, processorTransaction, executionRecord, message);
+		} catch (Exception e) {
+			LOGGER.error("ConvertFileToDocumentMetaData --> doExecute error converting file e={}", ExceptionUtils.getStackTrace(e));
+
+		} finally {
+			archiveOriginalFile(execution, filePath);
+		}
+	}
+
+	
+	private void archiveOriginalFile(DelegateExecution execution, String filePath) {
+    	try {
+    		var processor = (ProcessorMetaData) execution.getVariable(Workflow.PROCESSOR_METADATA);
+            var processorConfig = (Map<String, Object>) processor.getProcessConfig();
+
+            String sftpHost = (String) processorConfig.get(HOST_NAME_SOURCE);
+            String sftpUSER = (String) processorConfig.get(USER_NAME_SOURCE);
+            String sftpPASS = (String) processorConfig.get(USER_CREDENTIALS_SOURCE);
+            String sftpArchiveDir = (String) processorConfig.get(FTP_ARCHIVE_DIR);
+            
+            Integer maxSftpTriesVar = (Integer) processorConfig.get(Workflow.MAX_SFTP_TRIES);
+        	Long retryTimeSecsVar = (Long) processorConfig.get(Workflow.RETRY_TIME_SECS);
+        	int maxSftpTries = maxSftpTriesVar != null ? maxSftpTriesVar : 10;
+        	long retryTimeSecs = retryTimeSecsVar != null ? retryTimeSecsVar: 360;  // 6 minutes
+        	LOGGER.debug("ConvertFileToDocumentMetaData-->archiving file={}", filePath);
+			sftpUtil.moveFileFromLocalToSFTPLocation(sftpUSER, sftpPASS, sftpHost, SFTP_PORT, sftpArchiveDir, filePath, maxSftpTries, retryTimeSecs);
+		} catch (Exception e) {
+			LOGGER.error("ConvertFileToDocumentMetaData --> unable to archive original file, filePath={}", filePath);
+		}
+	}
 
 }
+
+
+
+
 
 
 
@@ -568,136 +213,641 @@ public class DocumentUtil {
 
 
 
-public class EncryptionUtil {
+@Service("CreateACKFile")
+public class CreateACKFile extends OptumJavaDelegateBase {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(EncryptionUtil.class);
+	private static final Logger log = LoggerFactory.getLogger(CreateACKFile.class);
+	
+	private static final String FILE_NAME = "FileName";
+	private static final String ERROR_CODE = "ErrorCode";
+	private static final String ERROR = "Error";
+	private static final String DELEGATE_EXECUTION_ID = "delegateExecutionId";
+	private static final String DESCRIPTION = "Description";
+	private static final String PROCESSOR_TRANSACTION_ID = "processorTransactionId";
+	private static final String NGSID = "NGSID";
+	
+	@Autowired
+	ProcessorsService processorsService;
+	
+	@Autowired
+	ProcessorService processorService;
+	
+	private DelegateExecution tempExecution = null;
+	
+	private static final List<String> REQ_VARS = Arrays.asList(
+			Workflow.PROCESSOR_TRANSACTION, Workflow.ACK_FLAG, Workflow.GENERATE_SINGLE_ACK_SUMMARY_FILE_FLAG
+	);
+	
+	public CreateACKFile() {
+		super(REQ_VARS);
+	}
+	
+	@Override
+	public void doExecute(DelegateExecution execution) {
+		log.info("CreateACKFile-->doExecute-->ENTER");
+		tempExecution = execution;
+		
+		ProcessorTransaction processorTransaction = null;
+		ProcessorExecutionRecord executionRecord = null;
+		Map<String, String> message = new HashMap<>();
+		try {
+			executionRecord = ProcessorTaskUtil.createProcessorExecutionRecord("Initializing CreateACKFile task");
+			message = new HashMap<>();
+			processorTransaction = execution.getVariable(Workflow.PROCESSOR_TRANSACTION, ProcessorTransaction.class);
+			List<ProcessorFileTask> processorFileTaskList = processAllFileTasksForTransaction(processorTransaction);
+			Boolean ackFlag = execution.getVariable(Workflow.ACK_FLAG, Boolean.class);
+			Boolean generateSingleAckSummaryFile = execution.getVariable(Workflow.GENERATE_SINGLE_ACK_SUMMARY_FILE_FLAG, Boolean.class);
+			message.put(Workflow.OUTCOME_KEY, "CreateACKFile task initialized successfully");
+			ProcessorTaskUtil.addMessageToProcessorExecutionRecordToProcessorTransaction(processorTransaction, executionRecord, message);
+			if(Boolean.TRUE.equals(ackFlag)) {
+				if(Boolean.TRUE.equals(generateSingleAckSummaryFile)) {
+					if(!createSingleAckSummaryFile(execution, processorTransaction, processorFileTaskList)) {
+						return;
+					}
+				}
+				else {
+					if(!createAckZipFile(execution, processorTransaction, processorFileTaskList)) {
+						return;
+					}
+				}
+			} else {
+				log.warn("CreateACKFile-->doExecute-->ackWorkingDir is not defined, Suppressing creation ACK file; processorTransactionId={}", processorTransaction.getId());
+			}
+		} catch(Exception e) {
+			log.error("doExecute Exception while executing CreateACKFile task {}={}, {}={} {}",
+        			DELEGATE_EXECUTION_ID, getDelegateExecutionId(execution), PROCESSOR_TRANSACTION_ID, getProcessorTransactionId(processorTransaction),
+        			ExceptionUtils.getStackTrace(e));
+			addErrorMsg("CreateACKFile-->doExecute-->Exception while executing CreateACKFile task", WorkFlowUtil.getStackTrace(e));
+			message.put(Workflow.OUTCOME_KEY, "There was Exception while executing CreateACKFile task");
+			message.put(Workflow.ERROR_KEY, WorkFlowUtil.getStackTrace(e));
+			if (processorTransaction != null)
+			{
+			  //	String msg = ProcessorErrorCode.UNKNOWN_ERROR_POSTING_TO_FDS_1807.getErrorMessage() + " " + e.getClass().getSimpleName() + ": " + e.getMessage() + "; CreateACKFile";
+			 //	processorTransaction.getSummary().addError(new ProcessorError(msg, ProcessorErrorCode.UNKNOWN_ERROR_POSTING_TO_FDS_1808.getErrorCode()));
+			}
+			ProcessorTaskUtil.addMessageToProcessorExecutionRecordToProcessorTransaction(processorTransaction, executionRecord, message);
+			return;
+		} finally {
+			if(processorTransaction != null) {
+				 execution.setTransientVariable(Workflow.PROCESSOR_TRANSACTION, processorTransaction);
+				processorService.updateProcessorTransactionMetaData(processorTransaction);
+			}
+		}
+		log.info("CreateACKFile-->doExecute-->EXIT");
+	}
 
-    private static final String CLEF_VAL_PHRASE = "Tw0 r0aDs div3rg3d in a y3l10w wo0d";
-    private static final String SLAT1 = "S0 thEy pArtEd; aNd the y0uNg mAn pUrSU3d hI3, ";
+	private boolean createSingleAckSummaryFile(DelegateExecution execution, ProcessorTransaction processorTransaction,
+			List<ProcessorFileTask> processorFileTaskList) {
+		ProcessorExecutionRecord executionRecord = null;
+		Map<String, String> message = new HashMap<>();
+		try {
+				String ackFileName = Utilities.stripFileExtension(processorTransaction.getFileName()) + Workflow.ACK_SUMMARY_FILE_EXTENSION;
+				String location = processorTransaction.getLocation();
+								
+				executionRecord = ProcessorTaskUtil.createProcessorExecutionRecord("Generating summary ACK XL for processorTransaction");
+				message = new HashMap<>();
+				byte[] summaryJSon = null;
+				try {
+					summaryJSon = generateSummaryFileForTransactionInReady(processorTransaction, processorFileTaskList);
+					message.put(Workflow.OUTCOME_KEY, "Summary ACK file generated");
+				} catch (IOException e) {
+					log.error("createSingleAckSummaryFile IOException while Generating summary ACK XL for processorTransaction {}={}, {}={} {}",
+							DELEGATE_EXECUTION_ID, getDelegateExecutionId(execution), PROCESSOR_TRANSACTION_ID, getProcessorTransactionId(processorTransaction),
+							ExceptionUtils.getStackTrace(e));
+					addErrorMsg("CreateACKFile-->createSingleAckSummaryFile-->IOException while Generating summary ACK XL for processorTransaction", WorkFlowUtil.getStackTrace(e));
+					message.put(Workflow.OUTCOME_KEY, "There was an error generating summary ack file");
+					message.put(Workflow.ERROR_KEY, e.toString());
+					//String msg = ProcessorErrorCode.UNKNOWN_ERROR_POSTING_TO_FDS_1809.getErrorMessage() + " " + e.getClass().getSimpleName() + ": " + e.getMessage() + "; createSingleAckSummaryFile";
+					//processorTransaction.getSummary().addError(new ProcessorError(msg, ProcessorErrorCode.UNKNOWN_ERROR_POSTING_TO_FDS_1810.getErrorCode()));
+					return false;
+				}
+		        finally {
+		            ProcessorTaskUtil.addMessageToProcessorExecutionRecordToProcessorTransaction(processorTransaction, executionRecord, message);
+		        }
+				
+				executionRecord = ProcessorTaskUtil.createProcessorExecutionRecord("Writing ACK Summary file to local folder");
+				message = new HashMap<>();
+				ackFileName = location + File.separator + ackFileName;
+				try (OutputStream fs = new BufferedOutputStream(Files.newOutputStream(Paths.get(ackFileName))) ){
+		            fs.write(summaryJSon);
+		            message.put(Workflow.OUTCOME_KEY, "ACK Summary file written to local folder");
+		        }
+		        catch (IOException e) {
+		        	log.error("createSingleAckSummaryFile IOException while Writing ACK Summary file to local folder {}={}, {}={} {}",
+		        			DELEGATE_EXECUTION_ID, getDelegateExecutionId(execution), PROCESSOR_TRANSACTION_ID, getProcessorTransactionId(processorTransaction),
+		        			ExceptionUtils.getStackTrace(e));
+		        	addErrorMsg("CreateACKFile-->createSingleAckSummaryFile-->IOException while Writing ACK Summary file to local folder", WorkFlowUtil.getStackTrace(e));
+		            message.put(Workflow.OUTCOME_KEY, "There was an error creating ACK Summary file.");
+		            message.put(Workflow.ERROR_KEY, e.toString());
+		            //  String msg = ProcessorErrorCode.UNKNOWN_ERROR_POSTING_TO_FDS_1811.getErrorMessage() + " " + e.getClass().getSimpleName() + ": " + e.getMessage() + "; createSingleAckSummaryFile-1";
+		            //  processorTransaction.getSummary().addError(new ProcessorError(msg, ProcessorErrorCode.UNKNOWN_ERROR_POSTING_TO_FDS_1812.getErrorCode()));
+		            return false;
+		        }
+		        finally {
+		            ProcessorTaskUtil.addMessageToProcessorExecutionRecordToProcessorTransaction(processorTransaction, executionRecord, message);
+		        }
+				 execution.setTransientVariable(Workflow.ACK_FILE, ackFileName);
+		} catch(Exception e) {
+			log.error("createSingleAckSummaryFile Exception while creating ACK Summary file {}={}, {}={} {}",
+					DELEGATE_EXECUTION_ID, getDelegateExecutionId(execution), PROCESSOR_TRANSACTION_ID, getProcessorTransactionId(processorTransaction),
+					ExceptionUtils.getStackTrace(e));
+			addErrorMsg("CreateACKFile-->createSingleAckSummaryFile-->Exception while creating ACK Summary file", WorkFlowUtil.getStackTrace(e));
+			message.put(Workflow.OUTCOME_KEY, "There was Exception while creating ACK Summary file");
+			message.put(Workflow.ERROR_KEY, WorkFlowUtil.getStackTrace(e));
+			if (processorTransaction != null)
+			{
+			//	String msg = ProcessorErrorCode.UNKNOWN_ERROR_POSTING_TO_FDS_1813.getErrorMessage() + " " + e.getClass().getSimpleName() + ": " + e.getMessage() + "; createSingleAckSummaryFile-2";
+			//	processorTransaction.getSummary().addError(new ProcessorError(msg, ProcessorErrorCode.UNKNOWN_ERROR_POSTING_TO_FDS_1814.getErrorCode()));
+			}
+			ProcessorTaskUtil.addMessageToProcessorExecutionRecordToProcessorTransaction(processorTransaction, executionRecord, message);
+			return false;
+		}
+		return true;
+	}
 
-    /**
-     * This is for use by external users only.
-     * 
-     * @param args
-     * @throws Exception
-     */
-    public static void main(String[] args) {
-        try {
-            if (args != null && args.length > 1) {
-                printInput(args);
-                if ("encrypt".equalsIgnoreCase(args[0])) {
-                    if (args.length > 2) {
-                       encrypt(args[1], args[2]);
-                    } else {
-                      encrypt(args[1]);
-                    }
-                }
-                else if ("decrypt".equalsIgnoreCase(args[0])) {
-                    if (args.length > 2) {
-                      decrypt(args[2], args[1]);
-                    } else {
-                        decrypt(args[1]);
-                    }
-                }
-                else {
-                    LOGGER.debug("Usage: encrypt/decrypt stringToEncryptOrDecrypt optionlSalt");
-                }
-            }
-            else {
-                LOGGER.debug("Usage: encrypt/decrypt stringToEncryptOrDecrypt optionlSalt");
-                LOGGER.debug("If you are using a salt and decrypting use the same salt you used to encrypt");
-            }
-        } catch (Exception e) {
-            LOGGER.warn("Encrypt or Decrypt exception {}",
-                    ExceptionUtils.getStackTrace(e));
-        }
-    }
+	private boolean createAckZipFile(DelegateExecution execution, ProcessorTransaction processorTransaction,
+			List<ProcessorFileTask> processorFileTaskList) {
+		ProcessorExecutionRecord executionRecord = null;
+		Map<String, String> message = new HashMap<>();
+		try {
+				String zipFileName = Utilities.stripFileExtension(processorTransaction.getFileName()) + Workflow.ACK_ZIP_FILE_EXTENSION;
+				String location = processorTransaction.getLocation();
+				
+				executionRecord = ProcessorTaskUtil.createProcessorExecutionRecord("Openning Zip Stream for ACK files");
+				message = new HashMap<>();
+				var baos = new ByteArrayOutputStream();
+				var zipOuts = new ZipOutputStream(baos);
+				message.put(Workflow.OUTCOME_KEY, "Zip Stream for ACK files openned");
+				ProcessorTaskUtil.addMessageToProcessorExecutionRecordToProcessorTransaction(processorTransaction, executionRecord, message);
+				
+				executionRecord = ProcessorTaskUtil.createProcessorExecutionRecord("Summarizing processorFileTask records and Generating an ACK file for each FileTask");
+				message = new HashMap<>();
+			try {
+				if (!MetaDataStatus.FATAL_ERROR.equals(processorTransaction.getStatus())) {
+					if (!CollectionUtils.isEmpty(processorFileTaskList)) {
+						Boolean ackWithErrorsOnly = execution.getVariable(Workflow.ACK_WITH_ERRORS_ONLY, Boolean.class);
 
-    private static void printInput(String[] args) {
-        if (args != null && args.length > 2) {
-            LOGGER.debug("Here is the input: Operation {} StringToEncrypt:{} salt: {} ", args[0], args[1], args[2]);
-        } else if (args != null && args.length > 1) {
-            LOGGER.debug("Here is the input: Operation:{} StringToEncrypt:{} ", args[0], args[1]);
-        }
-    }
+						if (BooleanUtils.isTrue(ackWithErrorsOnly)) {
+							addProcessorFileTasksErrorToACK(processorTransaction, zipOuts, processorFileTaskList);
+						} else {
+							addProcessorFileTasksToACK(processorTransaction, zipOuts, processorFileTaskList);
+						}
+					}
+					message.put(Workflow.OUTCOME_KEY, "FileTask Summarized and ACK files generated");
+					ProcessorTaskUtil.addMessageToProcessorExecutionRecordToProcessorTransaction(processorTransaction,
+							executionRecord, message);
+				}
+			} catch (IOException e) {
+				log.error("createAckZipFile IOException while Summarizing processorFileTask records and Generating an ACK file for each FileTask {}={}, {}={} {}",
+						DELEGATE_EXECUTION_ID, getDelegateExecutionId(execution), PROCESSOR_TRANSACTION_ID, getProcessorTransactionId(processorTransaction),
+						ExceptionUtils.getStackTrace(e));
+				addErrorMsg(
+						"CreateACKFile-->CreateACKZipFile-->IOException while Summarizing processorFileTask records and Generating an ACK file for each FileTask",
+						WorkFlowUtil.getStackTrace(e));
+				message.put(Workflow.OUTCOME_KEY, "There was an error generating fileTask ack files");
+				message.put(Workflow.ERROR_KEY, e.toString());
+				//String msg = ProcessorErrorCode.UNKNOWN_ERROR_POSTING_TO_FDS_1815.getErrorMessage() + " " + e.getClass().getSimpleName() + ": " + e.getMessage() + "; createAckZipFile";
+				//processorTransaction.getSummary().addError(new ProcessorError(msg, ProcessorErrorCode.UNKNOWN_ERROR_POSTING_TO_FDS_1816.getErrorCode()));
+				ProcessorTaskUtil.addMessageToProcessorExecutionRecordToProcessorTransaction(processorTransaction,
+						executionRecord, message);
+				closeZipStream(zipOuts, processorTransaction);
+				return false;
+			}
+				
+				executionRecord = ProcessorTaskUtil.createProcessorExecutionRecord("Generating summary ACK XL for processorTransaction and add it to the zip stream");
+				message = new HashMap<>();
+				try {
+					byte[] summaryJSon = generateSummaryFileForTransactionInReady(processorTransaction, processorFileTaskList);
+					addACKToZip(zipOuts, "summary", summaryJSon);
+					message.put(Workflow.OUTCOME_KEY, "Summary ACK file generated and added to zip stream");
+					ProcessorTaskUtil.addMessageToProcessorExecutionRecordToProcessorTransaction(processorTransaction, executionRecord, message);
+ 					if(closeZipStream(zipOuts, processorTransaction)) {
+						return false;
+					}
+				} catch (IOException e) {
+					log.error("createAckZipFile IOException while Generating summary ACK XL for processorTransaction and add it to the zip stream {}={}, {}={} {}",
+							DELEGATE_EXECUTION_ID, getDelegateExecutionId(execution), PROCESSOR_TRANSACTION_ID, getProcessorTransactionId(processorTransaction),
+							ExceptionUtils.getStackTrace(e));
+					addErrorMsg("CreateACKFile-->CreateACKZipFile-->IOException while Generating summary ACK XL for processorTransaction and add it to the zip stream", WorkFlowUtil.getStackTrace(e));
+					message.put(Workflow.OUTCOME_KEY, "There was an error generating summary ack file");
+					message.put(Workflow.ERROR_KEY, e.toString());
+					//String msg = ProcessorErrorCode.UNKNOWN_ERROR_POSTING_TO_FDS_1817.getErrorMessage() + " " + e.getClass().getSimpleName() + ": " + e.getMessage() + "; createAckZipFile-1";
+					//processorTransaction.getSummary().addError(new ProcessorError(msg, ProcessorErrorCode.UNKNOWN_ERROR_POSTING_TO_FDS_1818.getErrorCode()));
+					ProcessorTaskUtil.addMessageToProcessorExecutionRecordToProcessorTransaction(processorTransaction, executionRecord, message);
+					closeZipStream(zipOuts, processorTransaction);
+					return false;
+				}
+				
+				executionRecord = ProcessorTaskUtil.createProcessorExecutionRecord("Writing zip file to local folder");
+				message = new HashMap<>();
+				byte[] acks = baos.toByteArray();
+				zipFileName = location + File.separator + zipFileName;
+				var zipFile = new File(zipFileName);
+				if (!zipFile.exists()) {
+					zipFile.getParentFile().mkdirs();
+					zipFile.createNewFile();
+					log.info("ack file created for absolute path: {} ", zipFile.getAbsolutePath());
+				}
+				
+				try (OutputStream fs = new BufferedOutputStream(Files.newOutputStream(zipFile.toPath())) ){
+		            fs.write(acks);
+		            message.put(Workflow.OUTCOME_KEY, "Zip file written to local folder");
+		        }
+		        catch (IOException e) {
+		        	log.error("createAckZipFile IOException while Writing zip file to local folder {}={}, {}={} {}",
+		        			DELEGATE_EXECUTION_ID, getDelegateExecutionId(execution), PROCESSOR_TRANSACTION_ID, getProcessorTransactionId(processorTransaction),
+		        			ExceptionUtils.getStackTrace(e));
+		        	addErrorMsg("CreateACKFile-->CreateACKZipFile-->IOException while Writing zip file to local folder", WorkFlowUtil.getStackTrace(e));
+		            message.put(Workflow.OUTCOME_KEY, "There was an error creating Ack zip file.");
+		            message.put(Workflow.ERROR_KEY, e.toString());
+		            // String msg = ProcessorErrorCode.UNKNOWN_ERROR_POSTING_TO_FDS_1819.getErrorMessage() + " " + e.getClass().getSimpleName() + ": " + e.getMessage() + "; createAckZipFile-2";
+		           // processorTransaction.getSummary().addError(new ProcessorError(msg, ProcessorErrorCode.UNKNOWN_ERROR_POSTING_TO_FDS_1820.getErrorCode()));
+		            return false;
+		        }
+		        finally {
+		            ProcessorTaskUtil.addMessageToProcessorExecutionRecordToProcessorTransaction(processorTransaction, executionRecord, message);
+		            baos.close();
+		        }
+				 execution.setTransientVariable(Workflow.ACK_FILE, zipFile.getAbsolutePath());
+		} catch(Exception e) {
+			log.error("createAckZipFile Exception while creating ACK zip file {}={}, {}={} {}",
+					DELEGATE_EXECUTION_ID, getDelegateExecutionId(execution), PROCESSOR_TRANSACTION_ID, getProcessorTransactionId(processorTransaction),
+					ExceptionUtils.getStackTrace(e));
+			addErrorMsg("CreateACKFile-->CreateACKZipFile-->Exception while creating ACK zip file", WorkFlowUtil.getStackTrace(e));
+			message.put(Workflow.OUTCOME_KEY, "There was Exception while creating ACK zip file");
+			message.put(Workflow.ERROR_KEY, e.toString());
+			if (processorTransaction != null) {
+				//String msg = ProcessorErrorCode.UNKNOWN_ERROR_POSTING_TO_FDS_1821.getErrorMessage() + " " + e.getClass().getSimpleName() + ": " + e.getMessage() + "; createAckZipFile-3";
+				//processorTransaction.getSummary().addError(new ProcessorError(msg, ProcessorErrorCode.UNKNOWN_ERROR_POSTING_TO_FDS_1822.getErrorCode()));
+			}
+			ProcessorTaskUtil.addMessageToProcessorExecutionRecordToProcessorTransaction(processorTransaction, executionRecord, message);
+			return false;
+		}
+		return true;
+	}
 
-    /**
-     * @param salt
-     * @param input
-     * @return
-     * @throws Exception
-     */
-    public static String encrypt(String salt, String input) throws Exception {
-        BlowfishEngine engine = new BlowfishEngine();
-        PaddedBufferedBlockCipher cipher = new PaddedBufferedBlockCipher(engine);
-        KeyParameter key = new KeyParameter(CLEF_VAL_PHRASE.getBytes());
-        cipher.init(true, key);
-        byte[] in = (salt + input).getBytes();
-        byte[] out = new byte[cipher.getOutputSize(in.length)];
-        int len1 = cipher.processBytes(in, 0, in.length, out, 0);
-        try {
-            cipher.doFinal(out, len1);
-        } catch (Exception e) {
-            LOGGER.error("encrypt {}={}, {}={} {}",
-            		"salt", salt,
-            		"input", input,
-                    ExceptionUtils.getStackTrace(e));
-            throw new Exception(e.getMessage(), e);
-        }
-        return new String(Base64.encode(out));
-    }
+	private void resetProcessingMetrics (ProcessorTransaction processorTransaction) {
+		processorTransaction.getSummary().getProcessingMetrics().setFileCount(0);
+		processorTransaction.getSummary().getProcessingMetrics().setAverageRunTime(0L);
+		processorTransaction.getSummary().getProcessingMetrics().setAverageFileSize(0L);
 
-    /**
-     * uses a default salt
-     * 
-     * @param input
-     * @return
-     * @throws Exception
-     */
-    public static String encrypt(String input) throws Exception {
-        return EncryptionUtil.encrypt(SLAT1, input);
-    }
+		processorTransaction.getSummary().getProcessingMetrics().setBytesProcessed(0L);
+		processorTransaction.getSummary().getProcessingMetrics().setTotalRunTime(0L);
+		
+	}
+	
+	private List<ProcessorFileTask> processAllFileTasksForTransaction(ProcessorTransaction processorTransaction) {
+		log.info("CreateACKFile-->processAllFileTasksForTransaction-->ENTER");
+		List<ProcessorFileTask> processorFileTasks = processorsService.getProcessorFileTasksForTransactionId(processorTransaction.getId());
+		if (processorFileTasks != null && !processorFileTasks.isEmpty()) {
+			// reset the file count to 0 here.
+			resetProcessingMetrics(processorTransaction);
+			for (ProcessorFileTask processorFileTask : processorFileTasks) {
+				summarizeFileTask(processorTransaction, processorFileTask);
+			}
+			// set Average Runtime
+			var processingMetrics = processorTransaction.getSummary().getProcessingMetrics();
+			if (processingMetrics.getFileCount() > 0) {
+				processingMetrics.setAverageRunTime(
+					processorTransaction.getSummary().getRunTime() / processingMetrics.getFileCount()
+				);
+				// Set Average File Size
+				processingMetrics.setAverageFileSize(
+					processingMetrics.getBytesProcessed() / processingMetrics.getFileCount()
+				);
+			} else {
+				processingMetrics.setAverageRunTime(0L);
+				processingMetrics.setAverageFileSize(0L);
+			}
+		}
+		log.info("CreateACKFile-->processAllFileTasksForTransaction-->EXIT");
+		return processorFileTasks;
+	}
 
-    /**
-     * @param salt
-     * @param encryptedString
-     * @return
-     * @throws InvalidCipherTextException
-     * @throws IllegalStateException
-     * @throws DataLengthException
-     */
-    public static String decrypt(String salt, String encryptedString) throws DataLengthException, IllegalStateException, InvalidCipherTextException {
-        BlowfishEngine engine = new BlowfishEngine();
-        PaddedBufferedBlockCipher cipher = new PaddedBufferedBlockCipher(engine);
-        StringBuilder result = new StringBuilder();
-        KeyParameter key = new KeyParameter(CLEF_VAL_PHRASE.getBytes());
-        cipher.init(false, key);
-        byte[] out = Base64.decode(encryptedString);
-        byte[] out2 = new byte[cipher.getOutputSize(out.length)];
-        int len2 = cipher.processBytes(out, 0, out.length, out2, 0);
-        cipher.doFinal(out2, len2);
-        String s2 = new String(out2);
-        for (int i = 0; i < s2.length(); i++) {
-            char c = s2.charAt(i);
-            if (c != 0) {
-                result.append(c);
-            }
-        }
-        return result.toString().replace(salt, "");
-    }
+	private void summarizeFileTask(ProcessorTransaction processorTransaction, ProcessorFileTask processorFileTask){
+		log.info("CreateACKFile-->summarizeFileTask-->ENTER");
+		if (MetaDataStatus.FATAL_ERROR.equals(processorFileTask.getStatus()) || MetaDataStatus.SEVERE_ERROR.equals(processorFileTask.getStatus()) ){
+			summarizeFileTaskError(processorTransaction, processorFileTask);
+		}
+		else {
+			summarizeProcessingMetricsForFileTask(processorTransaction, processorFileTask);
+			summarizeFileTaskError(processorTransaction, processorFileTask, false);
+		}
+		log.info("CreateACKFile-->summarizeFileTask-->EXIT");
+	}
+	
+	private void summarizeFileTaskError(ProcessorTransaction processorTransaction, ProcessorFileTask processorFileTask) {
+		summarizeFileTaskError(processorTransaction,  processorFileTask, true);
+	}
 
-    /**
-     * uses default salt
-     * 
-     * @param encryptedString
-     * @return
-     * @throws InvalidCipherTextException
-     * @throws IllegalStateException
-     * @throws DataLengthException
-     */
-    public static String decrypt(String encryptedString) throws DataLengthException, IllegalStateException, InvalidCipherTextException {
-        return EncryptionUtil.decrypt(SLAT1, encryptedString);
-    }
+	private void summarizeFileTaskError(ProcessorTransaction processorTransaction, ProcessorFileTask processorFileTask, boolean callSummarizeProcessingMetricsForFileTask) {
+		log.info("CreateACKFile-->summarizeFileTaskError-->ENTER");
+		if (processorFileTask.getSummary()!= null && processorFileTask.getSummary().getErrorList() != null) {
+			processorFileTask.getSummary().getErrorList().forEach(error -> {
+				if (! MetaDataStatus.SEVERE_ERROR.equals(processorFileTask.getStatus()) && error.getErrorCode() == 18 && ! StringUtils.isEmpty(processorFileTask.getTargetId()))
+				{
+					// US28568: Don't count errCode18 if posted to docVault and then error e.g. mysql deadlock/conflict
+					log.warn("summarizeFileTask Skipping {}; {}={}, {}={}", error.getErrorMessage(),
+							PROCESSOR_TRANSACTION_ID, getProcessorTransactionId(processorTransaction), "processorFileTaskId", processorFileTask.getId());
+					if (callSummarizeProcessingMetricsForFileTask)
+					{
+						summarizeProcessingMetricsForFileTask(processorTransaction, processorFileTask);
+					}
+					return;
+				}
+				error.setFileName(processorFileTask.getFileName());
+				processorTransaction.getSummary().addError(error);
+				processorTransaction.getSummary().getProcessingMetrics().incrementErrorCodeCount(error.getErrorCode());
+			});
+		}
+		log.info("CreateACKFile-->summarizeFileTaskError-->EXIT");
+	}
+
+	private void summarizeProcessingMetricsForFileTask(ProcessorTransaction processorTransaction, ProcessorFileTask processorFileTask) {
+		log.info("CreateACKFile-->summarizeProcessingMetricsForFileTask-->ENTER");
+		var processingMetrics = processorTransaction.getSummary().getProcessingMetrics();
+		processingMetrics.setTotalRunTime(processingMetrics.getTotalRunTime() + Optional.ofNullable(processorFileTask.getSummary()).map(ProcessorSummaryCore::getRunTime).orElse(0L));
+		processingMetrics.setBytesProcessed(
+			processingMetrics.getBytesProcessed() + processorFileTask.getFileSize()
+		);
+		processingMetrics.setFileCount(processingMetrics.getFileCount() + 1);
+		log.info("CreateACKFile-->summarizeProcessingMetricsForFileTask-->EXIT");
+	}
+
+	/**
+	 * @param processorTransaction
+	 * @param zipOuts
+	 * @param processorFileTaskList
+	 * @throws IOException
+	 */
+	private void addProcessorFileTasksToACK(ProcessorTransaction processorTransaction, ZipOutputStream zipOuts,
+			List<ProcessorFileTask> processorFileTaskList) throws IOException {
+		for(ProcessorFileTask processorFileTask : processorFileTaskList){
+			log.info("CreateACKFile --> addProcessorFileTasksToACK processorFileTask id={}, status={}", processorFileTask.getId(), processorFileTask.getStatus());
+			byte[] fileTaskXMLBytes = generateFileTaskACK(processorTransaction, processorFileTask);
+			addACKToZip(zipOuts, processorFileTask.getFileName(), fileTaskXMLBytes);				
+		}
+	}
+	
+	private void addProcessorFileTasksErrorToACK(ProcessorTransaction processorTransaction, ZipOutputStream zipOuts,
+			List<ProcessorFileTask> processorFileTaskList) throws IOException {
+		for(ProcessorFileTask processorFileTask : processorFileTaskList){
+			log.info("CreateACKFile --> addProcessorFileTasksErrorToACK processorFileTask id={}, status={}", processorFileTask.getId(), processorFileTask.getStatus());
+			if(processorFileTask.getSummary()!= null && processorFileTask.getSummary().getErrorList() != null && processorFileTask.getStatus() != MetaDataStatus.COMPLETE){
+				byte[] fileTaskXMLBytes = generateFileTaskAckErrorsWithFileName(processorTransaction, processorFileTask);
+				addACKToZip(zipOuts, processorFileTask.getFileName(), fileTaskXMLBytes);				
+			}
+			
+		}
+	}
+	
+	@SuppressWarnings("rawtypes")
+	private byte[] generateFileTaskAckErrorsWithFileName(ProcessorTransaction processorTransaction, ProcessorFileTask processorFileTask) throws IOException {
+		log.info("CreateACKFile-->generateFileTaskACK-->ENTER");
+		ArrayList<HashMap> errors = new ArrayList<>();
+		if (processorFileTask.getSummary()!= null && processorFileTask.getSummary().getErrorList() != null) {
+			processorFileTask.getSummary().getErrorList().forEach(processorError -> {
+				if (! MetaDataStatus.SEVERE_ERROR.equals(processorFileTask.getStatus()) && processorError.getErrorCode() == 18 && ! StringUtils.isEmpty(processorFileTask.getTargetId()))
+				{
+					// US30615: Don't count errCode18 if posted to docVault and then error e.g. mysql deadlock/conflict - extending this logic to individual ack files for MR Appeals
+					log.warn("individualFileTask Skipping {}; {}={}, {}={}", processorError.getErrorMessage(),
+							PROCESSOR_TRANSACTION_ID, getProcessorTransactionId(processorTransaction), "processorFileTaskId", processorFileTask.getId());
+					return;
+				}
+				HashMap<String, HashMap<String, String>> oneError = new HashMap<>();
+				errors.add(oneError);
+				HashMap<String, String> error = new HashMap<>();
+				oneError.put(ERROR, error);
+				error.put(FILE_NAME, processorError.getFileName());
+				error.put(ERROR_CODE, processorError.getErrorCode().toString());
+				error.put(DESCRIPTION, processorError.getErrorMessage());
+			});
+		}
+		byte[] fileTaskJSonBytes = generateAckFileDetails(processorTransaction, processorFileTask, errors);
+		log.info("CreateACKFile-->generateFileTaskACK-->EXIT");
+		return fileTaskJSonBytes;
+	}
+	
+	private byte[] generateAckFileDetails(ProcessorTransaction processorTransaction, ProcessorFileTask processorFileTask, ArrayList<HashMap> errors ) throws IOException {
+		HashMap<String, Object> jMap = new HashMap<>();
+		jMap.put("Errors", errors);
+		jMap.put(FILE_NAME, processorFileTask.getFileName());
+		
+		// adding NGS ID to MR Appeals individual ack files
+		if(processorFileTask.getMetadata() != null && processorFileTask.getMetadata().get(Workflow.NGSID) != null) {
+			jMap.put(NGSID, processorFileTask.getMetadata().get(Workflow.NGSID).toString());
+	    }
+		
+		if(processorFileTask.getMetadata() != null && processorFileTask.getMetadata().get(Workflow.EMAIL_ALERT_REQUEST) != null) {
+				jMap.put("IsPrintSuppressed", processorFileTask.getMetadata().get(Workflow.EMAIL_ALERT_REQUEST).toString());
+		}	else { 
+				jMap.put("IsPrintSuppressed", StringUtils.EMPTY);
+		}
+		jMap.put("DocumentId", processorFileTask.getTargetId());
+		if (processorFileTask.getDateProcessed() != null) {
+			jMap.put("DateProcessed", processorFileTask.getDateProcessed());
+		} else {
+			jMap.put("DateProcessed", processorTransaction.getSummary().getStartTime());
+		}
+
+		String fileTaskJSon = Parser.toJson(jMap, "E MMM dd HH:mm:ss z yyyy", TimeZone.getTimeZone("UTC"));
+		return fileTaskJSon.getBytes();
+		//return fileTaskJSonBytes;
+	}
+	
+
+	@SuppressWarnings("rawtypes")
+	private byte[] generateFileTaskACK(ProcessorTransaction processorTransaction, ProcessorFileTask processorFileTask) throws IOException {
+		log.info("CreateACKFile-->generateFileTaskACK-->ENTER");
+		ArrayList<HashMap> errors = new ArrayList<>();
+		if (processorFileTask.getSummary()!= null && processorFileTask.getSummary().getErrorList() != null) {
+			processorFileTask.getSummary().getErrorList().forEach(processorError -> {
+				HashMap<String, HashMap<String, String>> oneError = new HashMap<>();
+				errors.add(oneError);
+				HashMap<String, String> error = new HashMap<>();
+				oneError.put(ERROR, error);
+				error.put(ERROR_CODE, processorError.getErrorCode().toString());
+				error.put(DESCRIPTION, processorError.getErrorMessage());
+			});
+		}
+		byte[] fileTaskJSonBytes = generateAckFileDetails(processorTransaction, processorFileTask, errors);
+		log.info("CreateACKFile-->generateFileTaskACK-->EXIT");
+		return fileTaskJSonBytes;
+	}
+
+	private void addACKToZip(ZipOutputStream zos, String fileName, byte[] fileTaskJSonBytes) throws IOException {
+		log.info("CreateACKFile-->addACKToZip-->ENTER");
+		try {
+			String newFileName = Utilities.stripFileExtension(fileName) + ".ack";
+			var entry = new ZipEntry(newFileName);
+			entry.setSize(fileTaskJSonBytes.length);
+			zos.putNextEntry(entry);
+			zos.write(fileTaskJSonBytes);
+			zos.closeEntry();
+		} catch (IOException e) {
+			log.error("addACKToZip Exception while adding ack file to zip {}={} {}",
+        			"fileName", fileName ,
+	                ExceptionUtils.getStackTrace(e));
+		}
+		log.info("CreateACKFile-->addACKToZip-->EXIT");
+	}
+
+	@SuppressWarnings({ "rawtypes", "unchecked" })
+	private final boolean closeZipStream(ZipOutputStream zipOuts, ProcessorTransaction processorTransaction) {
+		var error = false;
+		var executionRecord = ProcessorTaskUtil.createProcessorExecutionRecord("Closing zip stream");
+		Map zipMessage = new HashMap<>();
+		try {
+			zipOuts.close();
+			log.info("CreateACKFile-->closeZipStream-->Zip stream closed successfully");
+			zipMessage.put(Workflow.OUTCOME_KEY, "Zip stream closed successfully");
+		} catch (IOException e) {
+			log.error("closeZipStream There was an error closing zip stream {}={} {}",
+        			PROCESSOR_TRANSACTION_ID, getProcessorTransactionId(processorTransaction),
+	                ExceptionUtils.getStackTrace(e));
+			addErrorMsg("CreateACKFile-->closeZipStream-->There was an error closing zip stream", WorkFlowUtil.getStackTrace(e));
+			error = true;
+			zipMessage.put(Workflow.OUTCOME_KEY, "There was an error closing zip stream");
+			zipMessage.put(Workflow.ERROR_KEY, e.toString());
+		} finally {
+			ProcessorTaskUtil.addMessageToProcessorExecutionRecordToProcessorTransaction(processorTransaction, executionRecord, zipMessage);
+		}
+		return error;
+	}
+
+	@SuppressWarnings("rawtypes")
+	private byte[] generateSummaryFileForTransactionInReady(ProcessorTransaction processorTransaction,
+			List<ProcessorFileTask> processorFileTaskList) throws IOException {
+		log.info("CreateACKFile-->generateSummaryFileForTransactionInReady-->ENTER");
+		Map<String, Object> jMap = new HashMap<>();
+		Map<String, Object> sumMap = new HashMap<>();
+		ArrayList<Map> errors = new ArrayList<>();
+		ArrayList<Map> files = new ArrayList<>();
+		ArrayList<Map> filesWithoutError12 = new ArrayList<>();
+		
+		if (processorTransaction.getSummary().getErrorList() != null) {
+			processorTransaction.getSummary().getErrorList().forEach(processorError -> {
+				Map<String, Map<String, String>> oneError = new HashMap<>();
+				errors.add(oneError);
+				HashMap<String, String> error = new HashMap<>();
+				oneError.put(ERROR, error);
+				error.put(FILE_NAME, processorError.getFileName());
+				error.put(ERROR_CODE, processorError.getErrorCode().toString());
+				
+				if (!CollectionUtils.isEmpty(processorFileTaskList)) {
+					for (ProcessorFileTask processorFileTask : processorFileTaskList) {
+						if (processorFileTask.getMetadata() != null
+								&& processorFileTask.getMetadata().get(Workflow.NGSID) != null && processorError.getFileName() != null && processorFileTask.getFileName().contains(processorError.getFileName()) ) {
+							error.put(NGSID, processorFileTask.getMetadata().get(Workflow.NGSID).toString());
+						}
+					}
+				}
+				 
+				error.put(DESCRIPTION, processorError.getErrorMessage());
+			});
+		}
+		
+
+		List<ProcessorError> processorErrors = processorTransaction.getSummary().getErrorList();
+		if (processorErrors != null && processorTransaction.getFileToProcessList() != null) {
+			processorTransaction.getFileToProcessList().forEach(fileName -> {
+				var processorError = findFileNameInErrorList(processorErrors, fileName);
+				if (processorError != null) {
+					HashMap<String, HashMap<String, String>> error = new HashMap<>();
+					files.add(error);
+					HashMap<String, String> oneError = new HashMap<>();
+					error.put("File", oneError);
+					oneError.put(FILE_NAME, processorError.getFileName());
+					
+					if (processorError.getErrorCode() != 12) {
+						filesWithoutError12.add(error);
+					}
+				}
+			});
+		}
+
+		ArrayList<Map> uniqueErrors = new ArrayList<>(new HashSet<>(errors));
+
+		ArrayList<Map> uniqueErrorFiles = new ArrayList<>(new HashSet<>(files));
+		
+		ArrayList<Map> uniqueErrorFilesWithoutError12 = new ArrayList<>(new HashSet<>(filesWithoutError12));
+
+		Integer totalFiles = 0;
+		if (processorTransaction.getFileToProcessList() != null) {
+			totalFiles = processorTransaction.getFileToProcessList().size();
+		}
+		if (processorTransaction.getMissingFileList() != null) {
+			totalFiles += processorTransaction.getMissingFileList().size();
+		}
+
+		if ((processorTransaction.getFileToProcessList() == null) && (processorTransaction.getMissingFileList() == null)
+				&& (processorTransaction.getSummary().getProcessingMetrics().getFileCount() > 0)) {
+			totalFiles = processorTransaction.getSummary().getProcessingMetrics().getFileCount();
+		}
+		
+		sumMap.put(FILE_NAME, processorTransaction.getFileName());
+		sumMap.put("TotalFiles", totalFiles.toString());
+		sumMap.put("RunTime", processorTransaction.getSummary().getProcessingMetrics().getTotalRunTime().toString());
+		if (processorTransaction.getSummary().getProcessingMetrics().getFileCount() > 0) {
+			long averageRuntime = processorTransaction.getSummary().getProcessingMetrics().getTotalRunTime()
+					/ processorTransaction.getSummary().getProcessingMetrics().getFileCount();
+			sumMap.put("AverageRunTime", String.valueOf(averageRuntime));
+			long averageByteProcessed = processorTransaction.getSummary().getProcessingMetrics().getBytesProcessed()
+					/ processorTransaction.getSummary().getProcessingMetrics().getFileCount();
+			sumMap.put("AverageBytesProcessed", String.valueOf(averageByteProcessed));
+			sumMap.put("TotalBytes", processorTransaction.getSummary().getProcessingMetrics().getTotalBytes());
+			sumMap.put("AverageFileSize", processorTransaction.getSummary().getProcessingMetrics().getTotalBytes()
+					/ processorTransaction.getSummary().getProcessingMetrics().getFileCount());
+		}
+		sumMap.put("BytesProcessed",
+				processorTransaction.getSummary().getProcessingMetrics().getBytesProcessed().toString());
+		var trailId = "";
+		if (!CollectionUtils.isEmpty(processorFileTaskList)) {
+			for (ProcessorFileTask processorFileTask : processorFileTaskList) {
+				if (processorFileTask != null && !MetaDataStatus.FATAL_ERROR.equals(processorFileTask.getStatus())
+						&& processorFileTask.getMetadata() != null
+						&& processorFileTask.getMetadata().get(Workflow.ORIGINAL_PRINT_TRAIL) != null) {
+					trailId = (String) processorFileTask.getMetadata().get(Workflow.ORIGINAL_PRINT_TRAIL);
+					break;
+				}
+			}
+		}
+		
+		sumMap.put("TrailID", trailId);
+		sumMap.put("FilesProcessed", totalFiles - uniqueErrorFilesWithoutError12.size());
+		jMap.put("Errors", uniqueErrors);
+		jMap.put("Files", uniqueErrorFiles);
+		jMap.put("TransactionSummary", sumMap);
+
+		String summaryJSon = Parser.toJson(jMap);
+		byte[] summaryJSonBytes = summaryJSon.getBytes();
+		log.info("CreateACKFile-->generateSummaryFileForTransactionInReady-->EXIT");
+		return summaryJSonBytes;
+	}
+
+	private ProcessorError findFileNameInErrorList(List<ProcessorError> errors, String fileName) {
+		log.info("CreateACKFile-->findFileNameInErrorList-->ENTER");
+		ProcessorError processorError = null;
+		var i = 0;
+		while (processorError == null && errors.size() > i) {
+			ProcessorError error = errors.get(i++);
+			if (error.getFileName() != null && error.getFileName().equals(fileName)) {
+				processorError = error;
+			}
+		}
+		log.info("CreateACKFile-->findFileNameInErrorList-->EXIT");
+		return processorError;
+	}
+	
+	protected String getDelegateExecutionId(DelegateExecution execution)
+	{
+		return execution != null ? execution.getId() : "NULL";
+	}
+
+	protected String getProcessorTransactionId(ProcessorTransaction processorTransaction)
+	{
+		return processorTransaction != null ? processorTransaction.getId() : "NULL";
+	}
 }
 
 
@@ -709,3 +859,612 @@ public class EncryptionUtil {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+==
+
+
+
+@Service("CreateAckTemplate")
+public class CreateAckTemplate extends OptumJavaDelegateBase {
+    private static final Logger LOGGER = LoggerFactory.getLogger(CreateAckTemplate.class);
+    private static final String SUMMARY ="summary";
+    private static final String XMLOBJECT = "xmlObject";
+    private static final String FILENAME = "fileName";
+    private static final String BATCHID = "batchId";
+    private static final String DATE_MODIFIED ="dateModified";
+    private static final String DELEGATE_EXECUTION_ID = "delegateExecutionId";
+    private static final String FAILED = "Failed";
+    private static final String FILE_NAME = "FileName";
+    private static final String STATUS = "Status";
+    private static final String FILE_PATH = "filePath";
+    private static final String JSON_FILE = "jsonFile";
+    private static final String CLIENT_ID = "clientId";
+    private static final String SPACE_ID = "spaceId";
+    private static final List<String> REQ_VARS = Arrays.asList(
+    	Workflow.TEMPLATE_NAME, Workflow.JSON_FILE,  Workflow.OUTPUT_FILE_DIR, Workflow.OUTPUT_FILE_EXTENSION, Workflow.ZIP_OUTPUT_FILE
+    );
+
+    @Autowired
+    ProcessorService processorService;
+    
+    @Autowired
+   	DocumentMetaDataService documentMetaDataService;
+
+	@Autowired
+    EmailService emailService;
+	
+	@Autowired
+	ErrorMetaDataService errorMetaDataService;
+
+
+    public CreateAckTemplate() {
+        super(REQ_VARS);
+    }
+
+    @Override
+    protected void doExecute(DelegateExecution execution) {
+        String processTransactionIngestFolder = null;
+    	LOGGER.debug("Entering CreateAckTemplate doExecute");
+    	
+    	try {
+            var templateName = execution.getVariable(Workflow.TEMPLATE_NAME).toString();
+
+            String jsonFile = execution.getVariable(Workflow.JSON_FILE, String.class);
+
+            var jsonFileToProcess = new File(jsonFile);
+
+            processTransactionIngestFolder = execution.getVariable(Workflow.OUTPUT_FILE_DIR, String.class);
+
+            var processorTransactions =new ProcessorTransactions();
+
+            String mappingValueJson=null;
+            var gson = new Gson();
+
+            try (InputStream is = new BufferedInputStream(Files.newInputStream(jsonFileToProcess.toPath()))){
+            	  mappingValueJson = Parser.inputStreamToStringNoBomExclusion(is);
+            }catch(IOException e){
+                LOGGER.error("doExecute Unable to parse JSON File {}={}, {}={}, {}={} {}",
+    					DELEGATE_EXECUTION_ID, getDelegateExecutionId(execution), Workflow.TEMPLATE_NAME, templateName, JSON_FILE, jsonFile,
+    					ExceptionUtils.getStackTrace(e));
+                addErrorMsg("CreateAckTemplate-->doExecute-->Unable to parse JSON File", e.getMessage());
+                errorMetaDataService.writeToErrorCollection(execution,  "CreateACKTemplate --> doExecute: " + e.getMessage());
+                return;
+            }
+
+            try{
+                processorTransactions = gson.fromJson(mappingValueJson, ProcessorTransactions.class);
+            }catch(JsonSyntaxException e){
+                LOGGER.error("doExecute Unable to convert Json to Object {}={}, {}={}, {}={} {}",
+    					DELEGATE_EXECUTION_ID, getDelegateExecutionId(execution), Workflow.TEMPLATE_NAME, templateName, JSON_FILE, jsonFile,
+    					ExceptionUtils.getStackTrace(e));
+                addErrorMsg("CreateAckTemplate-->doExecute-->Unable to Json to Object", e.getMessage());
+                errorMetaDataService.writeToErrorCollection(execution, "CreateACKTemplate --> doExecute: " + e.getMessage());
+                return;
+            }
+            
+            String outputFileExtension = execution.getVariable(Workflow.OUTPUT_FILE_EXTENSION, String.class);
+            Boolean zipOutputFile = execution.getVariable(Workflow.ZIP_OUTPUT_FILE, Boolean.class);
+
+            if (processorTransactions != null) {
+            	ArrayList<String> ackFileList = new ArrayList<>();
+                for(var i=0; i<processorTransactions.getProcessorTransactions().size(); i++){
+                    try {
+                        JsonObject processorTransaction = processorTransactions.getProcessorTransactions().get(i);
+                        HashMap<String, Object> fileStatus = new HashMap<>();
+                        try {
+                            fileStatus = prepareTemplateData(fileStatus, processorTransaction, execution);
+                            if (fileStatus == null) {
+                            	LOGGER.error("createAckTemplate-->doExecute-->processorFileTasks list is empty");
+                            	addErrorMsg("processorFileTasks list is empty", "createAckTemplate-->doExecute-->processorFileTasks list is empty");
+                            	continue;
+                            }
+                            
+                        }catch(Exception e){
+                            LOGGER.error("doExecute cannot prepare template {}={}, {}={}, {}={} {}",
+                					DELEGATE_EXECUTION_ID, getDelegateExecutionId(execution), Workflow.TEMPLATE_NAME, templateName, JSON_FILE, jsonFile,
+                					ExceptionUtils.getStackTrace(e));
+                            addErrorMsg("createAckTemplate-->doExecute-->cannot prepare template", e.getMessage());
+                            errorMetaDataService.writeToErrorCollection(execution, "CreateACKTemplate --> doExecute: " + e.getMessage());
+                            continue;
+                        }
+                        String jsonprocessorTransaction = new Gson().toJson(fileStatus);
+                        String ackString = null;
+                        try {
+                        	ackString = TemplateFactory.getInstance(templateName).convertWithTemplate(jsonprocessorTransaction);
+                        }catch(Exception e){
+                            LOGGER.error("doExecute cannot convert with template {}={}, {}={}, {}={} {}",
+                					DELEGATE_EXECUTION_ID, getDelegateExecutionId(execution), Workflow.TEMPLATE_NAME, templateName, JSON_FILE, jsonFile,
+                					ExceptionUtils.getStackTrace(e));
+                            addErrorMsg("createAckTemplate-->doExecute-->cannot convert with template", e.getMessage());
+                            errorMetaDataService.writeToErrorCollection(execution, "CreateACKTemplate --> doExecute: " + e.getMessage());
+                            continue;
+                        }
+                        String ackFile = null;
+                        if(processTransactionIngestFolder!=null && !ackString.isEmpty()) {
+                            String ackFileName = Utilities.replaceExtension(processorTransaction.get(FILENAME).toString(), outputFileExtension);
+                            ackFileName = ackFileName.substring(1);
+                            ackFile = generateAckFile(ackString, processTransactionIngestFolder, ackFileName, zipOutputFile, execution);
+                        }
+                        else {
+                            LOGGER.error("createAckTemplate-->doExecute-->filePath is null");
+                            addErrorMsg("createAckTemplate-->doExecute-->filePath is null", "filePath is null");
+                            errorMetaDataService.writeToErrorCollection(execution, "CreateAckTemplate --> doExecute: filePath is null");
+                            continue;
+                        }
+                        if(ackFile != null) {
+                        	ackFileList.add(ackFile);
+                        }
+                        else {
+                            LOGGER.error("CreateAckTemplate-->doExecute-->ackFile is null");
+                            addErrorMsg("CreateAckTemplate-->doExecute-->ackFile is null", "ackFile is null");
+                            errorMetaDataService.writeToErrorCollection(execution, "CreateAckTemplate --> doExecute: ackFile is null");
+                            continue;
+                        }
+                    } catch (Exception e) {
+                        LOGGER.error("doExecute processorTransaction is null {}={}, {}={}, {}={} {}",
+            					DELEGATE_EXECUTION_ID, execution != null ? execution.getId() : "NULL", Workflow.TEMPLATE_NAME, templateName, JSON_FILE, jsonFile,
+            					ExceptionUtils.getStackTrace(e));
+                        addErrorMsg("CreateAckTemplate-->doExecute-->processorTransaction is null", e.getMessage());
+                        errorMetaDataService.writeToErrorCollection(execution, "CreateACKTemplate --> doExecute: " + e.getMessage());
+                        continue;
+                    }
+                }
+                execution.setTransientVariable(Workflow.SFTP_FILE_LIST, ackFileList);
+            }else{
+                LOGGER.error("CreateAckTemplate-->doExecute-->processorTransactionList is null");
+                addErrorMsg("CreateAckTemplate-->doExecute-->processorTransactionList is null", "processorTransactionList is null");
+                errorMetaDataService.writeToErrorCollection(execution, "CreateACKTemplate --> doExecute: processorTransactionList is null");
+                return;
+            }
+            String activitiJobId = execution.getCurrentActivityId();
+            ProcessorTransactions processorTransactionsUpdatedList = null;
+            processorTransactionsUpdatedList = updateProcessorTransaction(processorTransactions, activitiJobId, execution);
+            if(processorTransactionsUpdatedList != null) {
+                LOGGER.debug("doExecute posting {}", Workflow.PROCESSOR_TRANSACTION_UPDATE);
+                execution.setTransientVariable(Workflow.PROCESSOR_TRANSACTION_UPDATE, processorTransactionsUpdatedList.getProcessorTransactions().toString());
+            }
+
+    	} catch (Exception e) {
+			LOGGER.error("doExecute Exception while executing CreateAckTemplate task {}={} {}",
+					DELEGATE_EXECUTION_ID, execution != null ? execution.getId() : "NULL",
+					ExceptionUtils.getStackTrace(e));
+			errorMetaDataService.writeToErrorCollection(execution, "CreateACKTemplate --> doExecute: " + e.getMessage());
+			addErrorMsg("CreateAckTemplate-->doExecute-->Exception while executing CreateAckTemplate task", e.getMessage());
+        } finally {
+        	if (newErrors() && errorMap.size() > 1 ) {
+        		DelegateUtils.sendErrorNotification(execution, errorMap, DelegateUtils.generateMessageforCronExpressionHookWorkflow(execution), emailService);
+    		}
+        }
+    	
+        LOGGER.debug("CreateAckTemplate-->doExecute-->EXIT");
+    }
+
+
+    private ProcessorTransactions updateProcessorTransaction(ProcessorTransactions processorTransactions, String activitiJobId, DelegateExecution execution) {
+
+        LOGGER.debug("Entering createAckTemplate updateProcessorTransaction");
+
+        var processorTransactions1 =new ProcessorTransactions();
+
+        ArrayList<JsonObject> pT = new ArrayList<>();
+
+        var dateFormatter = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
+
+        dateFormatter.setTimeZone(TimeZone.getTimeZone("UTC"));
+        var d = new Date();
+
+        if (processorTransactions != null) {
+
+            for(var i=0; i<processorTransactions.getProcessorTransactions().size(); i++){
+
+                try {
+
+                    var processorTransactionNew = new JsonObject();
+                    JsonObject processorTransaction = processorTransactions.getProcessorTransactions().get(i);
+
+                    if(processorTransaction != null) {
+
+                        if(processorTransaction.get("id") != null){
+                            processorTransactionNew.addProperty(Workflow.MONGO_ID, processorTransaction.get("id").getAsString());
+                        }
+                        processorTransactionNew.addProperty("ackStatus", AckStatus.COMPLETE.toString());
+                        var processExec = new JsonObject();
+
+                        var processorExecutionRecordList = processorTransaction.getAsJsonArray("processorExecutionRecordList");
+                        if (((JsonPrimitive) ((JsonObject) processorExecutionRecordList.get(0)).get(CLIENT_ID)) != null) {
+
+                            processExec.addProperty(CLIENT_ID, ((JsonObject) processorExecutionRecordList.get(0)).get(CLIENT_ID).toString());
+                        }
+                        if (((JsonPrimitive) ((JsonObject) processorExecutionRecordList.get(0)).get(SPACE_ID)) != null) {
+                            processExec.addProperty(SPACE_ID, ((JsonObject) processorExecutionRecordList.get(0)).get(SPACE_ID).toString());
+                        }
+                        //get from execution bus
+                        processExec.addProperty("activitiJobId", activitiJobId);
+                        processExec.addProperty("activitiJobStatus", "COMPLETED");
+                        processExec.addProperty("activitiProcessKey", "cleanupFilesCreateACKTemplateProcess");
+                        processExec.addProperty("dateActivitiJobCompleted", dateFormatter.format(d));
+                        processExec.addProperty("dateActivitiJobCreated", dateFormatter.format(d));
+                        processorExecutionRecordList.add(processExec);
+                        processorTransactionNew.add("processorExecutionRecordList", processorExecutionRecordList);
+                        pT.add(processorTransactionNew);
+                    }
+                } catch (Exception e) {
+                    LOGGER.error("updateProcessorTransaction Unable to update ProcessorTransaction {}={} {}",
+        					"activitiJobId", activitiJobId,
+        					ExceptionUtils.getStackTrace(e));
+                    addErrorMsg("createAckTemplate:updateProcessorTransaction-->doExecute-->Unable to update ProcessorTransaction", e.getMessage());
+                    errorMetaDataService.writeToErrorCollection(execution, "CreateACKTemplate --> updateProcessorTransaction: " + e.getMessage());
+                    return null;
+
+                }
+            }
+        }
+        else {
+            LOGGER.debug("updateProcessorTransaction; processorTransactions == null");
+        }
+        processorTransactions1.setProcessorTransactions(pT);
+        LOGGER.debug("Exiting createAckTemplate updateProcessorTransaction");
+        return processorTransactions1;
+
+    }
+    
+    private HashMap<String, Object> prepareTemplateData(HashMap<String, Object> fileStatus, JsonObject processorTransaction, DelegateExecution execution) throws ParseException {
+    	if(processorTransaction.getAsJsonObject(SUMMARY) != null 
+    			&& processorTransaction.getAsJsonObject(SUMMARY).getAsJsonObject(XMLOBJECT) != null 
+    			&& StringUtils.isNotBlank(processorTransaction.getAsJsonObject(SUMMARY).getAsJsonObject(XMLOBJECT).get(BATCHID).getAsString()) ) {
+    		fileStatus.put("BatchID", processorTransaction.getAsJsonObject(SUMMARY).getAsJsonObject(XMLOBJECT).get(BATCHID).getAsString());
+    	} 
+    	else {
+    		fileStatus.put("BatchID", Utilities.stripFileExtension(processorTransaction.get(FILENAME).getAsString()));
+    	}
+        List<ProcessorFileTask> processorFileTasks = processorService.getProcessorFileTasksForTransactionId(processorTransaction.get("id").getAsString(), processorTransaction.get("serverType").getAsString());
+        if(processorFileTasks.isEmpty()) {
+        	LOGGER.info("CreateAckTemplate-->updateProcessorTransaction processorFileTasks list is empty, exiting workflow");
+        	return null;
+        }
+        ArrayList<HashMap<String, Object>> files = new ArrayList<>();
+    	List<DocumentMetaData> documentMetaDataList = new ArrayList<>();
+    	for (ProcessorFileTask fileTask : processorFileTasks) {
+    		var documentMetadata = documentMetaDataService.getDocumentMetaData(fileTask.getTargetId());
+    		if(fileTask.getMetadata() == null || Workflow.Y.equals(fileTask.getMetadata().get("emailAlertReq"))) {
+    			if(MetaDataStatus.FATAL_ERROR.equals(fileTask.getStatus()) || MetaDataStatus.SEVERE_ERROR.equals(fileTask.getStatus())) {
+    				HashMap<String,Object> fileDetails = new HashMap<>();
+    				fileDetails.put(STATUS, FAILED);
+    				fileDetails.put(FILE_NAME, fileTask.getFileName());
+    				files.add(fileDetails);
+    				if (documentMetadata != null) {
+    				    documentMetadata.getMetadata().put("addedToStatusFile", true);
+    				}
+        		}
+    			else {
+    				files.add(checkForEDeliveryFailure(documentMetadata, fileTask.getFileName()));
+    			}
+    		}
+    		if (documentMetadata != null) {
+    			LOGGER.debug("Adding documentMetadata");
+    			documentMetaDataList.add(documentMetadata);
+    		}
+    	}
+    	 execution.setTransientVariable(Workflow.LIST_DOCUMENT_METADATA, documentMetaDataList);
+    	fileStatus.put("Count", files.size());
+    	fileStatus.put("FileNameList", files);    	
+    	String oldDate = processorTransaction.get(DATE_MODIFIED).getAsString();
+    	SimpleDateFormat sdfOld = new SimpleDateFormat("EEE MMM dd HH:mm:ss z yyyy");
+    	SimpleDateFormat sdfNew = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
+    	Date dateModifiedOld = sdfOld.parse(oldDate);
+    	String dateModified = sdfNew.format(dateModifiedOld);
+    	fileStatus.put("UploadDate", dateModified);
+        return fileStatus;
+    }
+    
+    private HashMap<String, Object> checkForEDeliveryFailure(DocumentMetaData documentMetadata, String filName) {
+    	LOGGER.debug("Entering checkForEDeliveryFailure;  fileName={}", filName);
+    	HashMap<String, Object> fileDetails = new HashMap<>();
+		if(documentMetadata != null && documentMetadata.getMetadata() != null) {
+			var sendToDocVault =  documentMetadata.getMetadata().getBoolean(Workflow.SEND_TO_DOCVAULT, true);
+			String docSentTo = (String) documentMetadata.getMetadata().get(Workflow.METADATA_DOCSENTTO_FIELD);
+			var metadata = documentMetadata.getMetadata();
+			LOGGER.debug("sendToDocVault={}, docSentTo={}",sendToDocVault, docSentTo);
+			if (sendToDocVault && Workflow.METADATA_DOCSENTTO_DOCLIB.equalsIgnoreCase(docSentTo)) {
+				fileDetails.put(STATUS, "Success");
+			}
+			else {
+				fileDetails.put(STATUS, FAILED);
+			}
+			if (metadata != null) {
+				metadata.put("addedToStatusFile", true);
+				fileDetails.put(FILE_NAME, metadata.get(FILENAME).toString());
+				documentMetadata.setMetadata(metadata);
+			}
+		}
+		else {
+			fileDetails.put(STATUS, FAILED);
+			fileDetails.put(FILE_NAME, filName);
+		}
+		LOGGER.debug("Exiting checkForEDeliveryFailure");
+		return fileDetails;
+	}
+
+    private String generateAckFile(String ackString, String filePath, String ackFileName, boolean zipOutputFile, DelegateExecution execution) {
+    	String zipFile = null;
+    	try {
+    		var ackFile = new File(filePath+File.separator+ackFileName);
+    		if(!ackFile.exists()) {
+    			ackFile.getParentFile().mkdirs();
+    			if (!ackFile.exists()) {
+    				ackFile.createNewFile();
+    			}
+    		}else{
+    			LOGGER.warn("generateAckFile; File already exists; ackFile={}", ackFile);
+    		}
+    		try(OutputStream fos = new BufferedOutputStream(Files.newOutputStream(Paths.get(filePath+File.separator+ackFileName)));
+    				var bw = new BufferedWriter(new OutputStreamWriter(fos));) {
+    			bw.write(ackString);
+    		}
+    		if(zipOutputFile) {
+    			byte[] fileTaskJSonBytes = ackString.getBytes();
+    			zipFile = generateZip(ackFile, filePath, ackFileName, fileTaskJSonBytes, execution);
+    		}
+    		else {
+    			zipFile = ackFile.getAbsolutePath();
+    		}
+    	}
+    	catch(IOException e) {
+    		zipFile = null;
+    		LOGGER.error("generateAckFile Unable to generate ack file {}={}, {}={} {}",
+    				FILE_PATH, filePath, "ackFileName", ackFileName,
+    				ExceptionUtils.getStackTrace(e));
+    		addErrorMsg("CreateAckTemplate--->doExecute-->Unable to generate ack file", e.getMessage());
+    		errorMetaDataService.writeToErrorCollection(execution, "CreateACKTemplate --> generateAckFile: " + e.getMessage());
+    	}
+    	return zipFile;
+    }
+    
+    private String generateZip(File f, String filePath, String ackfileName, byte[] bytes, DelegateExecution execution) throws IOException{
+
+
+        var buffer = new byte[1024];
+        String zName = Utilities.stripFileExtension(ackfileName);
+        String zipFilePath = filePath+File.separator+zName+"_ack.zip";
+        try (OutputStream fos = new BufferedOutputStream(Files.newOutputStream(Paths.get(zipFilePath)));
+        		 var zos = new ZipOutputStream(fos);
+        		 InputStream in = new BufferedInputStream(Files.newInputStream(f.toPath())) )  {
+
+        var ze= new ZipEntry(ackfileName);
+        zos.putNextEntry(ze);
+
+        int len;
+        while ((len = in.read(buffer)) > 0) {
+            zos.write(buffer, 0, len);
+        }
+        }
+        catch (IOException e) {
+        		LOGGER.error("generateZip {}={}, {}={}, {}={} {}",
+        				"f", f != null ? f.toString() : "NULL",
+                		FILE_PATH, filePath, "ackfileName", ackfileName,
+    					ExceptionUtils.getStackTrace(e));
+        		errorMetaDataService.writeToErrorCollection(execution, "CreateACKTemplate --> generateZip: " + e.getMessage());
+        }
+
+        return zipFilePath;
+    }
+    
+    protected String getDelegateExecutionId(DelegateExecution execution)
+    {
+        return execution != null ? execution.getId() : "NULL";
+    }
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+==
+
+
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+
+
+@Service("CreateOneZipfilePrintServices")
+public class CreateOneZipfilePrintServices extends OptumJavaDelegateBase {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(CreateOneZipfilePrintServices.class);
+
+    private static final List<String> REQ_VARS = List.of(
+            PRINT_SERVICES_MANIFEST_GROUPED_MULTIMAP,
+            PRINT_SERVICES_MANIFEST
+    );
+    private Map<String, String> correlationIDs;
+
+    @Autowired
+    private ZipUtil zipUtil;
+
+    private Params params;
+
+    public CreateOneZipfilePrintServices() {
+        super(REQ_VARS);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public void doExecute(DelegateExecution execution) {
+        LOGGER.debug("CreateOneZipfilePrintServices-->doExecute-->START");
+        boolean fileToBeAdded = false;
+//        Params params = null;
+        try {
+        	
+        	var targetManifestWorkingDir = execution.getVariable(Workflow.OUTPUT_FILE_DIR_SHUTTERFLY, String.class);
+            if (targetManifestWorkingDir == null || targetManifestWorkingDir.isEmpty()) {
+            	targetManifestWorkingDir = execution.getVariable(OUTPUT_FILE_DIR_BOUNCE, String.class);
+            	fileToBeAdded = true;
+        	}
+            
+            var originalCompanionFileName = execution.getVariable(ORIGINAL_COMPANION_FILENAME, String.class);
+            var deliveryMethod = execution.getVariable(DELIVERY_METHOD, String.class);
+            correlationIDs = (Map<String, String>) execution.getVariable(CORRELATION_IDS);
+
+            var targetManifestFileNameList = (List<String>) execution.getVariable(PRINT_SERVICES_MANIFEST);
+            var targetManifestFileNameIterator = targetManifestFileNameList.iterator();
+            var listDocumentMetaDataMultiMap = (Multimap<String, DocumentMetaData>)
+                    execution.getVariable(PRINT_SERVICES_MANIFEST_GROUPED_MULTIMAP);
+            params = new Params(originalCompanionFileName, targetManifestWorkingDir, deliveryMethod);
+
+            LOGGER.info("CreateOneZipfilePrintServices.doExecute: originalCompanionFileName={}, targetManifestWorkingDir={}, targetManifestFileNameList={}, listDocumentMetaDataMultiMap={}",
+                    originalCompanionFileName, targetManifestWorkingDir, targetManifestFileNameList, listDocumentMetaDataMultiMap);
+
+
+            if (!listDocumentMetaDataMultiMap.isEmpty()) {
+                for (var entry : listDocumentMetaDataMultiMap.keyMultiValuePairsView()) {
+
+                    var targetManifestFile = targetManifestFileNameIterator.next();
+                    boolean isFileNameFDSRePrint = targetManifestFile.startsWith(FDS_RPRNT_APPLICATION_NAME);
+
+                    var listDocIds = entry.getTwo()
+                            .collect(DocumentMetaData::getId);
+
+                    LOGGER.info("CreateOneZipfilePrintServices.doExecute: Processing targetManifestFile={}, isFileNameFDSRePrint={}, listDocIds={}",
+                            targetManifestFile, isFileNameFDSRePrint, listDocIds);
+
+                    var listFilesToZip = entry.getTwo()
+                            .flatCollect(documentMetaData -> createPdfZipForFdsReprint(documentMetaData, isFileNameFDSRePrint, execution, params),
+                                    Lists.mutable.empty());
+
+                    zipTxtAndPdfFiles(targetManifestFile, listFilesToZip, params);
+                }
+            } else {
+                String targetManifestFile = targetManifestFileNameIterator.next();
+                zipTxtAndPdfFiles(targetManifestFile, Lists.mutable.empty(), params);
+            }
+            LOGGER.info("CreateOneZipfilePrintServices.doExecute: {}", params);
+            execution.setTransientVariable(SFTP_FILE_LIST, params.zipFileList);
+            execution.setTransientVariable(COMPANION_ZIP_FILE_NAME_MESSAGE, String.join(",", params.zipFileNameListForHookExecutionRecord));
+            if(fileToBeAdded)
+            {
+            	 execution.setTransientVariable("bouncedEmailFileName", params.zipFileNameListForHookExecutionRecord.getFirst());
+            }
+            else {
+            	execution.setTransientVariable("shutterflyFileName", params.zipFileNameListForHookExecutionRecord.getFirst());
+            }
+        } catch (Exception e) {
+            LOGGER.error("CreateOneZipfilePrintServices-->doExecute-->Exception while executing CreateOneZipfilePrintServices task, error:{}",
+                    ExceptionUtils.getStackTrace(e));
+            addErrorMsg("CreateOneZipfilePrintServices-->doExecute-->Exception while executing CreateOneZipfilePrintServices task", e.getMessage());
+            return;
+        }
+        LOGGER.debug("CreateOneZipfilePrintServices-->doExecute-->END");
+    }
+
+    private void zipTxtAndPdfFiles(String targetManifestFile, MutableList<ZipUtilBean> listFilesToZip, Params params) throws IOException {
+        String txtFileName = targetManifestFile + TXT_FINAL_EXTENSION;
+        String targetManifestWorkingDir = params.targetManifestWorkingDirectory;
+
+        String finalZipFileName;
+        String zipFileNameForHookExecutionRecord;
+        if (targetManifestFile.startsWith(FDS_RPRNT_APPLICATION_NAME)) {
+            // adding txt file to zip
+            listFilesToZip.add(ZipUtilBean.from(txtFileName, txtFileName, targetManifestWorkingDir));
+
+            // adding companion file to zip
+            var originalCompanionFileName = params.originalCompanionFileName;
+            if (StringUtils.isNotBlank(originalCompanionFileName)) {
+                String companionFileName = originalCompanionFileName + CMP_FINAL_EXTENSION;
+                listFilesToZip.add(ZipUtilBean.from(companionFileName, companionFileName, targetManifestWorkingDir));
+            }
+            var zipFileName = targetManifestFile + ZIP_FINAL_EXTENSION;
+            var uniqueListFilesToZip = listFilesToZip.distinctBy(ZipUtilBean::getFileName);
+
+            // adding all the pdf and txt in zip file
+            zipUtil.zipFiles(uniqueListFilesToZip, targetManifestWorkingDir, zipFileName);
+
+            // for RPRNT HookExecutionRecord should display the zip file and not the txt file
+            zipFileNameForHookExecutionRecord = targetManifestFile + ZIP_FINAL_EXTENSION;
+            finalZipFileName = targetManifestWorkingDir + zipFileName;
+        } else {
+            // for FDSNoRePrint HookExecutionRecord should display the txt file and not the zip file
+            zipFileNameForHookExecutionRecord = targetManifestFile + TXT_FINAL_EXTENSION;
+
+            // for FDSNoRePrint just adding the txt file only
+            finalZipFileName = targetManifestWorkingDir + txtFileName;
+        }
+        params.zipFileNameListForHookExecutionRecord.add(zipFileNameForHookExecutionRecord);
+        params.zipFileList.add(finalZipFileName);
+        LOGGER.info("zipTxtAndPdfFiles targetManifestFile={}, finalZipFileName={}", targetManifestFile, finalZipFileName);
+    }
+
+    private Iterable<ZipUtilBean> createPdfZipForFdsReprint(DocumentMetaData documentMetaData, boolean isFileNameFDSRePrint, DelegateExecution execution, Params params) {
+        Iterable<ZipUtilBean> zipUtilBeanStream = Lists.fixedSize.of();
+        params.docList.add(documentMetaData.getId());
+        var appIdentifier = documentMetaData.getAppIdentifier();
+        var targetWorkingDir = documentMetaData.getMetadata().get(DOCUMENT_ABSOLUTE_PATH, String.class);
+        var processKey = execution.getVariable(Workflow.PROCESS_KEY, String.class);
+
+            if (isFileNameFDSRePrint) {
+                zipUtilBeanStream = LazyIterate.adapt(documentMetaData.getDocumentAttachments())
+                        .collect(attachmentMetaData -> ZipUtilBean.from(attachmentMetaData.getName(), attachmentMetaData.getName(), targetWorkingDir));
+            }
+        return zipUtilBeanStream;
+    }
+
+    class Params {
+        private MutableList<String> zipFileList;
+        private MutableList<String> zipFileNameListForHookExecutionRecord;
+        private MutableList<String> docList;
+        private String originalCompanionFileName;
+        private String targetManifestWorkingDirectory;
+        private BooleanObjectPair<String> deliveryMethod;
+
+        public Params(String originalCompanionFileName, String targetManifestWorkingDirectory, String deliveryMethod) {
+            this.zipFileList = Lists.mutable.empty();
+            this.zipFileNameListForHookExecutionRecord = Lists.mutable.empty();
+            this.docList = Lists.mutable.empty();
+            this.originalCompanionFileName = originalCompanionFileName;
+            this.targetManifestWorkingDirectory = targetManifestWorkingDirectory;
+            this.deliveryMethod = PrimitiveTuples.pair(DELIVERY_METHOD.equalsIgnoreCase(deliveryMethod), deliveryMethod);
+        }
+
+        @Override
+        public String toString() {
+            return "Params [zipFileList=" + zipFileList + ", zipFileNameListForHookExecutionRecord="
+                + zipFileNameListForHookExecutionRecord + ", docList=" + docList + ", originalCompanionFileName="
+                + originalCompanionFileName + ", targetManifestWorkingDirectory=" + targetManifestWorkingDirectory
+                + ", deliveryMethod=" + deliveryMethod + "]";
+        }
+    }
+}
