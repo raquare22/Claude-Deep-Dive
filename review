@@ -1,294 +1,586 @@
 
 
-@Component
-public class FileSplitUtil {
-	private static final Logger LOGGER = LoggerFactory.getLogger(FileSplitUtil.class);
+public final class Utilities {
+    private static Utilities instance;
 
-	private static long bytesSplitMultiple = 1024L * 1024L;
+    private static final Logger LOGGER = LoggerFactory.getLogger(Utilities.class);
+    private static final byte[] WRITE_BUFFER = new byte[1024];
+    
+    private static final String LOCK_FILE_NAME = "locked.txt";
 
-	public static void setBytesSplitMultiple(long bytesSplitMultipleValue) {
-		bytesSplitMultiple = bytesSplitMultipleValue;
-		LOGGER.info("Setting bytesSplitMultiple={}", bytesSplitMultiple);
-	}
+    protected Utilities() {
+    }
 
-	// maxBytesNewLineWithin: Max number of bytes on a split to parse backward to locate a new line
-	public static List<StringBuilder> checkAndSplitFile(String filePath, int splitPerMbSize, int maxBytesNewLineWithin) throws IOException {
-		boolean isFileToSplit = FileSplitUtil.isSplitFile(splitPerMbSize, filePath);
-		if (! isFileToSplit) {
-			return new ArrayList<>();
-		}
-		List<StringBuilder> splitList = splitFilePerMbPerNewLine(filePath, splitPerMbSize, maxBytesNewLineWithin);
-		LOGGER.info("filePath={}, splitList.size={}, bytesSplitMultiple={}", filePath, splitList.size(), bytesSplitMultiple);
-		return splitList;
-	}
+    /**
+     * This method creates a temporary directory in the system's temp folder
+     * using the provided preFix name as a prefix.
+     * 
+     * @param preFix
+     * @return
+     * @throws IOException
+     */
+    public static Path createWorkingDirectory(String preFix, String tempDirRoot) throws IOException {
+        LOGGER.trace("Creating working directory for {}", preFix);
 
-	public static boolean isSplitFile(int splitPerMbSize, String sourceFile) throws IOException {
-		Path filePath = Paths.get(sourceFile);
-		long fileSize = filePath.toFile().length();
-		LOGGER.debug("fileSize={}", fileSize);
-		final long bytesPerSplit = bytesSplitMultiple * splitPerMbSize;
-		return fileSize >= bytesPerSplit;
-	}
+        return Files.createTempDirectory(Paths.get(tempDirRoot), preFix);
+    }
 
-	// If the file was not fully split i.e had an IOException it returns empty List<StringBuilder>
-	protected static List<StringBuilder> splitFilePerMbPerNewLine(final String fileName, final int splitPerMbSize, int maxBytesNewLineWithin) {
-		List<StringBuilder> splitList = new ArrayList<>();
-		if (splitPerMbSize <= 0) {
-			return splitList;
-		}
+    public static Path createWorkingDirectory(String tempDirRoot) throws IOException {
+        LOGGER.debug("Creating working directory for {}", tempDirRoot);
 
-		long sourceSize;
-		Path fileNamePath = Paths.get(fileName);
-		try {
-			sourceSize = Files.size(fileNamePath);
-		} catch (IOException e) {
-			LOGGER.error("Exception file.size: fileName={}; {}", fileName, ExceptionUtils.getStackTrace(e));
-			return splitList;
-		}
+        return Files.createDirectories(Paths.get(tempDirRoot));
+    }
 
-		final long bytesPerSplit = bytesSplitMultiple * splitPerMbSize;
-		if (sourceSize < bytesPerSplit) {
-			LOGGER.debug("Not splitting: fileName={}, sourceSize={}, bytesPerSplit={}", fileName, sourceSize, bytesPerSplit);
-			return splitList;
-		}
-		LOGGER.debug("Splitting: fileName={}, sourceSize={}, bytesPerSplit={}", fileName, sourceSize, bytesPerSplit);
+    public static Path createWorkingDirectoryWithParams(String delimiter, String...elements) throws IOException {
+        return createWorkingDirectory(String.join(delimiter, elements));
+    }
 
-		int i = 0;
-		long offset = 0;
-		long numSplits = sourceSize / bytesPerSplit;
-		long remainingBytes = sourceSize % bytesPerSplit;
-		long writtenByteSize = 0;
-		long sourceSizeOrig = sourceSize;
-		long writtenByteSizeTotal = 0;
-		LOGGER.debug("fileName={}, sourceSize={}, bytesPerSplit={}, numSplits={}, remainingBytes={}, splitPerMbSize={}, maxBytesNewLineWithin={}",
-			fileName, sourceSize, bytesPerSplit, numSplits, remainingBytes, splitPerMbSize, maxBytesNewLineWithin);
-		try {
-			try (RandomAccessFile sourceFile = new RandomAccessFile(fileName, "r");
-				FileChannel sourceChannel = sourceFile.getChannel()) {
-				while (numSplits > 0) {
-					LOGGER.debug("PRE: fileName={}, i={}, sourceSize={}, offset={}, bytesPerSplit={}, numSplits={}, remainingBytes={}, writtenByteSize={}, writtenByteSizeTotal={}",
-						fileName, i, sourceSize, offset, bytesPerSplit, numSplits, remainingBytes, writtenByteSize, writtenByteSizeTotal);
-					writtenByteSize = writePartToSplitList(fileName, ++i, offset, bytesPerSplit, maxBytesNewLineWithin, sourceChannel, splitList, false);
-					writtenByteSizeTotal = writtenByteSizeTotal + writtenByteSize;
-					sourceSize = sourceSize - writtenByteSize;
-					offset = offset + writtenByteSize;
-					numSplits = sourceSize / bytesPerSplit;
-					remainingBytes = sourceSize % bytesPerSplit;
-					LOGGER.debug("POST: fileName={}, i={}, sourceSize={}, offset={}, bytesPerSplit={}, numSplits={}, remainingBytes={}, writtenByteSize={}, writtenByteSizeTotal={}",
-						fileName, i, sourceSize, offset, bytesPerSplit, numSplits, remainingBytes, writtenByteSize, writtenByteSizeTotal);
-				}
-				if (remainingBytes > 0) {
-					writtenByteSize = writePartToSplitList(fileName, ++i, offset, remainingBytes, maxBytesNewLineWithin, sourceChannel, splitList, true);
-					writtenByteSizeTotal = writtenByteSizeTotal + writtenByteSize;
-				}
-			}
-		} catch(IOException e) {
-			LOGGER.error("Exception while splitting fileName={}: msg={}", fileName, e.getMessage());
-			return splitList;
-		}
-		if (sourceSizeOrig != writtenByteSizeTotal) {
-			LOGGER.error("Done: Backing out any splitFiles; Bytes written splitFiles mismatch; fileName={}, sourceSizeOrig={}, writtenByteSizeTotal={}",
-				fileName, sourceSizeOrig, writtenByteSizeTotal);
-			return splitList;
-		} else {
-			LOGGER.debug("Done: fileName={}, sourceSizeOrig={}, writtenByteSizeTotal={}, splitList.size={}", fileName, sourceSizeOrig, writtenByteSizeTotal, splitList.size());
-		}
-		return splitList;
-	}
+    public static boolean deleteWorkingDirectory(String workingDirecory) {
+        var toReturn = true;
+        try {
+            final var workingDirectoryPath = Paths.get(workingDirecory);
+            toReturn = deleteWorkingDirectory(workingDirectoryPath);
+        } catch (Exception e) {
+        	LOGGER.error("deleteWorkingDirectory {}={} {}",
+        			"workingDirectory", workingDirecory,
+        			ExceptionUtils.getStackTrace(e));
+        }
+        return toReturn;
+    }
 
-	protected static long writePartToSplitList(String origFile, int i, long offset, long bytesPerSplit, int maxBytesNewLineWithin, FileChannel sourceChannel,
-			List<StringBuilder> splitList, boolean remaining) throws IOException {
-		LOGGER.debug("origFile={}, i={}, offset={}, bytesPerSplit={}, remaining={}", origFile, i, offset, bytesPerSplit, remaining);
-		if (! remaining) {
-			ByteBuffer buf = ByteBuffer.allocate(maxBytesNewLineWithin);
-			LOGGER.debug("origFile={}, i={}, offset={}, bytesPerSplit={}, newOffset={}",
-				origFile, i, offset, bytesPerSplit, offset + bytesPerSplit - maxBytesNewLineWithin);
-			int noOfBytesRead = sourceChannel.read(buf, offset + bytesPerSplit - maxBytesNewLineWithin);
-			if (LOGGER.isDebugEnabled()) {
-				LOGGER.debug("File break: origFile={}, i={}, remaining={}, noOfBytesRead={}, fileContent=<{}>",
-					origFile, i, remaining, noOfBytesRead, new String(buf.array(), StandardCharsets.UTF_8));
-			}
-			boolean foundNewLine = false;
-			for (int index = maxBytesNewLineWithin - 1; index >= 0; index--) {
-				byte currentByte = buf.get(index);
-				if (currentByte == '\n') {
-					LOGGER.debug("NEWLINE found: origFile={}, i={}, offset={}, bytesPerSplit={}, index={}", origFile, i, offset, bytesPerSplit, index);
-					foundNewLine = true;
-					break;
-				}
-				bytesPerSplit--;
-			}
-			LOGGER.debug("origFile={}, i={}, offset={}, bytesPerSplit={}, foundNewLine={},", origFile, i, offset, bytesPerSplit, foundNewLine);
-		}
-	
-		MappedByteBuffer buff = sourceChannel.map(FileChannel.MapMode.READ_ONLY, offset, bytesPerSplit);
-		splitList.add(new StringBuilder(StandardCharsets.UTF_8.decode(buff)));
-		return bytesPerSplit;
-	}
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-=====
-
-
-
-
-
-public class FileUtil {
-	private static final String VK_PERIOD = ".";
-	private static FileUtil instance = null;
-	private static InetAddress localhost = null;
-	private static final Logger log = LoggerFactory.getLogger(FileUtil.class);
-
-	private FileUtil(){}
-
-	public synchronized static FileUtil getInstance(){
-		if(instance == null){
-			instance = new FileUtil();
-		}
-
-		if(localhost == null){
-			try {
-				localhost = InetAddress.getLocalHost();
-			} catch (UnknownHostException e) {
-				log.error("getInstance Could not get localhost. {}", ExceptionUtils.getStackTrace(e));
-			}
-		}
-
-		return instance;
-	}
-
-	/**
-	 * Use this if you are passing filenames that have spaces to unix command line programs
-	 * if input is null,  null is returned
-	 * @param input
-	 * @return
-	 */
-	public static final String addQuotesAroundName(String input) {
-		String retVal = input;
-		if(input != null) {
-			StringBuilder sb = new StringBuilder();
-			sb.append("\"").append(input).append("\"");
-			retVal =  sb.toString();
-		}
-		return retVal;
-	}
-
-	public static final List<File> getFilesByExtension(String extension, File directory) throws IOException{
-		return getFilesByExtension(extension, directory.toPath());
-	}
-	public static final List<File> getFilesByExtension(String extension, String directory) throws IOException {
-		return getFilesByExtension(extension, Paths.get(directory));
-	}
-	public static final List<File> getFilesByExtension(String extension, Path directory) throws IOException{
-		List<File> files = new ArrayList<>();
-		try(final DirectoryStream<Path> stream = Files.newDirectoryStream(directory, "*." + extension)){
-			stream.forEach(file -> files.add(file.toFile()));
-		} catch (IOException e) {
-			log.warn("getFilesByExtension {}={}, {}={} {}",
-					"extension", extension,
-					"directory", directory != null ? directory.toString() : "NULL",
-                    ExceptionUtils.getStackTrace(e));
-			throw e;
-		}
-
-		return files;
-	}
-
-
-	/**
-	 * Use this if you are passing filenames that have spaces to unix command line programs
-	 * if input is null,  null is returned
-	 * @param name
-	 * @return
-	 */
-	public static final String replaceSpaceToUnderScoreInFilename(String name) {
-		String retVal = name;
-		if(name != null && name.contains(" ")) {
-			retVal = name.replace(" ", "_");
-		}
-		return retVal;
-	}
-
-	public static final Long totalBytesAtLocation(Path location){
-		return totalBytesAtLocation(location, new ArrayList<String>());
-	}
-	public static final Long totalBytesAtLocation(Path location, List<String> extensionsToExclude){
-		final Long[] totalBytes = {0L};
-
-		try(final Stream<Path> stream = Files.list(location)){
-			stream.filter(Files::isRegularFile).forEach(file -> {
-				final Boolean[] exclude = {false};
-				extensionsToExclude.forEach(extensionToExclude ->{
-					if(file.getFileName().toString().endsWith(extensionToExclude)){
-						exclude[0] = true;
+    public static boolean deleteWorkingDirectory(Path workingDirectory) throws IOException {
+        final var toReturn = new boolean[]{true};
+        LOGGER.info("Deleting working directory {}", workingDirectory);
+		try (Stream<Path> paths = Files.walk(workingDirectory, FileVisitOption.FOLLOW_LINKS)) {
+			paths.forEach(path -> {
+				if (!path.toFile().isDirectory()) {
+					try {
+						Files.delete(path);
+					} catch (Exception e) {
+						LOGGER.error("deleteWorkingDirectory: {}={} {}",
+			        			"path", path, ExceptionUtils.getStackTrace(e));
+						toReturn[0] = false;
 					}
-				});
-				if(!exclude[0]){
-					totalBytes[0] += file.toFile().length();
 				}
+
 			});
+		}catch (Exception e) {
+			LOGGER.error("deleteWorkingDirectory: {}={} {}",
+        			"workingDirectory", workingDirectory, ExceptionUtils.getStackTrace(e));
+			toReturn[0] = false;
 		}
-		catch (IOException e) {
-			log.error("totalBytesAtLocation {}={}, {}={} {}",
-					"location", location != null ? location.toString() : "NULL",
-					"extensionsToExclude", extensionsToExclude != null ? extensionsToExclude.toString() : "NULL",
-                    ExceptionUtils.getStackTrace(e));
+		return toReturn[0];
+    }
+
+    public static void expandFile(File zipFile, File destination) throws IOException {
+        expandFile(zipFile.toPath(), destination.toPath());
+    }
+
+    public static void expandFile(File zipFile, Path destination) throws IOException {
+        expandFile(zipFile.toPath(), destination);
+    }
+
+    public static void expandFile(Path zipFile, File destination) throws IOException {
+        expandFile(zipFile, destination.toPath());
+    }
+    
+	public static boolean checkAndCreateLockFile(String filePath) throws IOException {
+		LOGGER.debug("filePath={}", filePath);
+		var lockFile = new File(filePath, LOCK_FILE_NAME);
+		var lockFileAlreadyExists = lockFile.exists();
+		if (lockFileAlreadyExists) {
+			return true;
+		} else {
+            lockFileAlreadyExists = !createLockFile(filePath);
 		}
-
-		return totalBytes[0];
+		return lockFileAlreadyExists;
 	}
+    
+    public static boolean createLockFile(String destination) throws IOException {
+    	var lockFile = new File(destination, LOCK_FILE_NAME);
+    	return touch(lockFile);
+    }
+    
+    public static boolean touch(File file) throws IOException{
+        if (!file.exists()) {
+        	try(OutputStream is = new BufferedOutputStream(Files.newOutputStream(file.toPath()))){
+        		return true;
+        	}
+        }
+        LOGGER.warn("Attempting to create a file which already exists: {}", file.getAbsolutePath());
+        return false;
+    }
 
-
-	/**
-	 * Returns the local host IP
-	 * @return
-	 */
-	public String getLocalHostIP(){
-		return localhost.getHostAddress();
-	}
-
-	/**
-	 * Returns the Local Hostname
-	 * @return
-	 */
-	public String getLocalHostName(){
-		return localhost.getHostName();
-	}
-
-	public String removeFileExtesion(String fileName){
-		String tmpFileName = fileName;
+    public static synchronized boolean expandFile(Path zipFile, Path destination) throws IOException {
+        
+    	// generate lock file for downstream processes to know this has already been done
+		if (checkAndCreateLockFile(destination.toString())) { return true; }
 		
-		if(fileName!=null &&
-				!StringUtils.isEmpty(fileName) &&
-				fileName.length() > 2 &&
-				fileName.contains(VK_PERIOD) ){
-			int index = fileName.lastIndexOf(VK_PERIOD);
-			tmpFileName = fileName.substring(0,index);
+        LOGGER.debug("Unzipping {} to {}", zipFile, destination);
+        
+        // generate lock file for downstream processess to know this has already been done
+      	try (InputStream is = new BufferedInputStream(Files.newInputStream(zipFile))) {
+      	
+          // Getting Zip File
+          try (var zipInputStream = new ZipInputStream(is)) {
+
+
+                // Getting first preFix in zip
+                var zipEntry = zipInputStream.getNextEntry();
+
+                // Extracting all files
+                var i = 0;
+                try {
+                    while (zipEntry != null) {
+                        var destinationFile = new File(destination.toString(), zipEntry.getName());
+                        if (!destinationFile.toPath().normalize().startsWith(destination.toAbsolutePath()))
+                            throw new IOException("Entry is outside of the target dir: " + zipEntry.getName());
+                        writeFile(zipInputStream, destinationFile);
+                        zipEntry = zipInputStream.getNextEntry();
+                        i++;
+                    }
+                }
+                catch (IOException e) {
+                    LOGGER.error("Zip extraction error; Entries processed={}; Last zipEntry processed: {}", i, getZipEntryInfo(zipEntry));
+                    throw e;
+                }
+
+                LOGGER.info("Unzipping of {} to {} complete.", zipFile, destination);
+
+            }
+        }
+        return false;
+    }
+    
+    static void writeFile(ZipInputStream zipInputStream, File destinationFile) {
+        if (isZipSlip(destinationFile)) {
+            return;
+        }
+    	 try (OutputStream fileOutputStream = new BufferedOutputStream(Files.newOutputStream(destinationFile.toPath())) ){
+
+            int length;
+            while ((length = zipInputStream.read(WRITE_BUFFER)) > 0) {
+                fileOutputStream.write(WRITE_BUFFER, 0, length);
+            }
+            fileOutputStream.flush();
+        } catch (FileNotFoundException e) {
+            LOGGER.warn("writeFile File not found {}={} {}",
+            		"destinationFile", destinationFile.getName(),
+            		ExceptionUtils.getStackTrace(e));
+        } catch (Exception e) {
+            LOGGER.error("writeFile {}={} {}",
+            		"destinationFile", Optional.ofNullable(destinationFile).map(File::getName).orElse("NULL"),
+                    ExceptionUtils.getStackTrace(e));
+        }
+    }
+
+ // Check the destinationFile is not outside of the target e.g it must not begin with ../
+ 	public static boolean isZipSlip(File destinationFile) {
+ 		String canonicalPath;
+ 		File normalizedFile=destinationFile.toPath().normalize().toFile();
+ 		try {
+ 			canonicalPath = getCanonicalPaths(normalizedFile);
+ 		} catch (IOException e) {
+ 			LOGGER.error("destinationFile={}: {}; {}", destinationFile, e.getClass().getSimpleName(), e.getMessage());
+ 			return true;
+ 		}
+ 		String destinationPath = normalizedFile.getPath();
+ 		if (!canonicalPath.startsWith(destinationPath) ) {
+ 			// If the path is a link it will fail
+ 			LOGGER.error("ZIP SLIP: Entry is outside of the target dir: destinationFile={}, canonicalPath={}, destinationPath={}", destinationFile, canonicalPath, destinationPath);
+ 			return true;
+ 		}
+ 		return false;
+ 	}
+ 	
+ 	public static String getCanonicalPaths(File file) throws IOException
+ 	{
+ 		return file.getCanonicalPath(); 
+ 	}
+
+    public static synchronized Utilities getInstance() {
+        if (instance == null) {
+            instance = new Utilities();
+        }
+        return instance;
+    }
+
+    public static String getFileExtension(String fileName) {
+        final Integer startPos = fileName.lastIndexOf('.');
+        if (startPos > 0) {
+        	fileName = fileName.substring(startPos + 1, fileName.length()).toLowerCase();
+        }
+
+        return fileName;
+    }
+
+    public static Map<String, Object> getFileInformation(File file) {
+        Map<String, Object> fileData = new HashMap<>();
+        fileData.put("size", file.length());
+        fileData.put("type", getFileExtension(file.getName()));
+        return fileData;
+    }
+
+    public File getResourceFile(String fileName) throws URISyntaxException {
+        final URL resource = Thread.currentThread().getContextClassLoader().getResource(fileName);
+        return Paths.get(resource.toURI()).toFile();
+    }
+
+    public static String stripFileExtension(String fileName) {
+        final Integer startPos = fileName.lastIndexOf('.');
+        if (startPos > 0) {
+            fileName = fileName.substring(0, startPos);
+        }
+        return fileName;
+    }
+
+    public static String replaceExtension(String fileName, String newExtension) {
+        return new StringBuilder()
+            .append(stripFileExtension(fileName)).append('.').append(newExtension).toString();
+    }
+    
+    protected static String getZipEntryInfo(ZipEntry zipEntry) {
+        return zipEntry != null ? "name=" + zipEntry.getName() + ", method=" + zipEntry.getMethod() : "NULL";
+    }
+
+    public static boolean validateProviderEmail(String providerEmail) {
+        //ValidEmailRegexTest.java - use this class to validate emailId and regex pattern
+        String regexPattern = "^[a-zA-Z0-9_+&*-]+(?:\\.[a-zA-Z0-9_+&*-]+)*@" + "[a-zA-Z0-9-]+(?:\\.[a-zA-Z0-9]+)*$";
+        final Pattern VALID_EMAIL_ADDRESS_REGEX=Pattern.compile(regexPattern,Pattern.CASE_INSENSITIVE);
+        Matcher matcher =VALID_EMAIL_ADDRESS_REGEX.matcher(providerEmail);
+        return matcher.find();
+    }
+    
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+===
+
+
+
+
+
+@Component
+public class SftpUtil {
+
+	private static final Logger LOGGER = LoggerFactory.getLogger(SftpUtil.class);
+	private static final String FILE_NAME = "fileName";
+	private static final String MAX_TRIES = "maxTries";
+	private static final String RETRY_TIME_SECS = "retryTimeSecs";
+	private static final String SFTP_HOST = "sftpHost";
+	private static final String SFTP_PORT = "sftpPort";
+	private static final String SFTP_USER = "sftpUSER";
+	private static final String TARGET_DIR = "targetDir";
+	private static final String ARCHIVE_DIR = "archiveDir";
+	private volatile Semaphore sftpPermits;
+	
+	@Value("${MinFreeSpacePercentage}")
+    protected Integer minFreeSpacePercentage;
+	
+	// SFTP concurrency limit (from Vault)
+	@Value("${SFTP.MAX.CONCURRENT:0}")
+	private int maxConcurrentSftp;
+	
+	 public boolean isEnoughFreeSpace(Path filePath, boolean log) {
+			File file = filePath.toFile();
+			var freeSpacePercentage = getFreeSpacePercentage(file, log);
+			if (LOGGER.isWarnEnabled() && freeSpacePercentage < minFreeSpacePercentage) {
+				LOGGER.warn("FREESPACE INSUFFICIENT: freeSpacePercentage={}, minFreeSpacePercentage={}, freeSpacePercentage > minFreeSpacePercentage={}, file={}",
+					freeSpacePercentage, minFreeSpacePercentage, freeSpacePercentage > minFreeSpacePercentage, file);
+			}
+			else
+			if (log) {
+				LOGGER.warn("FREESPACE OK: freeSpacePercentage={}, minFreeSpacePercentage={}, freeSpacePercentage > minFreeSpacePercentage={}, file={}",
+					freeSpacePercentage, minFreeSpacePercentage, freeSpacePercentage > minFreeSpacePercentage, file);
+			}
+			else
+			{
+				LOGGER.debug("FREESPACE OK: freeSpacePercentage={}, minFreeSpacePercentage={}, freeSpacePercentage > minFreeSpacePercentage={}, file={}",
+					freeSpacePercentage, minFreeSpacePercentage, freeSpacePercentage > minFreeSpacePercentage, file);
+			}
+			return freeSpacePercentage > minFreeSpacePercentage;
 		}
-		return tmpFileName;
+
+	    public int getFreeSpacePercentage(File file, boolean log) {
+			var rootFreeBytes = file.getFreeSpace();
+			var rootTotalBytes = file.getTotalSpace();
+			var freeSpacePercentage = (int) (0.5d + ((double) rootFreeBytes / (double) rootTotalBytes) * 100);
+			if (log) {
+				LOGGER.warn("FREESPACE: freeSpacePercentage={}: rootFreeBytes={}, rootTotalBytes={}, file={}",
+					freeSpacePercentage, rootFreeBytes, rootTotalBytes, file);
+			}
+			return freeSpacePercentage;
+		}
+
+	public void moveFileFromLocalToSFTPLocation(String sftpUSER, String sftpPASS, String sftpHost,
+			int sftpPort, String targetDir, String fileName, int maxTries, long retryTimeSecs)
+			throws JSchException, SftpException, IOException {
+		LOGGER.debug("targetDir={}, fileName={}, maxTries={}, retryTimeSecs={} (ignored; using increasing backoff)", targetDir, fileName, maxTries, retryTimeSecs);
+
+		Session sftpSession = null;
+		ChannelSftp channel = null;
+		int sftpExceptionId = 0;
+		for (int tries = 0; tries < maxTries; tries++) {
+			Semaphore semaphore = null;
+			boolean acquired = false;
+    		try {
+				semaphore = getSftpSemaphore();
+				if (semaphore != null) {
+					try {
+						semaphore.acquire();
+						acquired = true;
+					} catch (InterruptedException e) {
+						Thread.currentThread().interrupt();
+						throw new JSchException("Interrupted while acquiring SFTP concurrency permit", e);
+					}
+				}
+    		  LOGGER.debug("sftp tries {} on sftpHost {} targetDir {} file {} sftpExceptionId {}", tries + 1, sftpHost, targetDir, fileName, sftpExceptionId);
+    			sftpSession = createSesssion(sftpUSER, sftpPASS, sftpHost, sftpPort);
+    			channel = (ChannelSftp) createSFTPChannel(sftpSession);
+    			if (LOGGER.isInfoEnabled()) {
+    				LOGGER.debug("channel pwd {} - channel.lpwd {}", channel.pwd(), channel.lpwd());
+    			}
+    			channel.cd(targetDir);
+    			if (LOGGER.isInfoEnabled()) {
+    				LOGGER.debug("after cd channel pwd {} - channel.lpwd {}", channel.pwd(), channel.lpwd());
+    			}
+    			createFileInSFTPLocation(channel, fileName);
+    			break;
+    		} catch (JSchException e) {
+    		    if(tries >= maxTries - 1) {
+    		        LOGGER.error("moveFileFromLocalToSFTPLocation {}={}, {}={}, {}={}, {}={}, {}={}, {}={}, {}={} {}",
+    					SFTP_USER, sftpUSER, SFTP_HOST, sftpHost, SFTP_PORT, sftpPort, TARGET_DIR, targetDir,
+    					FILE_NAME, fileName, MAX_TRIES, maxTries, RETRY_TIME_SECS, retryTimeSecs, ExceptionUtils.getStackTrace(e));
+    		        throw e;
+    		    }
+				else {
+					long waitSecs = computeBackoffSecs(tries); // tries is 0-based
+					LOGGER.warn("SFTP PUT attempt {} failed for file {} on host {}. Retrying in {} seconds", tries + 1, fileName, sftpHost, waitSecs, e);
+					sleepSecondsQuietly(waitSecs); // non-final -> sleep and retry
+				}
+    		} catch (SftpException e) {
+                if(tries >= maxTries - 1) {
+                    LOGGER.error("moveFileFromLocalToSFTPLocation Failing to create sftp connection after max try {}={}, {}={}, {}={}, {}={}, {}={}, {}={}, {}={} {}",
+                    	SFTP_USER, sftpUSER, SFTP_HOST, sftpHost, SFTP_PORT, sftpPort, TARGET_DIR, targetDir,
+    					FILE_NAME, fileName, MAX_TRIES, maxTries, RETRY_TIME_SECS, retryTimeSecs, ExceptionUtils.getStackTrace(e));
+                    throw e;
+                }
+				else {
+					long waitSecs = computeBackoffSecs(tries); // tries is 0-based
+					LOGGER.warn("SFTP PUT attempt {} failed for file {} on host {}. Retrying in {} seconds", tries + 1, fileName, sftpHost, waitSecs, e);
+					sleepSecondsQuietly(waitSecs); // non-final -> sleep and retry
+				}
+
+    		} finally {
+    			if (channel != null) {
+    	            channel.disconnect();
+    	            channel.quit();			
+    			}
+    			if (sftpSession != null) {
+    				sftpSession.disconnect();
+    			}
+				if (semaphore != null && acquired) {
+					semaphore.release();
+				}
+    		}
+			/*
+			 * try { TimeUnit.SECONDS.sleep(retryTimeSecs); } catch (InterruptedException e)
+			 * { LOGGER.
+			 * warn("moveFileFromLocalToSFTPLocation; Time delay interrupted {}={}, {}={}",
+			 * TARGET_DIR, targetDir, FILE_NAME, fileName);
+			 * Thread.currentThread().interrupt(); }
+			 */
+	      }
 	}
 
-	public static String getFileNameFromContentDisposition(String contentDisposition) {
-		return contentDisposition.replaceFirst("(?i)^.*filename=\"?([^\"]+)\"?.*$", "$1");
+	/**
+	 * Retry every 6 minutes. maxTries default is 10 times
+	 */
+	public void moveFileFromSFTPDirToArchive(String sftpUSER, String sftpPASS, String sftpHost,
+			int sftpPort, String fromDir, String archiveDir, String fileName, int maxTries, long retryTimeSecs)
+			throws JSchException, SftpException {
+
+		Session sftpSession = null;
+		ChannelSftp channel = null;
+	      for (int tries = 0; tries < maxTries; tries++) {
+	    	  Semaphore semaphore = null;
+			  boolean acquired = false;
+        		try {
+					semaphore = getSftpSemaphore();
+					if (semaphore != null) {
+						try {
+							semaphore.acquire();
+							acquired = true;
+						} catch (InterruptedException e) {
+							Thread.currentThread().interrupt();
+							throw new JSchException("Interrupted while acquiring SFTP concurrency permit", e);
+						}
+					}
+        		    LOGGER.debug("sftp tries {}, fromDir {}, archiveDir {}, fileName {}", tries + 1, fromDir, archiveDir, fileName);
+        			sftpSession = createSesssion(sftpUSER, sftpPASS, sftpHost, sftpPort);
+        			channel = (ChannelSftp) createSFTPChannel(sftpSession);
+        			moveFileToLocation(channel, fromDir, archiveDir, fileName);
+                    break;
+                } catch (JSchException e) {
+                    if(tries >= maxTries - 1) {
+                        LOGGER.error("moveFileFromSFTPDirToArchive {}={}, {}={}, {}={}, {}={}, {}={}, {}={}, {}={}, {}={} {}",
+        					SFTP_USER, sftpUSER, SFTP_HOST, sftpHost, SFTP_PORT, sftpPort, "fromDir", fromDir, ARCHIVE_DIR, archiveDir, FILE_NAME,
+        					fileName, MAX_TRIES, maxTries, RETRY_TIME_SECS, retryTimeSecs, ExceptionUtils.getStackTrace(e));
+                        throw e;
+                    }
+					else {
+						long waitSecs = computeBackoffSecs(tries);
+						LOGGER.warn("SFTP MOVE attempt {} failed for file {} ({} -> {}). Retrying in {} seconds", tries + 1, fileName, fromDir, archiveDir, waitSecs, e);
+						sleepSecondsQuietly(waitSecs); // non-final -> sleep and retry
+					}
+        		} catch (SftpException e) {
+        		    if(tries >= maxTries - 1) {
+                        LOGGER.error("moveFileFromSFTPDirToArchive: {}={}, {}={}, {}={}, {}={}, {}={}, {}={}, {}={}, {}={} {}",
+        					SFTP_USER, sftpUSER, SFTP_HOST, sftpHost, SFTP_PORT, sftpPort, "fromDir", fromDir, ARCHIVE_DIR, archiveDir,
+        					FILE_NAME, fileName, MAX_TRIES, maxTries, RETRY_TIME_SECS, retryTimeSecs, ExceptionUtils.getStackTrace(e));
+                        throw new SftpException(e.id, "sftp exception", e);
+                    }
+					else {
+						long waitSecs = computeBackoffSecs(tries);
+						LOGGER.warn("SFTP MOVE attempt {} failed for file {} ({} -> {}). Retrying in {} seconds", tries + 1, fileName, fromDir, archiveDir, waitSecs, e);
+						sleepSecondsQuietly(waitSecs); // non-final -> sleep and retry
+					}
+        		} 
+        		finally {
+        			if (channel != null) {
+        	            channel.disconnect();
+        	            channel.quit();			
+        			}
+        			if (sftpSession != null) {
+        				sftpSession.disconnect();
+        			}
+					if (semaphore != null && acquired) {
+						semaphore.release();
+					}
+        		}	
+	      }
+
 	}
+
+	private static final void createFileInSFTPLocation(ChannelSftp channel, String fileName) throws SftpException, IOException {
+	    File f = new File(fileName);
+	    try (InputStream localFile = new BufferedInputStream(Files.newInputStream(f.toPath()))) {
+			channel.put(localFile, f.getName());
+        } 
+	}
+
+	private static final void moveFileToLocation(ChannelSftp channel, String fromDir, String targetDir, String fileName) throws SftpException {
+		channel.cd(fromDir);
+		if (channel.get(fileName) != null) {
+			channel.rename(fromDir + "/" + fileName, targetDir + "/" + fileName);
+			channel.cd(fromDir);
+		}
+
+	}
+
+	public static final Channel createSFTPChannel(Session sftpSession) throws JSchException {
+		Channel channel = sftpSession.openChannel("sftp");
+		channel.connect();
+		return channel;
+	}
+
+	public static final Session createSesssion(String sftpUSER, String sftpPASS, String sftpHost, int sftpPort)
+			throws JSchException {
+		Session sftpSession;
+		JSch jsch = new JSch();
+		sftpSession = jsch.getSession(sftpUSER, sftpHost, sftpPort);
+		sftpSession.setPassword(sftpPASS);
+		java.util.Properties config = new java.util.Properties();
+		config.put("StrictHostKeyChecking", "no");
+		sftpSession.setConfig(config);
+		sftpSession.connect(20000);
+		return sftpSession;
+	}
+	
+	public static final void removeFileFromSFTPLocation(String sftpUSER, String sftpPASS, String sftpHost, int sftpPort, String targetDir, String fileName) throws JSchException, SftpException {
+		Session sftpSession = null;
+		ChannelSftp channel = null;
+		try {
+			sftpSession = createSesssion(sftpUSER, sftpPASS, sftpHost, sftpPort);
+			channel = (ChannelSftp)createSFTPChannel(sftpSession);
+			removeFileInSFTPLocation(channel, targetDir, fileName);
+		} catch (JSchException | SftpException e) {
+		    LOGGER.error("removeFileFromSFTPLocation {}={}, {}={}, {}={}, {}={}, {}={} {}",
+				SFTP_USER, sftpUSER, SFTP_HOST, sftpHost, SFTP_PORT, sftpPort,
+				TARGET_DIR, targetDir, FILE_NAME, fileName, ExceptionUtils.getStackTrace(e));
+		} finally {
+
+			if (channel != null) {
+	            channel.disconnect();
+	            channel.quit();			
+			}
+			if (sftpSession != null) {
+				sftpSession.disconnect();
+			}
+		}
+	}
+
+	private static final void removeFileInSFTPLocation(ChannelSftp channel, String location, String fileName) throws SftpException {
+		removeFileInSFTPLocation(channel, location + File.separator + fileName);
+	}
+	
+	private static final void removeFileInSFTPLocation(ChannelSftp channel, String fileNameWithPath) throws SftpException {
+		channel.rm(fileNameWithPath);
+	}
+	
+	// Increasing backoff: 10s, 30s, 60s, 300s (then stay at 300s)
+	private static long computeBackoffSecs(int attemptIndex /* 0-based */) {
+		final long[] BACKOFF = new long[] { 10, 30, 60, 300 };
+		return (attemptIndex < BACKOFF.length) ? BACKOFF[attemptIndex] : BACKOFF[BACKOFF.length - 1];
+	}
+
+	private static void sleepSecondsQuietly(long secs) {
+		try {
+			TimeUnit.SECONDS.sleep(secs);
+		} catch (InterruptedException ie) {
+			Thread.currentThread().interrupt();
+			LOGGER.warn("SFTP retry sleep interrupted");
+		}
+	}
+
+	Semaphore getSftpSemaphore() {
+		if (sftpPermits == null && maxConcurrentSftp > 0) {
+			synchronized (this) {
+				if (sftpPermits == null) {
+					LOGGER.info("SFTP concurrency limiter ENABLED with {} permits", maxConcurrentSftp);
+					sftpPermits = new Semaphore(maxConcurrentSftp);
+				}
+			}
+		}
+		return sftpPermits;
+	}
+	
+	void setMaxConcurrentSftp(int maxConcurrentSftp) {
+		this.maxConcurrentSftp = maxConcurrentSftp;
+	}
+
 }
+
+
 
 
 
@@ -314,584 +606,1308 @@ public class FileUtil {
 ====
 
 
-/**
- * Use existing instances to create ObjectReader or ObjectWriter for purposes, otherwise create a static instance.
- */
-public final class Parser {
-	private static final Logger LOGGER = LoggerFactory.getLogger(Parser.class);
-    public static final int PRETTY_PRINT_INDENT_FACTOR = 1;
-    public static final int PRINT_DEFAULT_IDENTATION = 0;
-    public static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-    public static final ObjectMapper XML_MAPPER;
-    public static final ObjectMapper DATE_FORMAT_MAPPER = OBJECT_MAPPER.copy();
-    public static final ObjectMapper MIX_IN_MAPPER = OBJECT_MAPPER.copy();
-    static {
-        JacksonXmlModule module = new JacksonXmlModule();
-        module.setDefaultUseWrapper(false);
-        XML_MAPPER = new XmlMapper(module);
-    }
 
-    private Parser(){}
+@Component
+public class SftpMonitorUtil {
 
-    public static <T> T parseXMLFile(File xmlFile, Class<T> clazz) throws IOException {
-        String xml;
-        try (InputStream xmlFileInputStream =  new BufferedInputStream(Files.newInputStream(xmlFile.toPath()))) {
-            xml = inputStreamToString(xmlFileInputStream);
-        }
-        return parseXML(xml, clazz);
-    }
+	@Value("${INGEST_ROOT}")
+	private String ingestRoot;
+	
+	
+	private static final Logger LOGGER = LoggerFactory.getLogger(SftpMonitorUtil.class);
+	
+	private static final int SFTP_PORT = 22;
+	//private static final String INGEST_ROOT = ingestRoot;
 
-    public static <T> T parseXMLFile(Path xmlFile, Class<T> clazz) throws IOException {
-        return parseXMLFile(xmlFile.toFile(), clazz);
-    }
+	private static final String DIRECTORY_LISTING = "directoryListing";
+    private static final String CHANNEL_SFTP = "channelSftp";
+    private static final String SFTP_SESSION = "sftpSession";
+    private static final String CHANNEL = "channel";
 
-    public static <T> T parseXMLFile(String xmlFile, Class<T> clazz) throws IOException {
-        return parseXMLFile(Paths.get(xmlFile), clazz);
-    }
+	@SuppressWarnings("unchecked")
+    public Map<String, Object> proccessSFTPDirectory(String sftpUSER, String sftpPASS, String sftpHost, String sftpWorkingDir ) throws JSchException, SftpException {
+	    Map<String, Object> result = new HashMap<>();
+        Session sftpSession;
+        Channel channel;
+        ChannelSftp channelSftp;
+        sftpSession = SftpUtil.createSesssion(sftpUSER, sftpPASS, sftpHost, SFTP_PORT);
+        channel = SftpUtil.createSFTPChannel(sftpSession);
+        channelSftp = (ChannelSftp) channel;
 
-    /*
-     * Replace ampersand not followed by # (used in ascii code number)
-     * Ascii code 38 is for ampersand
-     * Also does not overwrite xml/html codes: ( &amp; &lt; &gt; &quot; &apos;)
-     * Leaves alone anything starting with & and ending with ; with 2 to 4 chars in between
-     * So this will not edit phrases (longer than 4 chars) ending with and ampersand
-     */
-    public static <T> T parseXML(String xmlContent, Class<T> clazz) throws IOException {
-        xmlContent = xmlContent.replaceAll("&(?![^&]{2,4};)", "&#038;");
+        LOGGER.debug("proccessSFTPDirectory cd to sftpWorkingDir: {}", sftpWorkingDir );
         try {
-            return XML_MAPPER.readerFor(clazz).readValue(xmlContent);
+            channelSftp.cd(sftpWorkingDir);
         } catch (Exception e) {
-            throw new IOException("xmlContent=" + xmlContent + "; " + e.getMessage());
+            LOGGER.error("proccessSFTPDirectory Failure: cd to sftpWorkingDir: {}, errMsg={}", sftpWorkingDir, e.getMessage());
+            throw e;
         }
-    }
-
-    public static <T> T parseJson(String jSONString, Class<T> clazz) throws IOException {
-        return OBJECT_MAPPER.readerFor(clazz).with(JsonParser.Feature.ALLOW_SINGLE_QUOTES)
-                .with(JsonReadFeature.ALLOW_BACKSLASH_ESCAPING_ANY_CHARACTER).readValue(jSONString);
-    }
-
-    public static <T> T parseJson(String jSONString, TypeReference<T> ref) throws IOException {
-        return OBJECT_MAPPER.readerFor(ref).with(JsonParser.Feature.ALLOW_SINGLE_QUOTES)
-                .with(JsonReadFeature.ALLOW_BACKSLASH_ESCAPING_ANY_CHARACTER).readValue(jSONString);
-    }
-
-    public static <T, V> T convertValue(V obj, Class<T> clazz) {
-        return OBJECT_MAPPER.convertValue(obj, clazz);
-    }
-
-    public static <T> T readValue(String jsonString, Class<T> clazz) throws IOException {
-        return OBJECT_MAPPER.readerFor(clazz).readValue(jsonString);
-    }
-
-    public static <T> T readValue(String jsonString, TypeReference<T> typeReference) throws JsonProcessingException {
-        return OBJECT_MAPPER.readValue(jsonString, typeReference);
-    }
-
-    public static <T> T parseJsonWithDateFormat(String jSONString, Class<T> clazz, SimpleDateFormat spf ) throws IOException {
-        return DATE_FORMAT_MAPPER.setDateFormat(spf)
-                .readerFor(clazz)
-                .with(JsonParser.Feature.ALLOW_SINGLE_QUOTES)
-                .readValue(jSONString);
-    }
-
-    public static <T> T parseJson(String jSONString, Class<T> clazz, boolean allowSingleQuotes) throws IOException {
-        ObjectReader reader = OBJECT_MAPPER.readerFor(clazz);
-        if (allowSingleQuotes) {
-            reader.with(JsonParser.Feature.ALLOW_SINGLE_QUOTES);
-        } else {
-            reader.without(JsonParser.Feature.ALLOW_SINGLE_QUOTES);
-        }
-        return reader.readValue(jSONString);
-    }
-
-    public static String toJson(Object objectToConvert) throws IOException {
-        return OBJECT_MAPPER.writer().writeValueAsString(objectToConvert);
-    }
-
-    public static String toJson(Object objectToConvert, String format, TimeZone tz) throws IOException {
-        DateFormat df = new SimpleDateFormat(format);
-        df.setTimeZone(tz);
-        return OBJECT_MAPPER.writer(df).writeValueAsString(objectToConvert);
-    }
-
-    public static String toJson(Object objectToConvert, String format) throws IOException {
-        DateFormat df = new SimpleDateFormat(format);
-        df.setTimeZone(TimeZone.getTimeZone("GMT"));
-        return OBJECT_MAPPER.writer(df).writeValueAsString(objectToConvert);
-    }
-    // method to write date as date and not timestamp based on boolean value
-    public static String toJson(Object objectToConvert, boolean value, String format) throws IOException{
-        DateFormat df = new SimpleDateFormat(format);
-        df.setTimeZone(TimeZone.getTimeZone("GMT"));
-        ObjectWriter writer = OBJECT_MAPPER.writer(df);
-        if (!value) {
-            writer.without(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
-        }
-        return writer.writeValueAsString(objectToConvert);
-    }
-
-    @SuppressWarnings("rawtypes")
-    public static String toJsonWithFilters(Object objectToConvert, Class filterMixinClass, String[] fieldsToFilter) throws JsonProcessingException {
-        DateFormat df = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX");
-        df.setTimeZone(TimeZone.getTimeZone("GMT"));
-        FilterProvider filters = new SimpleFilterProvider()
-                .addFilter(
-                        "filter properties by name",
-                        SimpleBeanPropertyFilter.serializeAllExcept(fieldsToFilter)
-                );
-        return MIX_IN_MAPPER.addMixIn(Object.class, filterMixinClass).writer(filters).with(df).writeValueAsString(objectToConvert);
-    }
-
-
-    public static String xmltoJson(boolean prettyPrint, String xml) {
-        var xmlJSONObj = XML.toJSONObject(xml);
-        return xmlJSONObj.toString((prettyPrint)?PRETTY_PRINT_INDENT_FACTOR: PRINT_DEFAULT_IDENTATION);
-    }
-
-    public static String toXML(Object objectToConvert) throws JsonProcessingException {
-        return XML_MAPPER.writeValueAsString(objectToConvert);
-    }
-
-    public static String inputStreamToString(InputStream is) throws IOException {
-        try (InputStreamReader isr = detectAndExcludeBOM(is)) {
-            var sb = new StringBuilder();
-            String line;
-            var br = new BufferedReader(isr);
-            while ((line = br.readLine()) != null) {
-                sb.append(line);
-            }
-            br.close();
-            return sb.toString();
-        }
-    }
-    
-    public static String inputStreamToStringNoBomExclusion(InputStream is) throws IOException {
-        try (InputStreamReader isr = new InputStreamReader(is)) {
-            var sb = new StringBuilder();
-            String line;
-            var br = new BufferedReader(isr);
-            while ((line = br.readLine()) != null) {
-                sb.append(line);
-            }
-            br.close();
-            return sb.toString();
-        }
-    }
-
-    protected static InputStreamReader detectAndExcludeBOM(InputStream is) throws IOException{
-        BOMInputStream bomIn = new BOMInputStream(is, ByteOrderMark.UTF_8, ByteOrderMark.UTF_16LE, ByteOrderMark.UTF_16BE);
-        if (! bomIn.hasBOM()) {
-            return new InputStreamReader(bomIn);
-        }
-        if (bomIn.hasBOM(ByteOrderMark.UTF_8)) {
-            return new InputStreamReader(bomIn);
-        }
-        if (bomIn.hasBOM(ByteOrderMark.UTF_16BE)) {
-            LOGGER.debug("BOM: UTF-16BE");
-            return new InputStreamReader(bomIn, StandardCharsets.UTF_16BE);
-        }
-        if (bomIn.hasBOM(ByteOrderMark.UTF_16LE)) {
-            LOGGER.debug("BOM: UTF-16LE");
-            return new InputStreamReader(bomIn, StandardCharsets.UTF_16LE);
-        }
-        LOGGER.error("BOM: NOT UTF-8 or UTF-16");
-        throw new IOException("BOM: Exists and not UTF-8 or UTF-16");
-    }
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-===
-
-
-
-public class PdfUtil {
-
-    private final float fontSize;
-    private final double xCoordinate;
-    private final double yCoordinate;
-    private final String pdfFile;
-    private final String outputPdf;
-    private final String receiverAddressIdentifier;
-
-    private PdfUtil(PdfUtilBuilder pdfUtilBuilder) {
-
-        this.xCoordinate = pdfUtilBuilder.xCoordinate;
-        this.yCoordinate = pdfUtilBuilder.yCoordinate;
-        this.fontSize = pdfUtilBuilder.fontSize;
-        this.receiverAddressIdentifier = pdfUtilBuilder.receiverAddressIdentifier;
-        this.pdfFile = pdfUtilBuilder.pdfFile;
-        this.outputPdf = pdfUtilBuilder.outputPdf;
-    }
-
-    public static class PdfUtilBuilder {
-        private float fontSize;
-        private double xCoordinate;
-        private double yCoordinate;
-        private String pdfFile;
-        private String outputPdf;
-        private String receiverAddressIdentifier;
-
-        public PdfUtilBuilder setFontSize(float fontSize) {
-            this.fontSize = fontSize;
-            return this;
-        }
-
-        public PdfUtilBuilder setxCoordinate(double xCoordinate) {
-            this.xCoordinate = xCoordinate;
-            return this;
-        }
-
-        public PdfUtilBuilder setyCoordinate(double yCoordinate) {
-            this.yCoordinate = yCoordinate;
-            return this;
-        }
-
-        public PdfUtilBuilder setPdfFile(String pdfFile) {
-            this.pdfFile = pdfFile;
-            return this;
-        }
-
-        public PdfUtilBuilder setOutputPdf(String outputPdf) {
-            this.outputPdf = outputPdf;
-            return this;
-        }
-
-        public PdfUtilBuilder setReceiverAddressIdentifier(String receiverAddressIdentifier) {
-            this.receiverAddressIdentifier = receiverAddressIdentifier;
-            return this;
-        }
-
-        public PdfUtil build() {
-            return new PdfUtil(this);
-        }
-
-        public String getReceiverAddressIdentifier() {
-            return receiverAddressIdentifier;
-        }
-    }
-
-    public void writeOnPdf() throws IOException  {
-            try ( PDDocument document = Loader.loadPDF(new File(pdfFile))) {
-                PDPageTree pages = document.getPages();
-                PDPage firstPage = pages.get(0);
-                PDRectangle rectangle = firstPage.getMediaBox();
-
-                if (rectangle.getHeight() >= rectangle.getWidth()) {
-                    portrait(document, pages);
-                } else {
-                    landscape(document, pages);
-                }
-                document.save(outputPdf);
-            } catch (IOException e) {
-                throw new IOException("IOException on input file " + pdfFile, e);
-                      }
-    }
-
-    public void writeOnEncryptedPdf() throws IOException {
-        var encryptedPdf = new File(pdfFile);
-        PDDocument document = Loader.loadPDF(encryptedPdf);
-        document.setAllSecurityToBeRemoved(true);
-        document.save(encryptedPdf);
-        document.close();
-        writeOnPdf();
-    }
-
-    public void portrait(PDDocument document, PDPageTree pages) throws IOException {
-
-    	PDFont font = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
-        float fontSize = 8;
-
-        double pdfPageHeight = pages.get(0).getMediaBox().getHeight();
-        double pdfPageWidth = pages.get(0).getMediaBox().getWidth();
-
-        int upperRightX = (int) Math.ceil(pdfPageWidth - 190);
-        int upperRightY = (int) Math.ceil(pdfPageHeight - (pdfPageHeight - 6));
-
-        int lowerLeftX = (int) Math.ceil(pdfPageWidth - 40);
-        int lowerLeftY = (int) Math.ceil(pdfPageHeight - (pdfPageHeight - 26));
-
-        for (var i = 0; i <= pages.getCount(); i++) {
-            PDPage page = pages.get(0);
-            try(PDPageContentStream contentStream = new PDPageContentStream(document, page, PDPageContentStream.AppendMode.APPEND, true, true)) {
-
-                contentStream.beginText();
-                contentStream.setFont(font, fontSize);
-                contentStream.newLineAtOffset((int) Math.ceil(xCoordinate * 79), (int) Math.ceil(yCoordinate * 414.10));
-                contentStream.showText(receiverAddressIdentifier);
-                contentStream.endText();
-
-                    PDRectangle rect = new PDRectangle(lowerLeftX, lowerLeftY, upperRightX - lowerLeftX, upperRightY - lowerLeftY);
-                    contentStream.setNonStrokingColor(1, 1, 1);
-                    contentStream.addRect(rect.getLowerLeftX(), rect.getLowerLeftY(), rect.getWidth(), rect.getHeight());
-                    contentStream.fillAndStroke();
-                }
-            }
-    }
-
-    public void landscape(PDDocument document, PDPageTree pages) throws IOException {
-
-        PDFont font = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
-        float fontSize = 8;
-
-        double pdfPageHeight = pages.get(0).getMediaBox().getHeight();
-        double pdfPageWidth = pages.get(0).getMediaBox().getWidth();
-
-        int upperRightX = (int) Math.ceil(pdfPageWidth - 190);
-        int upperRightY = (int) Math.ceil(pdfPageHeight - (pdfPageHeight - 6));
-
-        int lowerLeftX = (int) Math.ceil(pdfPageWidth - 40);
-        int lowerLeftY = (int) Math.ceil(pdfPageHeight - (pdfPageHeight - 26));
-
-        for (var i = 0; i <= pages.getCount(); i++) {
-            PDPage page = pages.get(0);
-            try(PDPageContentStream contentStream = new PDPageContentStream(document, page, PDPageContentStream.AppendMode.APPEND, true, true)) {
-
-                contentStream.beginText();
-                contentStream.setFont(font, fontSize);
-                contentStream.newLineAtOffset((int) Math.ceil((xCoordinate - .1) * 80), (int) Math.ceil((yCoordinate - .1) * 414.10 - 139));
-                contentStream.showText(receiverAddressIdentifier);
-                contentStream.endText();
-
-                PDRectangle rect = new PDRectangle(lowerLeftX, lowerLeftY, upperRightX - lowerLeftX, upperRightY - lowerLeftY);
-                contentStream.setNonStrokingColor(1, 1, 1);
-                contentStream.addRect(rect.getLowerLeftX(), rect.getLowerLeftY(), rect.getWidth(), rect.getHeight());
-                contentStream.fillAndStroke();
-            }
-        }
-    }
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-===
-
-
-
-
-
-public class ProcessorTaskUtil {
-    private ProcessorTaskUtil() {throw new AssertionError("cannot instantiate");}
-
-    public static void addMessageToProcessorExecutionRecordToProcessorTransaction(
-            ProcessorTransactionCore processorTransaction, ProcessorExecutionRecord executionRecord,
-            Map<String, String> message) {
-        executionRecord.setDateModified(new Date());
-        executionRecord.addMessage(message);
-        processorTransaction.addProcessorExecutionRecord(executionRecord);
-    }
-
-    public static void addMessageToProcessorExecutionRecordToProcessorFileTask(
-            ProcessorService processorService, ProcessorFileTask processorFileTask,
-            ProcessorExecutionRecord executionRecord, Map<String, String> message) {
-        executionRecord.setDateModified(new Date());
-        executionRecord.addMessage(message);
-        processorFileTask.addProcessorExecutionRecord(executionRecord);
-        processorService.updateProcessorFileTask(processorFileTask);
-
-    }
-
-    public static String getFileName(String documentId, String appIdentifier, ProcessorFileTaskService processorFileTaskService, ProcessorsService processorsService) {
-        var zipFileName = "";
-        var processorFileTask = processorFileTaskService.getProcessorFileTaskForTargetId(documentId, "documents", appIdentifier);
-        if (processorFileTask != null) {
-            var processorTransaction = processorsService.getProcessorTransactionById(processorFileTask.getProcessorTransactionId());
-            zipFileName = processorTransaction.getFileName();
-        }
-        return zipFileName;
-    }
-
-    public static void addMessageToProcessorExecutionRecordToProcessorTransactionMetadata(
-            ProcessorTransactionMetadata processorTransactionMetadata, ProcessorExecutionRecord executionRecord,
-            Map<String, String> message) {
-        executionRecord.setDateModified(new Date());
-        executionRecord.addMessage(message);
-        processorTransactionMetadata.addProcessorExecutionRecord(executionRecord);
-    }
-
-    public static void addMessageToProcessorExecutionRecord(
-            ProcessorExecutionRecord executionRecord, Map<String, String> message) {
-        executionRecord.setDateModified(new Date());
-        executionRecord.addMessage(message);
-    }
-
-    public static void addMiscellaneousToProcessorExecutionRecord(
-            ProcessorFileTask processorFileTask, ProcessorExecutionRecord executionRecord) {
-
-        executionRecord.setClientId(processorFileTask.getClientId());
-        executionRecord.setSpaceId(processorFileTask.getConfigSpaceId());
-    }
-
-    public static ProcessorExecutionRecord createProcessorExecutionRecord(String description) {
-        var processorExecutionRecord = createBlankAudit();
-        processorExecutionRecord.setDescription(description);
-
-        return processorExecutionRecord;
-    }
-
-    public static boolean validateCriteriaMatch(String expression, Map<String, Object> rootNodeMap) {
-        Boolean result = false;
-        try {
-            result = (Boolean) MVEL.eval(expression, rootNodeMap);
-
-        } catch (PropertyAccessException ex) {
-            result = false;
-        }
+        
+        var directoryListing = ((Vector<ChannelSftp.LsEntry>)channelSftp.ls(channelSftp.pwd()))
+                .stream()
+                .sorted(Comparator.comparingInt(o -> o.getAttrs().getMTime()))
+                .collect(Collectors.toList());
+        result.put(DIRECTORY_LISTING, directoryListing);
+        result.put(CHANNEL_SFTP, channelSftp);
+        result.put(SFTP_SESSION, sftpSession);
+        result.put(CHANNEL, channel);
         return result;
     }
 
-    public static boolean findDuplicateError(String errormsg, Set<String> errorList) {
-        return errorList.stream().anyMatch(o -> o.contains(errormsg));
+	public String createFileOutputDirectoryPath(Map processConfig, ProcessorMetaData processor, String dirFromFileName) {
+	    return ingestRoot
+	        + "/" + processor.getAppIdentifier() 
+	        + "/" + processor.getConfigSpaceId().toString()
+	        + "/" + dirFromFileName.replaceAll("\\.\\w{0,4}", "");
     }
 
-    public static ProcessorExecutionRecord createProcessorExecutionRecord(String description,
-                                                                          ProcessorTransactionCore processorTransaction) {
-        var processorExecutionRecord = createBlankAudit();
-        processorExecutionRecord.setDescription(description);
-        processorExecutionRecord.setClientId(processorTransaction.getClientId());
-        processorExecutionRecord.setSpaceId(processorTransaction.getConfigSpaceId());
+    public boolean exceptionForMissingLoginCredential(String sftpHost, String sftpUSER, String sftpPASS, String sftpWorkingDir ) throws IOException {
+        if( isMissingLoginCredential(sftpHost, sftpUSER, sftpPASS, sftpWorkingDir )) {
+            LOGGER.debug("runCsvSFTPMonitor Login credentials must be supplied ; not able to login to SFTP host={}", sftpHost);
+            throw new IOException("Missing login credentials host=" + sftpHost);
+        }
+        return false;
 
-        return processorExecutionRecord;
     }
 
-    public static ProcessorExecutionRecord createProcessorExecutionRecord(String description, Map<String, String> message) {
-        var processorExecutionRecord = createProcessorExecutionRecord(description);
-        processorExecutionRecord.addMessage(message);
-        return processorExecutionRecord;
+	public boolean isMissingLoginCredential(String sftpHost, String sftpUSER, String sftpPASS, String sftpWorkingDir ) {
+        return StringUtils.isEmpty(sftpHost)
+                || StringUtils.isEmpty(sftpUSER)
+                || StringUtils.isEmpty(sftpPASS)
+                || StringUtils.isEmpty(sftpWorkingDir);
     }
 
-    public static void updateFileMetrics(ProcessorFileTask processorFileTask, File fileToProcess,
-                                         ProcessorFileTaskService processorFileTaskService) {
-        // Updating metric information
-        var fileInfo = Utilities.getFileInformation(fileToProcess);
-        processorFileTask.setFileSize((Long) fileInfo.get("size"));
-        processorFileTask.setFileType((String) fileInfo.get("type"));
-
-        processorFileTaskService.updateProcessorFileTask(processorFileTask);
+	public boolean hasValidStatus(ProcessorMetaData processor) {
+        return processor != null &&
+                (MetaDataStatus.IN_PROCESS.equals(processor.getStatus()) ||
+                        MetaDataStatus.ACTIVE.equals(processor.getStatus()) ||
+                        MetaDataStatus.NEW.equals(processor.getStatus()));
     }
 
-//	public static  void updateFileMetrics(CsvProcessorTransaction csvProcessorTransaction, File fileToProcess,
-//			CsvProcessorService csvProcessorService) {
-//		csvProcessorTransaction.setJsonFileName(fileToProcess.getName());
-//		csvProcessorService.updateCsvProcessorTransactionMetaData(csvProcessorTransaction);
-//	}
+	public void closeSFTPChannel(ChannelSftp channelSftp, Session sftpSession, Channel channel){
+        if (channelSftp != null && channelSftp.isConnected()) {
+        	try {
+                channel.disconnect();
+                channelSftp.disconnect();
+                channelSftp.quit();
+                if(sftpSession == null || !sftpSession.isConnected()) {
+                    sftpSession = channelSftp.getSession();
+                }
+                sftpSession.disconnect();
+            } catch (Exception e) {
+                LOGGER.error("closeSFTPChannel IOException Error Message {}", ExceptionUtils.getStackTrace(e));
+}
+        }
+    }
+}
 
-    public static void updateServerMetrics(ProcessorFileTask processorFileTask, ProcessorFileTaskService processorFileTaskService) {
-        processorFileTask.setProcessedByHost(FileUtil.getInstance().getLocalHostName());
 
-        processorFileTaskService.updateProcessorFileTask(processorFileTask);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+====
+
+
+
+
+public final class SanitizeUtil {
+	private static final String AUTHORIZATION = "Authorization";
+
+	private SanitizeUtil() {}
+
+	public static String sanitizeString(String input){
+		if (input == null) {
+			return null;
+		}
+		try {
+			return JsonParser.parseString(input).toString();
+		} catch (JsonSyntaxException e) {
+			//return input.replaceAll("[^a-zA-Z0-9_-]", "");
+			return "Sanitize Failure";
+		}
+	}
+
+	public static String sanitizeToString(String str) {
+        return str == null ? null : str.replaceAll("\\v", "");
     }
 
-//	public static  void updateServerMetrics(CsvProcessorTransaction csvProcessorTransaction,
-//			CsvProcessorService csvProcessorService) {
-//		csvProcessorService.updateCsvProcessorTransactionMetaData(csvProcessorTransaction);
-//	}
 
-    public static void updateProcessFileTaskWithExecutionRecord(ProcessorFileTaskService processorFileTaskService,
-                                                                ProcessorFileTask processorFileTask, ProcessorExecutionRecord executionRecord) {
-        processorFileTask.addProcessorExecutionRecord(executionRecord);
-        processorFileTaskService.updateProcessorFileTask(processorFileTask);
-    }
+	public static HttpEntity<?> sanitizeHttpEntityHeaderRmAuth(HttpEntity<?> requestEntity) {
+		requestEntity = new HttpEntity<>(requestEntity.getHeaders());
+		HttpHeaders httpHeaders = requestEntity.getHeaders();
+		httpHeaders.remove(AUTHORIZATION);
+		if (requestEntity.getHeaders().getContentType() != null) {
+			httpHeaders.setContentType(new MediaType(sanitizeString(requestEntity.getHeaders().getContentType().toString())));
+		}
+		return requestEntity;
+	}
 
-    public static void updateProcessFileTaskWithExecutionRecord(ProcessorFileTaskService processorFileTaskService,
-                                                                ProcessorFileTask processorFileTask, ProcessorExecutionRecord executionRecord,
-                                                                Map<String, String> message) {
-        addMessageToProcessorExecutionRecord(executionRecord, message);
-        addMiscellaneousToProcessorExecutionRecord(processorFileTask, executionRecord);
-        updateProcessFileTaskWithExecutionRecord(processorFileTaskService, processorFileTask, executionRecord);
-    }
+	public static String sanitizeResponseEntityBody(ResponseEntity<?> response) {
+		return response != null && response.getBody() != null ? sanitizeString(response.getBody().toString()) : null;
+	}
 
-    public static void updateProcessTransactionWithExecutionRecord(ProcessorService processorService,
-                                                                   ProcessorTransaction processorTransaction, ProcessorExecutionRecord executionRecord) {
-        processorTransaction.addProcessorExecutionRecord(executionRecord);
-        processorService.updateProcessorTransactionMetaData(processorTransaction);
-    }
+	public static String sanitizeURL(String url) throws UriBuilderException, URISyntaxException {
+		String sanitizedURL = "";
+		var awsUri = new URI(url);
+		//rebuilding the uri
+		sanitizedURL = awsUri.getScheme() + "://" + awsUri.getHost() + awsUri.getPath();
+		if (awsUri.getQuery() != null) {
+			sanitizedURL += "?" + awsUri.getQuery();
+		}
+		if (awsUri.getFragment() != null) {
+			sanitizedURL += "#" + awsUri.getFragment();
+		}
+		return sanitizedURL;
+	}
+	
 
-    public static void updateProcessTransactionWithExecutionRecord(ProcessorService processorService,
-                                                                   ProcessorTransaction processorTransaction, ProcessorExecutionRecord executionRecord,
-                                                                   Map<String, String> message) {
-        addMessageToProcessorExecutionRecord(executionRecord, message);
-        updateProcessTransactionWithExecutionRecord(processorService, processorTransaction, executionRecord);
-    }
 
-//	public static  void updateProcessTransactionWithExecutionRecord(CsvProcessorService csvProcessorService,
-//			ProcessorTransactionCore processorTransaction, ProcessorExecutionRecord executionRecord) {
-//		processorTransaction.addProcessorExecutionRecord(executionRecord);
-//		if (processorTransaction instanceof CsvProcessorTransaction) {
-//			csvProcessorService.updateCsvProcessorTransactionMetaData((CsvProcessorTransaction) processorTransaction);
+	public static String sanitizeAttachmentURL(URI uri) throws UriBuilderException, URISyntaxException {
+		String sanitizedURL = "";
+		//rebuilding the uri
+		sanitizedURL = uri.getScheme() + "://" + uri.getHost() + uri.getRawPath();
+		if (uri.getQuery() != null) {
+			sanitizedURL += "?" + uri.getRawQuery();
+		}
+		if (uri.getFragment() != null) {
+			sanitizedURL += "#" + uri.getRawFragment();
+		}
+		return sanitizedURL;
+	}
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+==
+
+
+
+
+
+@Component
+public class RetryUtil {
+	
+	private static final Logger LOGGER = LoggerFactory.getLogger(RetryUtil.class);
+
+	
+//	public ResponseEntity<byte[]> retryGetAttachment(URI awsUri, String urlToken, RestTemplate restTemplate) throws InterruptedException, URISyntaxException {
+//		
+//		int count = 0;
+//		int retryInterval = 1000;
+//		int retryCount = 3;
+//		
+//		// get new token for retry
+//		HttpHeaders headers = new HttpHeaders();
+//		headers.set("Authorization", urlToken);
+//		HttpEntity<?> attachmentEntity = new HttpEntity<>(headers);
+//
+//		
+//		LOGGER.info("retryGetAttachment request searchUrl:{}, interval:{}, retryCount:{} ", Encode.forJava(awsUri.toString())
+//				,retryInterval, retryCount );
+//
+//		while (count < retryCount) {
+//			try {
+//				synchronized (this) {
+//					this.wait(retryInterval);
+//				}
+//				String sanitizedURL = "";
+//				try{
+//					sanitizedURL = SanitizeUtil.sanitizeURL(awsUri.toString());
+//				}catch (UriBuilderException e){
+//					LOGGER.error("getAttachment Invoking Retry Mechanism, err={}", ExceptionUtils.getStackTrace(e));
+//					String errorMessage = "Error Building URL";
+//					byte[] errorBytes = errorMessage.getBytes();
+//					return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorBytes);
+//				}
+//
+//				return restTemplate.exchange(sanitizedURL, HttpMethod.GET, attachmentEntity, byte[].class);
+//			} catch (HttpServerErrorException e) {
+//				if (HttpUtils.validateStatusCode(e.getStatusCode())) {
+//					LOGGER.error("retryGetAttachment Provider Search - Invoking Retry Mechanism Again: {} ", count);
+//					if (count == (retryCount - 1)) {
+//						LOGGER.error("retryGetAttachment HTTP 5xx Error after {} retries, err = {}", count, ExceptionUtils.getStackTrace(e));
+//						throw e;
+//					}
+//				} else {
+//					throw e;
+//				}
+//			} catch (InterruptedException e) {
+//				Thread.currentThread().interrupt();
+//				throw e;
+//			} catch (Exception e) {
+//				LOGGER.error("retryGetAttachment Error while Provider Search{}", ExceptionUtils.getStackTrace(e));
+//				throw e;
+//			} finally {
+//				count++;
+//			}
 //		}
+//		return null;
 //	}
 
-//	public static  void updateProcessTransactionWithUnprocessedRecord(CsvProcessorService csvProcessorService,
-//			ProcessorTransactionCore processorTransaction, List<UnprocessedRecord> unprocessedRecord) {
-//		processorTransaction.setUnprocessedRecordList(unprocessedRecord);
-//		if (processorTransaction instanceof CsvProcessorTransaction) {
-//			csvProcessorService.updateCsvProcessorTransactionMetaData((CsvProcessorTransaction) processorTransaction);
-//		}
-//	}
+	public ResponseEntity<byte[]> retryGetAttachment(String awsUri, String urlToken, RestTemplate restTemplate) throws InterruptedException, URISyntaxException {
 
-//	public static  void updateProcessTransactionWithExecutionRecord(CsvProcessorService csvProcessorService,
-//			ProcessorTransactionCore processorTransaction, ProcessorExecutionRecord executionRecord,
-//			Map<String, String> message) {
-//		addMessageToProcessorExecutionRecord(executionRecord, message);
-//		updateProcessTransactionWithExecutionRecord(csvProcessorService, processorTransaction, executionRecord);
-//	}
+		var retryInterval = 500L;
+		var retryCount = 3;
+		
+		var retryHandler = new RetryOnExceptionHandler(retryCount, retryInterval);
 
-    private static ProcessorExecutionRecord createBlankAudit() {
-        var processorExecutionRecord = new ProcessorExecutionRecord();
-        processorExecutionRecord.setServerName(FileUtil.getInstance().getLocalHostName());
-        processorExecutionRecord.setServerIp(FileUtil.getInstance().getLocalHostIP());
-        processorExecutionRecord.setDateCreated(new Date());
-        processorExecutionRecord.setDateModified(processorExecutionRecord.getDateCreated());
-        return processorExecutionRecord;
+		// get new token for retry
+		HttpHeaders headers = new HttpHeaders();
+		headers.set("Authorization", urlToken);
+		HttpEntity<?> attachmentEntity = new HttpEntity<>(headers);
+
+		
+		ResponseEntity<byte[]> response = null;
+		
+		long startTime = System.nanoTime();
+		
+		while (retryHandler.shouldRetry()) {
+			try {
+				try {
+					response = restTemplate.exchange(awsUri, HttpMethod.GET, attachmentEntity, byte[].class);
+					
+					long latency = (System.nanoTime() - startTime) / 1000000;
+					
+					LOGGER.info("retryGetAttachment Consumer=fds.paperless, ServiceName=fds.cloud, HTTPMethod={}, HTTPStatus={}, TotalLatency={}", 
+							 HttpMethod.GET.toString(), response.getStatusCode().value(), latency );
+					break;
+				} catch (HttpStatusCodeException e) {
+					long latency = (System.nanoTime() - startTime) / 1000000;
+				
+					if (HttpUtils.validateStatusCode(e.getStatusCode())) {
+						
+						LOGGER.error("retryGetAttachment HttpStatusCodeException Invoking Retry Mechanism Consumer=fds.paperless, ServiceName=fds.cloud, HTTPMethod={}, HTTPStatus={}, TotalLatency={}, responseBody={}, err={}", 
+								HttpMethod.GET.toString(), e.getStatusCode().value(), latency, e.getResponseBodyAsString(), ExceptionUtils.getStackTrace(e) );
+						
+						retryHandler.exceptionOccurred();
+					} else {
+						LOGGER.error("retryGetAttachment HttpStatusCodeException Invoking Retry Mechanism Consumer=fds.paperless, ServiceName=fds.cloud, HTTPMethod={}, HTTPStatus={}, TotalLatency={}, responseBody={}, err={}", 
+								HttpMethod.GET.toString(), e.getStatusCode().value(), latency, e.getResponseBodyAsString(), ExceptionUtils.getStackTrace(e) );
+						ResponseEntity<byte[]> errorResponse = new ResponseEntity<byte[]>(null, headers, e.getStatusCode().value());
+						return errorResponse;
+					}
+				}
+			} catch (OutOfRetriesException e) {
+
+				LOGGER.error("retryGetAttachment HttpStatusCodeException 3 retries exhausted Consumer=fds.paperless, ServiceName=fds.cloud, URI={}, HTTPMethod={}, err={}", 
+						Encode.forJava(awsUri.toString()), HttpMethod.GET.toString(), ExceptionUtils.getStackTrace(e));
+				ResponseEntity<byte[]> errorResponse = new ResponseEntity<byte[]>(HttpStatus.INTERNAL_SERVER_ERROR);
+				return errorResponse;
+			}
+		}
+		
+		return response;
+	}
+	
+	public ResponseEntity<DocumentAttachmentMetaData> retryFDSCloudCall(URI awsUri, String newAccessToken, RestTemplate restTemplate) throws InterruptedException {
+		
+		var retryInterval = 500L;
+		var retryCount = 3;
+		
+		var retryHandler = new RetryOnExceptionHandler(retryCount, retryInterval);
+		
+		// get new token for retry
+		HttpHeaders headers = new HttpHeaders();
+		headers.set("Accept", MediaType.APPLICATION_JSON_VALUE);
+		headers.set("fds-authorization", newAccessToken);
+		HttpEntity<?> attachmentEntity = new HttpEntity<>(headers);
+
+		ResponseEntity<DocumentAttachmentMetaData> response = null;
+		
+		long startTime = System.nanoTime();
+		
+		while (retryHandler.shouldRetry()) {
+			try {
+				try {
+					response = restTemplate.exchange(awsUri, HttpMethod.GET, attachmentEntity, DocumentAttachmentMetaData.class);
+					
+					long latency = (System.nanoTime() - startTime) / 1000000;
+					
+					LOGGER.info("retryFDSCloudCall Consumer=fds.paperless, ServiceName=fds.cloud, URI={}, HTTPMethod={}, HTTPStatus={}, TotalLatency={}", 
+							 Encode.forJava(awsUri.toString()), HttpMethod.GET.toString(), response.getStatusCode().value(), latency );
+					break;
+				} catch (HttpStatusCodeException e) {
+					long latency = (System.nanoTime() - startTime) / 1000000;
+				
+					if (HttpUtils.validateStatusCode(e.getStatusCode())) {
+						
+						LOGGER.error("retryFDSCloudCall HttpStatusCodeException Invoking Retry Mechanism Consumer=fds.paperless, ServiceName=fds.cloud, URI={}, HTTPMethod={}, HTTPStatus={}, TotalLatency={}, responseBody={}, err={}", 
+								Encode.forJava(awsUri.toString()), HttpMethod.GET.toString(), e.getStatusCode().value(), latency, e.getResponseBodyAsString(), ExceptionUtils.getStackTrace(e) );
+						
+						retryHandler.exceptionOccurred();
+					} else {
+						LOGGER.error("retryFDSCloudCall HttpStatusCodeException Invoking Retry Mechanism Consumer=fds.paperless, ServiceName=fds.cloud, URI={}, HTTPMethod={}, HTTPStatus={}, TotalLatency={}, responseBody={}, err={}", 
+								Encode.forJava(awsUri.toString()), HttpMethod.GET.toString(), e.getStatusCode().value(), latency, e.getResponseBodyAsString(), ExceptionUtils.getStackTrace(e) );
+						
+						ResponseEntity<DocumentAttachmentMetaData> errorResponse = new ResponseEntity<DocumentAttachmentMetaData>(null, headers, e.getStatusCode().value());
+						return errorResponse;
+					}
+				}
+			} catch (OutOfRetriesException e) {
+
+				LOGGER.error("retryFDSCloudCall HttpStatusCodeException 3 retries exhausted Consumer=fds.paperless, ServiceName=fds.cloud, URI={}, HTTPMethod={}, err={}", 
+						Encode.forJava(awsUri.toString()), HttpMethod.GET.toString(), ExceptionUtils.getStackTrace(e));
+				ResponseEntity<DocumentAttachmentMetaData> errorResponse = new ResponseEntity<DocumentAttachmentMetaData>(HttpStatus.INTERNAL_SERVER_ERROR);
+				return errorResponse;
+			}
+		}
+		
+		return response;
+	}
+	
+public ResponseEntity<FDSCloudDocument> retryFDSCloudGetCall(URI awsUri, String newAccessToken, RestTemplate restTemplate) throws InterruptedException {
+		
+		int count = 0;
+		int retryInterval = 1000;
+		int retryCount = 3;
+		
+		// get new token for retry
+		HttpHeaders headers = new HttpHeaders();
+		headers.set("Accept", MediaType.APPLICATION_JSON_VALUE);
+		headers.set("fds-authorization", newAccessToken);
+		HttpEntity<?> attachmentEntity = new HttpEntity<>(headers);
+
+		
+		LOGGER.info("retryFDSCloudCall request headers, interval:{}, retryCount:{} ", retryInterval, retryCount );
+
+		while (count < retryCount) {
+			try {
+				synchronized (this) {
+					this.wait(retryInterval);
+				}
+				return restTemplate.exchange(awsUri, HttpMethod.GET, attachmentEntity, FDSCloudDocument.class);
+			} catch (HttpServerErrorException e) {
+				if (HttpUtils.validateStatusCode(e.getStatusCode())) {
+					LOGGER.error("retryFDSCloudCall Provider Search - Invoking Retry Mechanism Again: {} ", count);
+					if (count == (retryCount - 1)) {
+						LOGGER.error("retryFDSCloudCall HTTP 5xx Error after {} retries, err = {}", count, ExceptionUtils.getStackTrace(e));
+						throw e;
+					}
+				} else {
+					throw e;
+				}
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+				throw e;
+			} catch (Exception e) {
+				LOGGER.error("retryGetAttachment Error while Provider Search{}", ExceptionUtils.getStackTrace(e));
+				throw e;
+			} finally {
+				count++;
+			}
+		}
+		return null;
+	}
+	
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+==
+
+
+
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+
+public class DelegateUtils {
+	
+	private static final Logger LOGGER = LoggerFactory.getLogger(DelegateUtils.class);
+	protected Map<String, Object> errorMap;
+	
+	/**
+	 * Method to add document Id in error map
+	 * @param execution
+	 */
+	public static String addDocumentIdInErrors(DelegateExecution execution) {
+		var result ="";
+		if (execution.getVariable(Workflow.DOCUMENT, DocumentMetaData.class) != null) {
+			result =  "Error while processing for Document Id:" + execution.getVariable(Workflow.DOCUMENT, DocumentMetaData.class).getId() ;
+		}
+		return result ;
+	}
+
+	/**
+	 * Method to add hook Id in error map
+	 * @param execution
+	 */
+	public static String generateMessageforCronExpressionHookWorkflow(DelegateExecution execution) {
+		var result ="";
+		if (execution.getVariable(Workflow.DOCUMENT, DocumentMetaData.class) != null && execution.getVariable(Workflow.HOOK_EXECUTION_ID, String.class) != null) {
+			result =  "Error while executing hook with Id " + execution.getVariable(Workflow.DOCUMENT, DocumentMetaData.class).getId() + " at " + new Date() 
+					+ ". \n" + "Hook Execution Id for the execution is " + execution.getVariable(Workflow.HOOK_EXECUTION_ID, String.class) 
+					+ ". \n" + "Please check hook transaction in cronExpressionHook collection in Mongo DB for more details.";
+		}
+		return result ;
+	}
+	
+	/**
+	 * Method to add error map in hook transaction
+	 *
+	 */
+	public static Map<String, String> generateErrorMessageforCronExpressionHookWorkflow(Map<String, Object> errorMap) {
+		var result = "";
+		Map<String, String> errorResult= new HashMap<>();
+		if (errorMap != null && !errorMap.isEmpty()) {
+			for (Map.Entry<String, Object> errMsg : errorMap.entrySet()) {
+				result = errMsg.getKey().concat(": ").concat(errMsg.getValue().toString());
+			}
+		}
+		errorResult.put(Workflow.ERROR_MESSAGE, result);
+		return errorResult;
+	}
+	
+	/**
+	 * Method to send notifications to the support on workflow failures.
+	 * * @param execution
+	 * @param errorMap 
+	 * @param emailService 
+	 */
+	
+	public static void sendErrorNotification(DelegateExecution execution, Map<String, Object> errorMap, String message, EmailService emailService) {
+		String emailReceiver = execution.getVariable(Workflow.EMAIL_RECEIVER, String.class);
+		String environment = execution.getVariable(Workflow.ENVIRONMENT, String.class);
+		if(!StringUtils.isNullOrEmpty(emailReceiver) && !StringUtils.isNullOrEmpty(environment)) {
+			emailService.sendEmail(execution, errorMap, message);
+		}
+		
+	}
+	
+	public static void updateProcessorTransactionList(DelegateExecution execution, ProcessorService processorService) {
+		LOGGER.debug("Entering UpdateProcessorTransactionList doExecute");
+		try {
+			String processorTransactionUpdateList = execution.getVariable(Workflow.PROCESSOR_TRANSACTION_UPDATE, String.class);
+			var gson = new Gson();
+			List<JsonObject> metadataObjlist ;
+			var type = new TypeToken<List<JsonObject>>() {}.getType();
+			metadataObjlist = gson.fromJson(processorTransactionUpdateList, type);
+			Map<String, Object> map = new HashMap<>();
+			for (JsonObject jsonObject : metadataObjlist) {
+				map = gson.fromJson(jsonObject.toString(), map.getClass());
+				String id = (String)map.get(Workflow.MONGO_ID);
+				String ackStatus = (String)map.get(Workflow.ACK_STATUS);
+				processorService.setAckStatus(id, ackStatus);
+			}
+		} catch (Exception e) {
+			LOGGER.error("Update Processor Transaction error", e);
+        } 
+		LOGGER.debug("Exiting UpdateProcessorTransactionList doExecute");
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+==
+
+
+
+public class OauthTokenExtended implements Serializable {
+
+	private static final long MILLISECOND_CONVERSION_MULTIPLIER = 1000;
+    private static final long serialVersionUID = 1L;
+    // expire token 10 minutes before actual expiry
+    private static final long TOKEN_EXPIRY_LATENT_TIME = 600000;
+
+    private String accessToken;
+    private Integer expiresIn;
+    private long expiryTime;
+    private Date obtainedOn;
+    private String tokenType;
+    private String password;
+    private String applicationId;
+    private String url;
+    private String grantType;
+    private String scope;
+
+    public OauthTokenExtended(String applicationId, String password) {
+        this.applicationId = applicationId;
+        this.password = password;
     }
 
-    public static ProcessorExecutionRecord createRecordWithDelegateName(Class<?> clazz) {
-        var processorExecutionRecord = new ProcessorExecutionRecord();
-        processorExecutionRecord.setActivitiProcessKey(clazz.getSimpleName());
-        processorExecutionRecord.setDateActivitiJobCompleted(new Date());
-        return processorExecutionRecord;
+    public OauthTokenExtended(String applicationId, String password, String url, String grantType, String scope) {
+        this(applicationId, password);
+        this.url = url;
+        this.grantType = grantType;
+        this.scope = scope;
     }
+
+    public OauthTokenExtended(OauthTokenExtended oauthTokenExtended) {
+        this(oauthTokenExtended.applicationId, oauthTokenExtended.password);
+        this.url = oauthTokenExtended.url;
+        this.grantType = oauthTokenExtended.grantType;
+        this.scope = oauthTokenExtended.scope;
+    }
+
+    public OauthTokenExtended(String token, Integer expiresIn) {
+        // Create OauthToken with accessToken and set expiryTime to be current time + expiresIn
+        this.accessToken = token;
+        this.expiresIn = expiresIn;
+        this.expiryTime = Instant.now().plusSeconds(expiresIn.longValue()).toEpochMilli();
+    }
+
+    public String getAccessToken() {
+        return accessToken;
+    }
+
+    public void setAccessToken(String accessToken) {
+        this.accessToken = accessToken;
+    }
+
+    public String getTokenType() {
+        return tokenType;
+    }
+
+    public void setTokenType(String tokenType) {
+        this.tokenType = tokenType;
+    }
+
+    public String getPassword() {
+        return password;
+    }
+
+    public String getApplicationId() {
+        return applicationId;
+    }
+
+    public Date getObtainedOn() {
+        return (Date) obtainedOn.clone();
+    }
+
+    public void setObtainedOn(Date obtainedOn) {
+        this.obtainedOn = (obtainedOn != null) ? (Date) obtainedOn.clone() : null;
+    }
+
+    public Integer getExpiresIn() {
+        return expiresIn;
+    }
+
+    public void setExpiresIn(Integer expiresIn) {
+        this.expiresIn = expiresIn;
+    }
+
+    public String getUrl() {
+        return url;
+    }
+
+    public void setUrl(String url) {
+        this.url = url;
+    }
+
+    public String getGrantType() {
+        return grantType;
+    }
+
+    public void setGrantType(String grantType) {
+        this.grantType = grantType;
+    }
+
+    public String getScope() {
+        return scope;
+    }
+
+    public void setScope(String scope) {
+        this.scope = scope;
+    }
+
+    public boolean isTokenGoingToExpire() {
+        // We will get a new token 10 minutes before the actual expiry
+        var now = new Date();
+        if (obtainedOn == null) {
+            return true;
+        }
+        return now.getTime() > (expiresIn * MILLISECOND_CONVERSION_MULTIPLIER + obtainedOn.getTime() - TOKEN_EXPIRY_LATENT_TIME);
+    }
+
+    public void setExpiryTime(Long expiryTime) {
+        this.expiryTime = expiryTime;
+    }
+
+    public Long getExpiryTime() {
+        return expiryTime;
+    }
+
+    public boolean isEmpty() {
+        return (this.accessToken == null || this.accessToken.isEmpty());
+    }
+    
+    @Override
+	public String toString() {
+		return "OauthTokenExtended [accessToken=" + accessToken + ", expiresIn=" + expiresIn + ", obtainedOn="
+				+ obtainedOn + ", tokenType=" + tokenType + ", password=" + password + ", applicationId="
+				+ applicationId + ", url=" + url + ", grantType=" + grantType + ", scope=" + scope + "]";
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+==
+
+
+
+
+
+@Service("CallRestApi")
+public class CallRestApi extends OptumJavaDelegateBase {
+	private static final Logger LOGGER = LoggerFactory.getLogger(CallRestApi.class);
+	@Autowired
+	CsvProcessorsService csvProcessorsSvc;
+
+	@Autowired
+	CsvProcessorService csvProcessorSvc;
+
+	private RestTemplate restTemplate = new RestTemplate();
+
+	private static final List<String> REQ_VARS = Arrays.asList(Workflow.JOB, Workflow.OAUTH_TOKEN_V1);
+
+	public CallRestApi() {
+		super(REQ_VARS);
+	}
+
+	public CallRestApi(RestTemplate restTemplate, CsvProcessorsService csvProcessorsSvc,
+			CsvProcessorService csvProcessorSvc) {
+		super(REQ_VARS);
+		this.restTemplate = restTemplate;
+		this.csvProcessorsSvc = csvProcessorsSvc;
+		this.csvProcessorSvc = csvProcessorSvc;
+	}
+
+	public void doExecute(DelegateExecution execContext) {
+		LOGGER.debug("CallRestApi-->doExecute-->ENTER");
+		if (!validateAndMapRestInput(execContext)) {
+			LOGGER.debug("CallRestApi Completed with errors.");
+		} else {
+			if (execRestApi(execContext)) {
+				LOGGER.debug("CallRestApi Completed successfully.");
+			} else {
+				LOGGER.debug("CallRestApi Completed with errors.");
+			}
+		}
+		convertRestRequestForDbSerialzation(execContext);
+		LOGGER.debug("CallRestApi-->doExecute-->EXIT");
+	}
+
+	private void convertRestRequestForDbSerialzation(DelegateExecution execContext) {
+
+		Map<String, Object> varsMap = ((Map<String, Object>) execContext.getVariable(Workflow.REST_API_JOB_ATTRS));
+		Object request = varsMap.get(Workflow.REST_REQUEST);
+		if (ApplicationUtil.isNotNull(request)) {
+			varsMap.put(Workflow.REST_REQUEST, varsMap.get(Workflow.REST_REQUEST).toString());
+			execContext.setVariable(Workflow.REST_API_JOB_ATTRS, varsMap);
+		}
+	}
+
+	/**
+	 * Method to start execution of the REST API that is requested in the
+	 * Activiti Job
+	 * 
+	 * @param execCtxt
+	 * @return
+	 */
+	@SuppressWarnings("unchecked")
+	private boolean execRestApi(DelegateExecution execCtxt) {
+		LOGGER.debug("CallRestApi-->execRestApi-->ENTER");
+		var result = false;
+		var method = ((Map<String, Object>) execCtxt.getVariable(Workflow.REST_API_JOB_ATTRS))
+				.get(Workflow.REST_METHOD).toString();
+		switch (method) {
+		case "POST":
+		case "PUT":
+			result = doPostOrPut(execCtxt);
+			break;
+		default:
+			addErrorMsg(Workflow.REST_ERROR_MSG,
+					String.format("Method %s not supported.", Workflow.UNSUPPORTED_METHOD));
+			break;
+		}
+		LOGGER.debug("CallRestApi-->execRestApi-->EXIT");
+		return result;
+	}
+
+	/**
+	 * Method to perform HTTP POST/PUT transaction
+	 * 
+	 * @param execCtxt
+	 * @return
+	 */
+	@SuppressWarnings({ "rawtypes", "unchecked" })
+	private boolean doPostOrPut(DelegateExecution execCtxt) {
+		LOGGER.debug("CallRestApi-->doPostOrPut-->ENTER");
+		var result = false;
+		Map<String, Object> restApiJobAttrs = ((Map<String, Object>) execCtxt.getVariable(Workflow.REST_API_JOB_ATTRS));
+		var uri = (URI) restApiJobAttrs.get(Workflow.REST_URI);
+		HttpMethod method = (HttpMethod) restApiJobAttrs.get(Workflow.REST_METHOD);
+		HttpEntity request = (HttpEntity) restApiJobAttrs.get(Workflow.REST_REQUEST);
+		try {
+			ResponseEntity<String> sr = restTemplate.exchange(uri, method, request, String.class);
+			restApiJobAttrs.put(Workflow.REST_RESPONSE, sr.toString());
+			if (!StringUtils.isEmpty(sr.getHeaders().toString()) && sr.getHeaders().get(Workflow.REST_X_TRX_HEADER) != null) {
+				restApiJobAttrs.put(Workflow.REST_TRX_ID, sr.getHeaders().get(Workflow.REST_X_TRX_HEADER).get(0));
+			}
+
+		} catch (Exception e) {
+			LOGGER.error("doPostOrPut {}={} {}",
+					"delegateExecutionId", execCtxt.getId(),
+					ExceptionUtils.getStackTrace(e));
+			restApiJobAttrs.put(Workflow.REST_RESPONSE, e.getMessage());
+			restApiJobAttrs.put(Workflow.REST_STATUS, "COMPLETE_WITH_ERRORS");
+			addErrorMsg(Workflow.REST_ERROR_MSG, Workflow.REST_HTTP_REQUEST_EXECUTION_ERROR);
+			addErrorMsg(Workflow.REST_ERROR_MSG, ExceptionUtils.getStackTrace(e));
+		}
+		writeCsvProcessorRowTask(execCtxt);
+		result = (execCtxt.getVariable(Workflow.ERROR_MAP) == null) ;
+		LOGGER.debug("CallRestApi-->doPostOrPut-->EXIT");
+		return result;
+	}
+
+	/**
+	 * Method to validate that the Job being called is of type 'RestApiJob' and
+	 * to set a RestApiJobAttributes Map.
+	 * 
+	 * @return boolean
+	 */
+	private boolean validateAndMapRestInput(DelegateExecution execCtxt) {
+		LOGGER.debug("CallRestApi-->validateAndMapRestInput-->ENTER");
+		var result = false;
+		execCtxt.setVariable(Workflow.REST_API_JOB_ATTRS, new HashMap<String, Object>());
+		Object oJob = execCtxt.getVariable(REQ_VARS.get(0));
+		if (RestApiJob.class.isAssignableFrom(oJob.getClass())) {
+			result = getRestApiJobMap(execCtxt, (RestApiJob) oJob);
+		} else {
+			LOGGER.warn("validateAndMapRestInput; delegateExecutionId={}, Object of type {}", execCtxt.getId(), oJob.getClass().getName());
+			addErrorMsg(Workflow.REST_ERROR_MSG, Workflow.INVALID_JOB_TYPE);
+		}
+		LOGGER.debug("CallRestApi-->validateAndMapRestInput-->EXIT");
+		return result;
+	}
+
+	/**
+	 * Method to create a Map of variables being set by RestApiJob
+	 * 
+	 * @param execCtxt
+	 * 
+	 * @param rApiJob
+	 * @return boolean
+	 */
+	@SuppressWarnings("unchecked")
+	private boolean getRestApiJobMap(DelegateExecution execCtxt, RestApiJob rApiJob) {
+		LOGGER.debug("CallRestApi-->getRestApiJobMap-->ENTER");
+		var result = true;
+		Map<String, Object> varsMap = ((Map<String, Object>) execCtxt.getVariable(Workflow.REST_API_JOB_ATTRS));
+		varsMap.put(Workflow.REST_URI, rApiJob.getUri());
+		varsMap.put(Workflow.REST_SOURCE_ID, rApiJob.getSourceType());
+		varsMap.put(Workflow.REST_TRX_ID, rApiJob.getTransactionId());
+		varsMap.put(Workflow.REST_CONFIG_SPACE_ID, rApiJob.getSpaceId());
+		varsMap.put(Workflow.REST_CLIENT_ID, rApiJob.getClientId());
+		varsMap.put(Workflow.REST_APP_IDENTIFIER, rApiJob.getAppIdentifier());
+		varsMap.put(Workflow.REST_VERSION, "1");
+		varsMap.put(Workflow.REST_CSV_FILE_NAME, rApiJob.getCsvFileName());
+		varsMap.put(Workflow.REST_JSON_FILE_NAME, rApiJob.getJsonFileName());
+		varsMap.put(Workflow.REST_TARGET_TYPE, rApiJob.getTargetType());
+		varsMap.put(Workflow.REST_DB_STATUS_OBJ_ID, rApiJob.getDbStatusObjectId());
+
+		String[] reqdAttrs = { Workflow.REST_METHOD, Workflow.REST_REQUEST, Workflow.REST_URI };
+		for (var i = 0; i < reqdAttrs.length; i++) {
+			if (varsMap.get(reqdAttrs[i]) == null) {
+				addErrorMsg(Workflow.REST_ERROR_MSG, String.format("Null %s", reqdAttrs[i]));
+				result = false;
+			}
+		}
+		LOGGER.debug("CallRestApi-->getRestApiJobMap-->EXIT");
+		return result;
+	}
+
+	/**
+	 * Method to write CsvProcessorRowTask to MongoDB->CsvProcessor Collection
+	 * 
+	 * @param execCtxt
+	 */
+	@SuppressWarnings("unchecked")
+	public void writeCsvProcessorRowTask(DelegateExecution execCtxt) {
+		LOGGER.debug("CallRestApi-->writeCsvProcessorRowTask-->ENTER");
+		Map<String, Object> restApiJobAttrs = ((Map<String, Object>) execCtxt.getVariable(Workflow.REST_API_JOB_ATTRS));
+		var csvProcessorRowTask = csvProcessorSvc.getCsvProcessorRowTask(
+				restApiJobAttrs.get(Workflow.REST_DB_STATUS_OBJ_ID).toString(),
+				restApiJobAttrs.get(Workflow.REST_APP_IDENTIFIER).toString(),
+				restApiJobAttrs.get(Workflow.REST_SERVER_TYPE).toString());
+		boolean csvProcessorRowTaskDoesNotExist = (csvProcessorRowTask == null) ;
+		if (csvProcessorRowTaskDoesNotExist) {
+			addErrorMsg(Workflow.REST_ERROR_MSG, Workflow.REST_CSV_PROCESSOR_ROW_TASK_RECORD_NOT_LOCATED);
+			return;
+		}
+		if (ApplicationUtil.isNotNull(restApiJobAttrs.get(Workflow.REST_APP_IDENTIFIER))) {
+			csvProcessorRowTask.setAppIdentifier(restApiJobAttrs.get(Workflow.REST_APP_IDENTIFIER).toString());
+		}
+		if (ApplicationUtil.isNotNull(restApiJobAttrs.get(Workflow.REST_JSON_FILE_NAME))) {
+			csvProcessorRowTask.setJsonFileName(restApiJobAttrs.get(Workflow.REST_JSON_FILE_NAME).toString());
+		}
+		if (ApplicationUtil.isNotNull(restApiJobAttrs.get(Workflow.REST_CSV_FILE_NAME))) {
+			csvProcessorRowTask.setCsvFileName(restApiJobAttrs.get(Workflow.REST_CSV_FILE_NAME).toString());
+		}
+		if (ApplicationUtil.isNotNull(restApiJobAttrs.get(Workflow.REST_REQUEST))) {
+			csvProcessorRowTask.setRequest(restApiJobAttrs.get(Workflow.REST_REQUEST).toString());
+		}
+		if (ApplicationUtil.isNotNull(restApiJobAttrs.get(Workflow.REST_RESPONSE))) {
+			csvProcessorRowTask.setResponse(restApiJobAttrs.get(Workflow.REST_RESPONSE).toString());
+		}
+		if (ApplicationUtil.isNotNull(restApiJobAttrs.get(Workflow.REST_STATUS))) {
+			csvProcessorRowTask.setStatus(restApiJobAttrs.get(Workflow.REST_STATUS).toString());
+		}
+		if (ApplicationUtil.isNotNull(restApiJobAttrs.get(Workflow.REST_TARGET_ID))) {
+			csvProcessorRowTask.setTargetId(restApiJobAttrs.get(Workflow.REST_TARGET_ID).toString());
+		}
+		if (ApplicationUtil.isNotNull(restApiJobAttrs.get(Workflow.REST_TARGET_TYPE))) {
+			csvProcessorRowTask.setTargetType(restApiJobAttrs.get(Workflow.REST_TARGET_TYPE).toString());
+		}
+		if (ApplicationUtil.isNotNull(restApiJobAttrs.get(Workflow.REST_TRX_ID))) {
+			csvProcessorRowTask.setTransactionId(restApiJobAttrs.get(Workflow.REST_TRX_ID).toString());
+		}
+		csvProcessorRowTask.setProcessorRecordType(ProcessorRecordTypes.csvProcessorRowTask);
+		if (ApplicationUtil.isNotNull(restApiJobAttrs.get(Workflow.REST_CONFIG_SPACE_ID))) {
+			csvProcessorRowTask.setConfigSpaceId((Integer) (restApiJobAttrs.get(Workflow.REST_CONFIG_SPACE_ID)));
+		}
+		if (ApplicationUtil.isNotNull(restApiJobAttrs.get(Workflow.REST_CLIENT_ID))) {
+			csvProcessorRowTask.setClientId((Integer) (restApiJobAttrs.get(Workflow.REST_CLIENT_ID)));
+		}
+
+		try {
+			csvProcessorsSvc.createCsvProcessorRowTask(csvProcessorRowTask);
+		} catch (Exception e) {
+			LOGGER.error("writeCsvProcessorRowTask {}={}, {}={} {}",
+					"delegateExecutionId", execCtxt.getId(),
+					"csvProcessorRowTaskId", csvProcessorRowTask.getId(),
+					ExceptionUtils.getStackTrace(e));
+			addErrorMsg(Workflow.REST_ERROR_MSG, Workflow.REST_CSV_PROCESSOR_ROW_TASK_RECORD_NOT_UPDATED);
+			addErrorMsg(Workflow.REST_ERROR_MSG, ExceptionUtils.getStackTrace(e));
+		}
+		LOGGER.debug("CallRestApi-->writeCsvProcessorRowTask-->EXIT");
+
+
+	}
+
+	/**
+	 * Method to extract targetId from Http response Body string
+	 * 
+	 *
+	 * @return
+	 */
+	private String getTargetIdFromResponseBody(String respBody) {
+		LOGGER.debug("CallRestApi-->getTargetIdFromResponseBody-->ENTER");
+		var response = Document.parse(respBody);
+		LOGGER.debug("CallRestApi-->getTargetIdFromResponseBody-->EXIT");
+		return response.get("id", String.class);
+	}
+
+	/**
+	 * 
+	 * @param restApiJob
+	 * @return
+	 */
+	@SuppressWarnings("rawtypes")
+	private HttpEntity reconstructRequest(RestApiJob restApiJob, String oauthToken) {
+		LOGGER.debug("CallRestApi-->reconstructRequest-->ENTER");
+
+		MultiValueMap<String, String> multiPartMap = new LinkedMultiValueMap<>();
+		var headers = new HttpHeaders();
+		if (restApiJob.getRequest() == null) {
+			return null;
+		}
+		Map documentBody = (Map) restApiJob.getRequest().getBody();
+		headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+		headers.set("authorization", "Bearer " + oauthToken);
+		LOGGER.debug("CallRestApi-->reconstructRequest-->EXIT");
+
+		return new HttpEntity<>(multiPartMap, headers);
+
+	}
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+==
+
+
+
+@Service("CallRestApiWithMsgServiceOnErrorCallback")
+public class CallRestApiWithMsgServiceOnErrorCallback extends OptumJavaDelegateBase {
+	private static final Logger LOGGER = LoggerFactory.getLogger(CallRestApiWithMsgServiceOnErrorCallback.class);
+
+	private static final String PROCESS_FILE_TASK_ID = "processorFileTaskId";
+	private static final String PRUN_DOCUMENT_ID = "prunDocumentId";
+	private static final String APP_IDENTIFIER = "appIdentifier";
+	private static final String FILE_PATH = "filePath";
+	private static final String DOCUMENTS = "documents";
+	private static final String SEARCH_TERMS = "searchTerms";
+
+	private static final String CALLBACK_EXCEPTION = "CALLBACK: Exception while sendRequestToQueue; spaceId={}, queue={}, identifier={}, targetId={}, documentId={}, msg={}, delegate={}; {}";
+
+	@Autowired
+	ErrorMetaDataService errorMetaDataService;
+
+	@Autowired
+	SendQueueService sendQueueService;
+
+	@Override
+	public void doExecute(DelegateExecution execution) {
+		// This can support multiple restApi endPoints using restApiId do not specify REQ_VARS
+		String restApiId = null;
+		Integer spaceId = null;
+		String identifier = null;
+		String targetId = null;
+		String delegate = null;
+		Integer retryCnt = null;
+		String processorFileTaskId = null;
+		String documentId = null;
+		String appIdentifier = null;
+		String filePath = null;
+		String documents = null;
+		String searchTerms = null;
+		try {
+			restApiId = (String) execution.getVariable("restApiId");
+			spaceId = (Integer) execution.getVariable("spaceId");
+			identifier = (String) execution.getVariable("identifier");
+			targetId = (String) execution.getVariable("targetId");
+			delegate = (String) execution.getVariable("delegate");
+			retryCnt = (Integer) execution.getVariable("retryCnt");
+			processorFileTaskId = (String) execution.getVariable(PROCESS_FILE_TASK_ID);
+			documentId = (String) execution.getVariable(PRUN_DOCUMENT_ID);
+			appIdentifier = (String) execution.getVariable(APP_IDENTIFIER);
+			filePath = (String) execution.getVariable(FILE_PATH);
+			documents = (String) execution.getVariable(DOCUMENTS);
+			searchTerms = (String) execution.getVariable(SEARCH_TERMS);
+		} catch (Exception e) {
+			LOGGER.error("Failure: {}", ExceptionUtils.getStackTrace(e));
+			return;
+		}
+
+		LOGGER.debug("CALLBACK: restApiId={}, spaceId={}, identifier={}, targetId={}, delegate={}, retryCnt={}, processorFileTaskId={}, prunDocumentId={}, appIdentifier={}, filePath={}, documents={}, searchTerms={}",
+			restApiId, spaceId, identifier, targetId, delegate, retryCnt, processorFileTaskId, documentId, appIdentifier, filePath, documents, searchTerms);
+
+		if (spaceId == null || identifier == null || targetId == null || delegate == null || processorFileTaskId == null || documentId == null || appIdentifier == null || filePath == null || documents == null || searchTerms == null) {
+			LOGGER.error("CALLBACK: Params not valid exiting; restApiId={}, spaceId={}, identifier={}, targetId={}, delegate={}, retryCnt={}, processorFileTaskId={}, prunDocumentId={}, appIdentifier={}, filePath={}, documents={}, searchTerms={}",
+				restApiId, spaceId, identifier, targetId, delegate, retryCnt, processorFileTaskId, documentId, appIdentifier, filePath, documents, searchTerms);
+			return;
+		}
+
+		if (! "addSendDocumentRequestToFds".equals(restApiId)) {
+			LOGGER.error("CALLBACK: Failure restApiId={} != addSendDocumentRequestToFds", restApiId);
+			return;
+		}
+
+		Map<String, Object> callbackMap = new HashMap<>();
+		callbackMap.put(PROCESS_FILE_TASK_ID, processorFileTaskId);
+		callbackMap.put(PRUN_DOCUMENT_ID, documentId);
+		callbackMap.put(APP_IDENTIFIER, appIdentifier);
+
+		MultiValueMap<String, Object> requestMap = new LinkedMultiValueMap<>();
+		requestMap.add(FILE_PATH, filePath);
+		requestMap.add(DOCUMENTS, documents);
+		requestMap.add(SEARCH_TERMS, searchTerms);
+
+		Map<String, Object> restApiMsgServiceCallbackMap = new HashMap<>();
+		restApiMsgServiceCallbackMap.put(PROCESS_FILE_TASK_ID, targetId);
+		restApiMsgServiceCallbackMap.put(PRUN_DOCUMENT_ID, documentId);
+		restApiMsgServiceCallbackMap.put(APP_IDENTIFIER, appIdentifier);
+		restApiMsgServiceCallbackMap.put(FILE_PATH, filePath);
+		restApiMsgServiceCallbackMap.put(DOCUMENTS, documents);
+		restApiMsgServiceCallbackMap.put(SEARCH_TERMS, searchTerms);
+		restApiMsgServiceCallbackMap.put("restApiId", "addSendDocumentRequestToFds");
+		restApiMsgServiceCallbackMap.put("spaceId", spaceId);
+		restApiMsgServiceCallbackMap.put("delegate", delegate);
+		restApiMsgServiceCallbackMap.put("identifier", identifier);
+		restApiMsgServiceCallbackMap.put("targetId", targetId);
+
+		retryCnt = retryCnt == null ? 0 : retryCnt + 1;
+		restApiMsgServiceCallbackMap.put("retryCnt", retryCnt);
+
+		try {
+			LOGGER.info("CALLBACK: Calling addSendDocumentRequestToFds; retryCnt={}, spaceId={}, identifier={}, targetId={}, documentId={}, delegate={}, requestMap={}, callbackMap={}, restApiMsgServiceCallbackMap={}",
+					retryCnt, spaceId, identifier, targetId, documentId, delegate, requestMap, callbackMap, restApiMsgServiceCallbackMap);
+			if (sendQueueService.addSendDocumentRequestToFds(spaceId, identifier, targetId, delegate, requestMap, callbackMap, restApiMsgServiceCallbackMap, retryCnt)) {
+				LOGGER.info("SUCCESS: addSendDocumentRequestToFds: retryCnt={}, spaceId={}, identifier={}, targetId={}, documentId={}, callback={}", retryCnt, spaceId, identifier, targetId, documentId, delegate);
+			} else {
+				LOGGER.warn("FAILURE: addSendDocumentRequestToFds: retryCnt={}, spaceId={}, identifier={}, targetId={}, documentId={}, callback={}", retryCnt, spaceId, identifier, targetId, documentId, delegate);
+			}
+		} catch (HttpServerException e) {
+			// MessageService will process appError
+			String queue = sendQueueService.getPriorityQueue(spaceId);
+			LOGGER.error(CALLBACK_EXCEPTION, spaceId, queue, identifier, targetId, documentId, e.getMessage(), "callRestApiWithMsgServiceOnErrorCallback", restApiMsgServiceCallbackMap);
+			ErrorMetaData errorMetaData = errorMetaDataService.writeToMessageServiceErrorCollection(queue, "callRestApiWithMsgServiceOnErrorCallback", targetId, spaceId, restApiMsgServiceCallbackMap, e.getMessage(), MetaDataStatus.AUTOMATIC);
+		}
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+==
+
+
+
+@Service("CleanupFilesCreateACK")
+public class CleanupFilesCreateACK extends OptumJavaDelegateBase {
+
+	@Value("${serverType}")
+	private String serverType;
+	
+	private static final Logger log = LoggerFactory.getLogger(CleanupFilesCreateACK.class);
+	private static final String EXECUTION_ID = "executionId";
+	
+	@Autowired
+	ProcessorService processorService;
+	
+	@Autowired
+	ProcessorFileTaskService processorFileTaskService;
+	
+	private static final List<String> REQ_VARS = Arrays.asList(
+		Workflow.PROCESSOR_TRANSACTION_ID, Workflow.APP_IDENTIFIER
+	);
+    
+	public CleanupFilesCreateACK() {
+		super(REQ_VARS);
+	}
+
+	@SuppressWarnings("rawtypes")
+	@Override
+	public void doExecute(DelegateExecution execution) {
+		log.info("CleanupFilesCreateACK-->doExecute-->ENTER");
+		ProcessorTransaction processorTransaction = null;
+		ProcessorExecutionRecord executionRecord = null;
+		Map<String, String> message = new HashMap<>();
+			try {
+			String processorTransactionId = execution.getVariable(Workflow.PROCESSOR_TRANSACTION_ID, String.class);
+			String appIdentifier = execution.getVariable(Workflow.APP_IDENTIFIER, String.class);
+			
+			executionRecord = ProcessorTaskUtil.createProcessorExecutionRecord("Fetching process configurations");
+
+			processorTransaction = processorService.getProcessorTransaction(processorTransactionId, appIdentifier, serverType);
+
+			log.info("CleanupFilesCreateAck-->doExecute -- are all processorFileTasks complete for processorTransactionId={}, {}", 
+					processorTransactionId, processorFileTaskService.areAllProcessorFileTasksCompletedForTransactionId(processorTransactionId));
+			
+			if (!processorFileTaskService.areAllProcessorFileTasksCompletedForTransactionId(processorTransactionId)) {
+				log.error("CleanupFilesCreateACK-->doExecute-->Not all processorFileTasks are complete for processorTransactionId={}", processorTransactionId);
+				return;
+			}
+			
+			var processorMetaData = processorService.getProcessorMetaData(processorTransaction.getProcessorId(), appIdentifier);
+			if(processorMetaData == null) {
+				log.error("CleanupFilesCreateACK-->doExecute-->processorMetaData is empty");
+				addErrorMsg("CleanupFilesCreateACK-->doExecute-->processorMetaData is empty", "processorMetaData is empty");
+				message.put(Workflow.OUTCOME_KEY, "There was error while fetching processor details from MongoDB");
+				message.put(Workflow.ERROR_KEY, "processorMetaData is empty");
+				return;
+			}
+			
+			Map processConfig = processorMetaData.getProcessConfig();			
+			if(processConfig == null) {
+				log.error("CleanupFilesCreateACK-->doExecute-->processConfig is empty");
+				addErrorMsg("CleanupFilesCreateACK-->doExecute-->processConfig is empty", "processConfig is empty");
+				message.put(Workflow.OUTCOME_KEY, "There was error while fetching processor configurations from processor");
+				message.put(Workflow.ERROR_KEY, "processConfig is empty");
+				return;
+			}
+			
+	        String sftpHost = (String) processConfig.get(Workflow.HOST_NAME_DESTINATION);
+	        if(StringUtil.isBlank(sftpHost)) {
+				log.warn("CleanupFilesCreateACK-->doExecute-->sftpHost is empty {}={}", EXECUTION_ID, execution.getId());
+			}
+	        String sftpUSER = (String) processConfig.get(Workflow.USER_NAME_DESTINATION);
+	        if(StringUtil.isBlank(sftpUSER)) {
+				log.warn("CleanupFilesCreateACK-->doExecute-->sftpUSER is empty {}={}", EXECUTION_ID, execution.getId());
+			}
+	        String sftpPASS = (String) processConfig.get(Workflow.USER_CREDENTIALS_DESTINATION);
+	        if(StringUtil.isBlank(sftpPASS)) {
+				log.warn("CleanupFilesCreateACK-->doExecute-->sftpPASS is empty {}={}", EXECUTION_ID, execution.getId());
+			}
+	        String ftpWorkingDir = (String) processConfig.get(Workflow.FTP_ROOT_DIR);
+	        if(StringUtil.isBlank(ftpWorkingDir)) {
+				log.warn("CleanupFilesCreateACK-->doExecute-->ftpWorkingDir is empty {}={}", EXECUTION_ID, execution.getId());
+			}
+	        var ackFlag = true;
+	        String ackWorkingDir = (String) processConfig.get(Workflow.FTP_ACK_DIR);
+	        if(StringUtil.isBlank(ackWorkingDir)) {
+				log.warn("CleanupFilesCreateACK-->doExecute-->ackWorkingDir is empty {}={}", EXECUTION_ID, execution.getId());
+				ackFlag = false;
+			}
+	        String archiveWorkingDir = (String) processConfig.get(Workflow.FTP_ARCHIVE_DIR);
+	        if(StringUtil.isBlank(archiveWorkingDir)) {
+				log.warn("CleanupFilesCreateACK-->doExecute-->archiveWorkingDir is empty {}={}", EXECUTION_ID, execution.getId());
+			}
+	        Boolean ackWithErrorsOnly = (Boolean) processConfig.get(Workflow.ACK_WITH_ERRORS_ONLY);
+	        if(!BooleanUtils.isFalse(ackWithErrorsOnly)) {
+				log.warn("CleanupFilesCreateACK-->doExecute-->ackWithErrorsOnly is empty {}={}", EXECUTION_ID, execution.getId());
+			}
+
+	        Boolean generateSingleAckSummaryFile =  Optional.ofNullable((Boolean) processConfig.get(Workflow.GENERATE_SINGLE_ACK_SUMMARY_FILE_FLAG)).orElse(false);
+
+	        message.put(Workflow.OUTCOME_KEY, "Process configurations fetched sucessfully");
+	        
+	        execution.setTransientVariable(Workflow.PROCESSOR_TRANSACTION, processorTransaction);
+	        execution.setTransientVariable(Workflow.ACK_FLAG, ackFlag);
+	        execution.setTransientVariable(Workflow.GENERATE_SINGLE_ACK_SUMMARY_FILE_FLAG, generateSingleAckSummaryFile);
+	        execution.setTransientVariable(Workflow.ACK_WITH_ERRORS_ONLY, ackWithErrorsOnly);
+	        execution.setTransientVariable(Workflow.SFTP_HOSTNAME, sftpHost);
+	        execution.setTransientVariable(Workflow.SFTP_USERNAME, sftpUSER);
+	        execution.setTransientVariable(Workflow.SFTP_PW, sftpPASS);
+	        execution.setTransientVariable(Workflow.SFTP_ROOT_DIRECTORY, ftpWorkingDir);
+	        execution.setTransientVariable(Workflow.SFTP_ACK_DIRECTORY, ackWorkingDir);
+	        execution.setTransientVariable(Workflow.SFTP_ARCHIVE_DIRECTORY, archiveWorkingDir);
+		} catch(Exception e) {
+			log.error("doExecute Exception while executing CleanupFilesCreateACK task {}={} {}",
+	        		  "processorTransactionId", processorTransaction != null ? processorTransaction.getId() : "NULL",
+	        		  ExceptionUtils.getStackTrace(e));
+			addErrorMsg("CleanupFilesCreateACK-->doExecute-->Exception while executing CleanupFilesCreateACK task", e.getMessage());
+			message.put(Workflow.OUTCOME_KEY, "There was Exception while executing CleanupFilesCreateACK task");
+			message.put(Workflow.ERROR_KEY, e.toString());
+		} finally {
+			if(processorTransaction != null) {
+				ProcessorTaskUtil.addMessageToProcessorExecutionRecordToProcessorTransaction(processorTransaction, executionRecord, message);
+				processorService.updateProcessorTransactionMetaData(processorTransaction);
+			}
+		}
+		log.info("CleanupFilesCreateACK-->doExecute-->EXIT");
+	}
 
 }
 
