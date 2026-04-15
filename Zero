@@ -1,0 +1,1421 @@
+name: extract-config
+
+
+inputs:
+  environment:
+    description: 'Environment to extract config for'
+    required: true
+    default: 'stage'
+  datacenters:
+    description: 'Comma-separated list of datacenters to filter (optional)'
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+
+    - name: Extract config for datacenters
+      env:
+        ENVIRONMENT: ${{ inputs.environment }}
+      run: |
+        ls -al
+
+        ls -al ./helm
+
+        ls -al ./helm/assets
+        
+        set -e
+
+        COMMON_YML="./pipeline.yml"
+        PROFILE_YML="./helm/assets/hcck8s.yml"
+
+        # Function to resolve cluster host to IP
+        resolve_cluster_ip() {
+          local cluster_host="$1"
+          getent hosts "$cluster_host" | awk '{ print $1 }' || {
+            echo "[ERROR] Failed to resolve $cluster_host"
+            echo ""
+          }
+        }
+
+        # Read environment variables
+        ENVIRONMENT="${ENVIRONMENT:-}"
+        # DATACENTERS="${DATACENTERS:-}"
+
+        if [[ -z "$ENVIRONMENT" ]]; then
+          echo "ENVIRONMENT variable not set"
+          exit 1
+        fi
+
+        # Load YAML files using yq
+        common=$(yq eval '.' "$COMMON_YML")
+        profile=$(echo "$common" | yq eval '.k8s.profile' -)
+        hcck8s=$(yq eval '.' "$PROFILE_YML")
+
+        # Get datacenters list
+        datacenters_raw=$(echo "$common" | yq eval ".k8s.environments.$ENVIRONMENT.deploy" -)
+        IFS=',' read -ra datacenters <<< "$datacenters_raw"
+        datacenters=("${datacenters[@]// /}")
+
+        # Optional: filter datacenters if DATACENTERS is set
+        if [[ -n "$DATACENTERS" ]]; then
+          IFS=',' read -ra filter_set <<< "$DATACENTERS"
+          filtered=()
+          for dc in "${datacenters[@]}"; do
+            for f in "${filter_set[@]}"; do
+              if [[ "$dc" == "$f" ]]; then
+                filtered+=("$dc")
+              fi
+            done
+          done
+          datacenters=("${filtered[@]}")
+        fi
+
+        result="[]"
+
+        for datacenter in "${datacenters[@]}"; do
+          cluster_dns=$(echo "$hcck8s" | yq eval ".hcck8sProfile.$profile.$ENVIRONMENT.$datacenter.clusterDNS" -)
+          namespace=$(echo "$hcck8s" | yq eval ".hcck8sProfile.$profile.$ENVIRONMENT.$datacenter.namespace" -)
+
+          cluster_name=$(echo "$hcck8s" | yq eval ".hcck8sProfile.$profile.$ENVIRONMENT.$datacenter.cluster" -)
+
+          if [[ -z "$cluster_dns" || -z "$namespace" || "$cluster_dns" == "null" || "$namespace" == "null" ]]; then
+            echo "[WARN] Skipping $datacenter - missing cluster or namespace."
+            continue
+          fi
+
+          ip=$(resolve_cluster_ip "$cluster_dns")
+          if [[ -z "$ip" ]]; then
+            echo "[WARN] Skipping $datacenter - unable to resolve $cluster_dns."
+            continue
+          fi
+
+          app_name=$(echo "$common" | yq eval '.pipeline.application.name' -)
+          api_server="https://${ip}:443"
+
+          entry=$(jq -n \
+            --arg datacenter "$datacenter" \
+            --arg app_name "$app_name" \
+            --arg cluster_dns "$cluster_dns" \
+            --arg cluster_name "$cluster_name" \
+            --arg namespace "$namespace" \
+            --arg api_server "$api_server" \
+            '{
+              datacenter: $datacenter,
+              app_name: $app_name,
+              cluster_dns: $cluster_dns,
+              cluster_name: $cluster_name,
+              namespace: $namespace,
+              api_server: $api_server
+            }')
+          result=$(echo "$result" | jq ". += [$entry]")
+        done
+
+        echo "$result" > deploy_data.json
+
+        echo -e "\n[INFO] Created deploy_data.json with the following deployments:\n"
+        for row in $(jq -c '.[]' deploy_data.json); do
+          datacenter=$(echo "$row" | jq -r '.datacenter')
+          app_name=$(echo "$row" | jq -r '.app_name')
+          cluster_dns=$(echo "$row" | jq -r '.cluster_dns')
+          namespace=$(echo "$row" | jq -r '.namespace')
+          api_server=$(echo "$row" | jq -r '.api_server')
+          cluster_name=$(echo "$row" | jq -r '.cluster_name')
+          echo "  • Datacenter   : $datacenter"
+          echo "    App Name  : $app_name"
+          echo "    Cluster DNS  : $cluster_dns"
+          echo "    Cluster Name: $cluster_name"
+          echo "    Namespace : $namespace"
+          echo "    API Server: $api_server"
+          echo ""
+        done
+
+        echo "[INFO] Total datacenters ready for deployment: $(jq '. | length' deploy_data.json)"
+      shell: bash
+      
+      
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+name: 'prepare'
+description: 'Prepare the env & check the prerequites'
+# inputs:
+#     enable-imageexits:
+#       default: "true"
+#       description: Enables or disables the codeql scan
+#       required: false
+
+inputs:
+  jfrogUsername:
+    description: 'JFrog username'
+    required: true
+    type: string
+  jfrogToken:
+    description: 'JFrog token'
+    required: true
+    type: string
+
+
+outputs:
+  image_url:
+    description: "Docker image url with build version"
+    value: ${{ steps.map_image_url.outputs.DOCKER_IMAGE_URL }}
+  image_central_url:
+    description: "Docker image url with build version in central registry"
+    value: ${{ steps.map_image_url.outputs.DOCKER_IMAGE_CENTRAL_URL }}
+  docker_host:
+    description: "Docker host URL"
+    value: ${{ steps.set_env.outputs.REGISTRY_HOST }}
+  image_path:
+    description: "Docker image path"
+    value: ${{ steps.image_path_tag.outputs.DOCKER_IMAGE_PATH }}
+    
+  build_version:
+    description: "Build version"
+    value: ${{ steps.get_version.outputs.BUILD_VERSION }}
+  artifact_name:
+    description: "Application name"
+    value: ${{ steps.set_env.outputs.ARTIFACT_NAME }}
+  application_name:
+    description: "Application name"
+    value: ${{ steps.set_env.outputs.APPLICATION_NAME }}
+  latest_version:
+    description: "Latest availble versions"
+    value: ${{ steps.check_version.outputs.LATEST_VERSION }}
+  DEPLOY_TO_PRA:
+    description: "Deploy to PRA namespaces"
+    value: ${{ steps.set_env.outputs.DEPLOY_TO_PRA }}
+  JFROG_PROJECT_KEY:
+    description: "JFrog project key"
+    value: ${{ steps.set_env.outputs.JFROG_PROJECT_KEY }}
+  skip_build:
+    description: "Skip build if the image already exists"
+    value: ${{ steps.check-docker-image.outputs.skip_build }}
+    
+
+runs:
+  using: composite
+  steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: Get the Branch Name 
+        run: |
+          echo "Branch name: ${{ github.ref }}"  
+        shell: bash
+            
+      - name: Set environment variables
+        id: set_env  
+        run: |  
+            APP_NAME=$(awk '/pipeline:/ {f=1} f && /name:/ {print $2; exit}' pipeline.yml)
+            JFROG_PROJECT_KEY=$(awk '/pipeline:/ {f=1} f && /jfrogProjectKey:/ {print $2; exit}' pipeline.yml | tr -d '"')
+            ELASTIC_NAME=$(awk '/elastic:/ {f=1} f && /serviceName:/ {print $2; exit}' pipeline.yml) #TODO: is this needed? 
+            HOST=$(awk '/registry:/ {f=1} f && /host:/ {print $2; exit}' pipeline.yml | tr -d '"')
+            CENTRAL_HOST=$(awk '/registry:/ {f=1} f && /centralHost:/ {print $2; exit}' pipeline.yml | tr -d '"')
+            REGISTRY_PATH_DEV=$(awk '/registry:/ {f=1} f && /devPath:/ {print $2; exit}' pipeline.yml | tr -d '"')            
+            REGISTRY_PATH=$(awk '/registry:/ {f=1} f && /prodPath:/ {print $2; exit}' pipeline.yml | tr -d '"')
+
+            echo "Application Name: $APP_NAME"
+            echo "Elastic Name: $ELASTIC_NAME"
+            echo "Registry Host: $HOST"
+            echo "Image Path: $REGISTRY_PATH"
+            echo "Image Path Dev: $REGISTRY_PATH_DEV"
+            echo "JFrog Project Key: $JFROG_PROJECT_KEY"
+
+            # if PRUN application, deploy to both PRA and NON-PRA namespaces
+            if [[ $APP_NAME == *"fds-paperless-activiti"* ||
+                $APP_NAME == *"ppl-paperless-processor-listener"* ||
+                $APP_NAME == *"fds-paperless-message-service"* ||
+                $APP_NAME == *"ppl-prun-filestore"* ||
+                $APP_NAME == *"ppl-prun-services"* ]]; then
+              DEPLOY_TO_PRA=true
+            else
+              DEPLOY_TO_PRA=false
+            fi
+
+            echo "DEPLOY TO PRA: $DEPLOY_TO_PRA"
+
+            echo "DEPLOY_TO_PRA=$DEPLOY_TO_PRA" >> $GITHUB_ENV
+            echo "DEPLOY_TO_PRA=$DEPLOY_TO_PRA" >> $GITHUB_OUTPUT
+            echo "ARTIFACT_NAME=$APP_NAME" >> $GITHUB_ENV
+            echo "ARTIFACT_NAME=$APP_NAME" >> $GITHUB_OUTPUT
+            echo "APPLICATION_NAME=$APP_NAME" >> $GITHUB_OUTPUT
+            echo "JFROG_PROJECT_KEY=$JFROG_PROJECT_KEY" >> $GITHUB_ENV
+            echo "JFROG_PROJECT_KEY=$JFROG_PROJECT_KEY" >> $GITHUB_OUTPUT
+
+            echo "ELASTIC_NAME=$ELASTIC_NAME" >> $GITHUB_ENV
+            echo "REGISTRY_HOST=$HOST" >> $GITHUB_ENV
+            echo "REGISTRY_CENTRAL_HOST=$CENTRAL_HOST" >> $GITHUB_ENV
+            echo "IMAGE_PATH=$REGISTRY_PATH" >> $GITHUB_ENV
+            echo "IMAGE_PATH_DEV=$REGISTRY_PATH_DEV" >> $GITHUB_ENV
+            # echo "IMAGE_DEVELOP_PATH=$DEVELOP_PATH" >> $GITHUB_ENV
+
+
+            # echo "Image URL: ${{ inputs.dockerImage }}"
+            # echo "Build Version: ${{ inputs.dockerTag }}"
+            # echo "Artifact Name: ${{ inputs.application }}"
+            # echo "Latest Version: ${{ inputs.dockerTag }}"
+
+            # echo "image_url=${{ inputs.dockerImage }}" >> $GITHUB_OUTPUT
+            # echo "build_version=${{ inputs.dockerTag }}" >> $GITHUB_OUTPUT
+            # echo "artifact_name=${{ inputs.application }}" >> $GITHUB_OUTPUT
+            # echo "latest_version=${{ inputs.dockerTag }}" >> $GITHUB_OUTPUT
+            echo "current_date=$(date +'%Y-%m-%d')" >> $GITHUB_OUTPUT  
+
+        shell: bash
+
+      - name: Read Chart.yaml version and name
+        id: chart_info
+        run: |
+          CHART_VERSION=$(grep '^version:' helm/Chart.yaml | awk '{print $2}' | tr -d '"')
+          CHART_NAME=$(grep '^name:' helm/Chart.yaml | awk '{print $2}' | tr -d '"')
+
+          echo "Chart Version: $CHART_VERSION"
+          echo "Chart Name: $CHART_NAME"
+
+          echo "CHART_VERSION=$CHART_VERSION" >> $GITHUB_ENV
+          echo "CHART_NAME=$CHART_NAME" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Read pom.xml version 
+        id: maven_info
+        run: |
+          echo "MAVEN VERSION: $(cat ./pom.xml | grep -oPm1 "(?<=<version>)[^-SNAPSHOT<]+")"
+          echo "MAVEN_VERSION=$(cat ./pom.xml | grep -oPm1 "(?<=<version>)[^-SNAPSHOT<]+")" >> $GITHUB_ENV
+          echo "MAVEN_VERSION=$(cat ./pom.xml | grep -oPm1 "(?<=<version>)[^-SNAPSHOT<]+")" >> $GITHUB_OUTPUT          
+        shell: bash  
+      
+      - name: Read sonar-project-key & askid from vitals.yaml
+        run: |
+          SONAR_PROJECT_KEY=$(awk '/metadata:/ {f=1} f && /projectKey:/ {print $2; exit}' vitals.yaml | tr -d '"')
+          echo "SONAR_PROJECT_KEY: $SONAR_PROJECT_KEY"
+          echo "SONAR_PROJECT_KEY=$SONAR_PROJECT_KEY" >> $GITHUB_ENV
+
+          ASK_ID=$(awk '/metadata:/ {f=1} f && /askId:/ {print $2; exit}' vitals.yaml | tr -d '"')
+          echo "ASK_ID: $ASK_ID"
+          echo "ASK_ID=$ASK_ID" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Compare versions and names
+        run: |
+          echo "Comparing chart version (${{ env.CHART_VERSION }}) with gradle version (${{ env.MAVEN_VERSION }})"
+          if [ "${{ env.MAVEN_VERSION }}" != "${{ env.CHART_VERSION }}" ]; then  
+            echo "Version mismatch! Exiting build."  
+            exit 1  
+          fi 
+          echo "Comparing chart name (${{ env.CHART_NAME }}) with application name  (${{ env.ARTIFACT_NAME}})"
+          if [ "${{ env.CHART_NAME }}" != "${{ env.ARTIFACT_NAME }}" ]; then  
+            echo "Names mismatch! Exiting build."  
+            exit 1  
+          fi
+        shell: bash 
+           
+      - name: Set build version  
+        id: get_version
+        run: |  
+          if [[ $GITHUB_EVENT_NAME == 'pull_request' ]]; then
+            echo "BUILD_VERSION=PR-${{ github.event.pull_request.number }}" >> $GITHUB_ENV
+            echo "BUILD_VERSION=PR-${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
+          else 
+            echo "BUILD_VERSION=${{ env.CHART_VERSION }}"  >> $GITHUB_ENV 
+            echo "BUILD_VERSION=${{ env.CHART_VERSION }}" >> $GITHUB_OUTPUT
+          fi  
+
+        shell: bash
+
+      - name: assign the image path according to branch and deploy env 
+        id: image_path_tag
+        run: |  
+          echo "Determining Docker image path based on branch: ${{ github.ref }}"
+          if [[ "$GITHUB_REF" == "refs/heads/main" || "${{ github.ref }}" = "refs/heads/master" ]]; then
+            echo "Prod branch detected. Using PROD image path."
+            echo "DOCKER_IMAGE_PATH=${{env.IMAGE_PATH}}/${{env.ARTIFACT_NAME}}" >> $GITHUB_ENV  
+            echo "DOCKER_IMAGE_PATH=${{env.IMAGE_PATH}}/${{env.ARTIFACT_NAME}}" >> $GITHUB_OUTPUT  
+            echo "DOCKER_IMAGE_PATH_AND_TAG=${{env.IMAGE_PATH}}/${{env.ARTIFACT_NAME}}:${{env.BUILD_VERSION}}" >> $GITHUB_ENV
+            echo "DOCKER_IMAGE_PATH_AND_TAG=${{env.IMAGE_PATH}}/${{env.ARTIFACT_NAME}}:${{env.BUILD_VERSION}}" >> $GITHUB_OUTPUT 
+            IMAGE_PATH=$(echo "$IMAGE_PATH" | sed 's#^\(.*\)/\([^/]*\)$#\1/v2/\2#')
+            echo "IMAGE_PATH_API=$IMAGE_PATH/${{env.ARTIFACT_NAME}}" >> $GITHUB_ENV
+            echo "IMAGE_PATH_API=$IMAGE_PATH/${{env.ARTIFACT_NAME}}" >> $GITHUB_OUTPUT
+          else  
+            echo "DOCKER_IMAGE_PATH=${{env.IMAGE_PATH_DEV}}/${{env.ARTIFACT_NAME}}" >> $GITHUB_ENV  
+            echo "DOCKER_IMAGE_PATH=${{env.IMAGE_PATH_DEV}}/${{env.ARTIFACT_NAME}}" >> $GITHUB_OUTPUT  
+            echo "DOCKER_IMAGE_PATH_AND_TAG=${{env.IMAGE_PATH_DEV}}/${{env.ARTIFACT_NAME}}:${{env.BUILD_VERSION}}" >> $GITHUB_ENV
+            echo "DOCKER_IMAGE_PATH_AND_TAG=${{env.IMAGE_PATH_DEV}}/${{env.ARTIFACT_NAME}}:${{env.BUILD_VERSION}}" >> $GITHUB_OUTPUT  
+            IMAGE_PATH_DEV=$(echo "$IMAGE_PATH_DEV" | sed 's#^\(.*\)/\([^/]*\)$#\1/v2/\2#')
+            echo "IMAGE_PATH_API=$IMAGE_PATH_DEV/${{env.ARTIFACT_NAME}}" >> $GITHUB_ENV
+            echo "IMAGE_PATH_API=$IMAGE_PATH_DEV/${{env.ARTIFACT_NAME}}" >> $GITHUB_OUTPUT
+          fi 
+          
+        shell: bash
+
+      - name: mapping the docker image url with version
+        id: map_image_url
+        run: |
+           echo "DOCKER_IMAGE_URL=${{env.REGISTRY_HOST}}/${{env.DOCKER_IMAGE_PATH_AND_TAG}}" >> $GITHUB_ENV 
+           echo "DOCKER_IMAGE_URL=${{env.REGISTRY_HOST}}/${{env.DOCKER_IMAGE_PATH_AND_TAG}}" >> $GITHUB_OUTPUT 
+           echo "DOCKER_IMAGE_CENTRAL_URL=${{env.REGISTRY_CENTRAL_HOST}}/${{env.DOCKER_IMAGE_PATH_AND_TAG}}" >> $GITHUB_ENV
+           echo "DOCKER_IMAGE_CENTRAL_URL=${{env.REGISTRY_CENTRAL_HOST}}/${{env.DOCKER_IMAGE_PATH_AND_TAG}}" >> $GITHUB_OUTPUT
+           echo "DOCKER_IMAGE_CURL_URL=https://${{env.REGISTRY_HOST}}/artifactory/api/docker/${{env.IMAGE_PATH_API}}/tags/list" >> $GITHUB_ENV 
+           echo "DOCKER_IMAGE_CURL_URL=https://${{env.REGISTRY_HOST}}/artifactory/api/docker/${{env.IMAGE_PATH_API}}/tags/list" >> $GITHUB_OUTPUT
+        shell: bash
+
+
+      - name: Check docker image 
+        id: check-docker-image
+        run: |
+          echo "Checking if Docker image already exists in JFrog Artifactory: ${{ env.DOCKER_IMAGE_URL }}"
+
+          RESPONSE=$(curl -s -w "HTTPSTATUS:%{http_code}" -u ${{ inputs.jfrogUsername }}:${{ inputs.jfrogToken }} ${{ env.DOCKER_IMAGE_CURL_URL }})
+          BODY=$(echo "$RESPONSE" | sed -e 's/HTTPSTATUS\:.*//g')
+          status_code=$(echo "$RESPONSE" | tr -d '\n' | sed -e 's/.*HTTPSTATUS://')
+         
+          echo "HTTP status code: $status_code"
+          if [ "$status_code" -eq 200 ]; then
+             TAGS_LIST=$(echo "$BODY" | jq -r '.tags[]?' | sort -Vr)
+             echo "Available tags:"
+             echo "$TAGS_LIST"
+          
+             if echo "$TAGS_LIST" | grep -q "${{ env.BUILD_VERSION }}"; then
+               echo "Docker image already exists. Skipping build and push steps."
+               echo "skip_build=true" >> $GITHUB_ENV
+               echo "skip_build=true" >> $GITHUB_OUTPUT
+             else
+               echo "Docker image does not exist. Proceeding with build and push steps."
+               echo "skip_build=false" >> $GITHUB_ENV
+               echo "skip_build=false" >> $GITHUB_OUTPUT
+             fi
+          else
+            echo "Repository not found or error occurred (HTTP $status_code)"
+            echo "skip_build=false" >> $GITHUB_ENV
+            echo "skip_build=false" >> $GITHUB_OUTPUT
+          fi
+
+        shell: bash
+
+      - name: print all the env variables
+        run: cat $GITHUB_ENV  
+        shell: bash          
+
+      - name: Used Variables to GitHub Summary
+        shell: bash
+        run: |
+          REPO_NAME="${GITHUB_REPOSITORY##*/}"
+          echo "REPO_NAME=$REPO_NAME" >> $GITHUB_ENV
+          echo "### $REPO_NAME environment variables" >> $GITHUB_STEP_SUMMARY
+          echo "| Variable | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          while IFS='=' read -r key value; do
+            if [[ -n "$key" && -n "$value" ]]; then
+              echo "| $key | $value |" >> $GITHUB_STEP_SUMMARY
+            fi
+          done < <(env | grep -E 'SONAR_PROJECT_KEY|ASK_ID|ARTIFACT_NAME|CHART_NAME|CHART_VERSION|BUILD_VERSION|REGISTRY_HOST|IMAGE_PATH|DOCKER_IMAGE_PATH|DOCKER_IMAGE_PATH_AND_TAG|skip_build|JFROG_PROJECT_KEY|APPLICATION_NAME|DEPLOY_TO_PRA|REGISTRY_CENTRAL_HOST|DOCKER_IMAGE_CENTRAL_URL')
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+name: hcc-k8s-cicd-workflow
+
+on:
+  workflow_dispatch:
+    inputs:
+      jfrogUsername:
+        description: 'Jfrog username'
+        required: true
+        type: string
+    secrets:
+      JFROG_TOKEN:
+        required: true
+      STAGE_DT_TOKEN:
+        required: false
+      PROD_DT_TOKEN:
+        required: false
+      KUBECONFIG:
+        required: true
+      STAGE_VAULT_ROLE_ID:
+        required: true
+      STAGE_VAULT_SECRET_ID:
+        required: true
+      STAGE_KEYSTORE_PASS:
+        required: true
+      STAGE_SPLUNK_TOKEN:
+        required: true
+      PROD_VAULT_ROLE_ID:
+        required: true
+      PROD_VAULT_SECRET_ID:
+        required: true
+      PROD_KEYSTORE_PASS:
+        required: true 
+      PROD_SPLUNK_TOKEN:
+        required: true
+  
+  workflow_call:
+    inputs:
+      jfrogUsername:
+        description: 'Jfrog username'
+        required: true
+        type: string
+    secrets:
+      JFROG_TOKEN:
+        required: true
+      KUBECONFIG:
+        required: true
+      STAGE_DT_TOKEN:
+        required: false
+      PROD_DT_TOKEN:
+        required: false
+      STAGE_VAULT_ROLE_ID:
+        required: true
+      STAGE_VAULT_SECRET_ID:
+        required: true
+      STAGE_KEYSTORE_PASS:
+        required: true
+      STAGE_SPLUNK_TOKEN:
+        required: true
+      PROD_VAULT_ROLE_ID:
+        required: true
+      PROD_VAULT_SECRET_ID:
+        required: true
+      PROD_KEYSTORE_PASS:
+        required: true 
+      PROD_SPLUNK_TOKEN:
+        required: true
+
+
+jobs:
+  prepare:
+    if: |
+      github.event_name == 'pull_request' || startsWith(github.ref, 'refs/heads/MI') 
+      || github.ref == 'refs/heads/develop'
+      || github.ref == 'refs/heads/US8559903-github-actions' 
+      || startsWith(github.ref, 'refs/heads/release/') || github.ref == 'refs/heads/master' || 
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'stage')
+    runs-on: uhg-runner
+    outputs:
+      image_url: ${{ steps.prepare.outputs.image_url}}
+      image_central_url: ${{ steps.prepare.outputs.image_central_url}}
+      build_version: ${{ steps.prepare.outputs.build_version}}
+      skip_build: ${{ steps.prepare.outputs.skip_build }}
+      DEPLOY_TO_PRA: ${{ steps.prepare.outputs.DEPLOY_TO_PRA }}
+      current_date: ${{ steps.prepare.outputs.current_date }}
+      JFROG_PROJECT_KEY: ${{ steps.prepare.outputs.JFROG_PROJECT_KEY }}
+
+    steps:
+      - name: Prepare environment variables
+        id: prepare
+        uses: uhc-tech-provider/ppl-prun-github-actions/.github/actions/prepare@main
+        with:
+          jfrogUsername: ${{ github.event.inputs.jfrogUsername }}
+          jfrogToken: ${{ secrets.JFROG_TOKEN }}
+        
+
+
+  build:
+    needs: prepare
+    if: needs.prepare.outputs.skip_build != 'true' && (github.event_name == 'pull_request' || startsWith(github.ref, 'refs/heads/MI') 
+      || github.ref == 'refs/heads/US8559903-github-actions' 
+      || startsWith(github.ref, 'refs/heads/release/') || github.ref == 'refs/heads/develop'
+      || github.ref == 'refs/heads/master')
+    uses: uhg-pipelines/ci-workflows/.github/workflows/java-maven-ci.yml@v2.16.0
+    with:
+      docker-tags: ${{ needs.prepare.outputs.image_central_url }}
+      jfrog-project-key: ${{ needs.prepare.outputs.JFROG_PROJECT_KEY }}
+      java-version: "17"
+      jfrog-create-release-bundle: false
+      sonar-continue-on-error: true
+
+
+  deploy-stage:
+    needs: [prepare, build]
+    # Even if the build step is skipped, we still want to deploy to stage. Always run this job unless a previous job failed/cancelled
+    if: always() && 
+      !contains(needs.*.result, 'failure') &&
+      !contains(needs.*.result, 'cancelled') &&
+      (github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/heads/MI') || github.ref == 'refs/heads/US8559903-github-actions' 
+      || startsWith(github.ref, 'refs/heads/release/'))
+    uses: uhc-tech-provider/ppl-prun-github-actions/.github/workflows/deploy.yml@main
+    with:
+      environment: "stage"
+      dockerImage: "${{ needs.prepare.outputs.image_url }}"
+    secrets:
+      KUBECONFIG: ${{ secrets.KUBECONFIG }}
+      STAGE_VAULT_ROLE_ID: ${{ secrets.STAGE_VAULT_ROLE_ID }}
+      STAGE_VAULT_SECRET_ID: ${{ secrets.STAGE_VAULT_SECRET_ID }}
+      STAGE_KEYSTORE_PASS: ${{ secrets.STAGE_KEYSTORE_PASS }}
+      STAGE_SPLUNK_TOKEN: ${{ secrets.STAGE_SPLUNK_TOKEN }}
+      PROD_VAULT_ROLE_ID: ${{ secrets.PROD_VAULT_ROLE_ID }}
+      PROD_VAULT_SECRET_ID: ${{ secrets.PROD_VAULT_SECRET_ID }}
+      PROD_KEYSTORE_PASS: ${{ secrets.PROD_KEYSTORE_PASS }}
+      PROD_SPLUNK_TOKEN: ${{ secrets.PROD_SPLUNK_TOKEN }}
+      STAGE_DT_TOKEN: ${{ secrets.STAGE_DT_TOKEN }}
+      PROD_DT_TOKEN: ${{ secrets.PROD_DT_TOKEN }}
+
+
+  deploy-stage-pra:
+    # needs: [prepare]
+    needs: [prepare, build, deploy-stage]
+    # Even if the build step is skipped, we still want to deploy to stage. Always run this job unless a previous job failed/cancelled
+    if: always() && 
+      !contains(needs.*.result, 'failure') &&
+      !contains(needs.*.result, 'cancelled') &&
+      (github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/heads/MI') || github.ref == 'refs/heads/US8559903-github-actions' 
+      || startsWith(github.ref, 'refs/heads/release/')) && needs.prepare.outputs.DEPLOY_TO_PRA == 'true'
+    uses: uhc-tech-provider/ppl-prun-github-actions/.github/workflows/deploy.yml@main
+    with:
+      environment: "stage-pra"
+      dockerImage: "${{ needs.prepare.outputs.image_url }}"
+    secrets:
+      KUBECONFIG: ${{ secrets.KUBECONFIG }}
+      STAGE_VAULT_ROLE_ID: ${{ secrets.STAGE_VAULT_ROLE_ID }}
+      STAGE_VAULT_SECRET_ID: ${{ secrets.STAGE_VAULT_SECRET_ID }}
+      STAGE_KEYSTORE_PASS: ${{ secrets.STAGE_KEYSTORE_PASS }}
+      STAGE_SPLUNK_TOKEN: ${{ secrets.STAGE_SPLUNK_TOKEN }}
+      PROD_VAULT_ROLE_ID: ${{ secrets.PROD_VAULT_ROLE_ID }}
+      PROD_VAULT_SECRET_ID: ${{ secrets.PROD_VAULT_SECRET_ID }}
+      PROD_KEYSTORE_PASS: ${{ secrets.PROD_KEYSTORE_PASS }}
+      PROD_SPLUNK_TOKEN: ${{ secrets.PROD_SPLUNK_TOKEN }}
+      STAGE_DT_TOKEN: ${{ secrets.STAGE_DT_TOKEN }}
+      PROD_DT_TOKEN: ${{ secrets.PROD_DT_TOKEN }}
+
+
+  deploy-prod:
+    needs: [prepare, build]
+    if: always() && 
+      !contains(needs.*.result, 'failure') &&
+      !contains(needs.*.result, 'cancelled') && github.ref == 'refs/heads/master'
+    uses: uhc-tech-provider/ppl-prun-github-actions/.github/workflows/deploy.yml@main
+    with:
+      environment: "prod"
+      dockerImage: "${{ needs.prepare.outputs.image_url }}"
+    # secrets: inherit
+    secrets:
+      KUBECONFIG: ${{ secrets.KUBECONFIG }}
+      STAGE_VAULT_ROLE_ID: ${{ secrets.STAGE_VAULT_ROLE_ID }}
+      STAGE_VAULT_SECRET_ID: ${{ secrets.STAGE_VAULT_SECRET_ID }}
+      STAGE_KEYSTORE_PASS: ${{ secrets.STAGE_KEYSTORE_PASS }}
+      STAGE_SPLUNK_TOKEN: ${{ secrets.STAGE_SPLUNK_TOKEN }}
+      PROD_VAULT_ROLE_ID: ${{ secrets.PROD_VAULT_ROLE_ID }}
+      PROD_VAULT_SECRET_ID: ${{ secrets.PROD_VAULT_SECRET_ID }}
+      PROD_KEYSTORE_PASS: ${{ secrets.PROD_KEYSTORE_PASS }}
+      PROD_SPLUNK_TOKEN: ${{ secrets.PROD_SPLUNK_TOKEN }}
+      STAGE_DT_TOKEN: ${{ secrets.STAGE_DT_TOKEN }}
+      PROD_DT_TOKEN: ${{ secrets.PROD_DT_TOKEN }}
+
+
+  deploy-prod-pra:
+    needs: [prepare, build, deploy-prod]
+    if: always() && 
+      !contains(needs.*.result, 'failure') &&
+      !contains(needs.*.result, 'cancelled') && 
+      (github.ref == 'refs/heads/master' && needs.prepare.outputs.DEPLOY_TO_PRA == 'true')
+    uses: uhc-tech-provider/ppl-prun-github-actions/.github/workflows/deploy.yml@main
+    with:
+      environment: "prod-pra"
+      dockerImage: "${{ needs.prepare.outputs.image_url }}"
+    secrets:
+      KUBECONFIG: ${{ secrets.KUBECONFIG }}
+      STAGE_VAULT_ROLE_ID: ${{ secrets.STAGE_VAULT_ROLE_ID }}
+      STAGE_VAULT_SECRET_ID: ${{ secrets.STAGE_VAULT_SECRET_ID }}
+      STAGE_KEYSTORE_PASS: ${{ secrets.STAGE_KEYSTORE_PASS }}
+      STAGE_SPLUNK_TOKEN: ${{ secrets.STAGE_SPLUNK_TOKEN }}
+      PROD_VAULT_ROLE_ID: ${{ secrets.PROD_VAULT_ROLE_ID }}
+      PROD_VAULT_SECRET_ID: ${{ secrets.PROD_VAULT_SECRET_ID }}
+      PROD_KEYSTORE_PASS: ${{ secrets.PROD_KEYSTORE_PASS }}
+      PROD_SPLUNK_TOKEN: ${{ secrets.PROD_SPLUNK_TOKEN }}
+      STAGE_DT_TOKEN: ${{ secrets.STAGE_DT_TOKEN }}
+      PROD_DT_TOKEN: ${{ secrets.PROD_DT_TOKEN }}
+
+
+  tag-release:
+    needs: [prepare, build, deploy-prod]
+    if: always() && 
+      !contains(needs.*.result, 'failure') &&
+      !contains(needs.*.result, 'cancelled') && (github.ref == 'refs/heads/master')
+    runs-on: uhg-runner
+    steps:
+      - name: Tag release
+        uses: actions/create-release@latest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: "v${{ needs.prepare.outputs.build_version }}"
+          release_name: "Release v${{ needs.prepare.outputs.build_version }}"
+          body: |
+            Version ${{ needs.prepare.outputs.build_version }} ${{ needs.prepare.outputs.current_date }}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+name: CM3 Report
+
+on:
+  workflow_dispatch:
+    inputs:
+      milestone:
+        description: 'Milestone'
+        required: true
+        type: string
+      application:
+        description: 'Application'
+        required: true
+        type: choice
+        options:
+          - PRUN
+          - PEN
+          - PDO
+
+env:
+  RALLY_API_TOKEN: ${{ secrets.PEN_RCA_TOKEN }}
+  COMAUTO_CLIENT_ID: ${{ secrets.COMAUTO_CLIENT_ID }}
+  COMAUTO_CLIENT_SECRET: ${{ secrets.COMAUTO_CLIENT_SECRET }}
+
+jobs:
+  full-report:
+    runs-on: uhg-runner
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set variables
+        id: vars
+        run: |
+          if [ "${{ github.event.inputs.application }}" = "PRUN" ]; then
+            echo "USER_STORY_APPROVERS=PaperlessRulesEngine_CM1_CM2" >> $GITHUB_ENV
+            echo "CM3_BUSINESS_APPROVERS=PaperlessRulesEngine_CM3_Business" >> $GITHUB_ENV
+            echo "CM3_IT_APPROVERS=PaperlessRulesEngine_CM3_IT" >> $GITHUB_ENV
+            echo "SECURITY_SCANS=SONAR:com.optum.fds:fds-paperless-processor-listener,SONAR:com.optum.fds:fds-paperless-activiti,SONAR:com.optum.fds:message-service,SONAR:com.optum.fds:ppl-prun-services,SONAR:com.optum.pen:pen-api,SONAR:com.optum.pen:pen-batch" >> $GITHUB_ENV
+            echo "ASK_ID=UHGWM110-023810" >> $GITHUB_ENV
+          elif [ "${{ github.event.inputs.application }}" = "PEN" ]; then
+            echo "USER_STORY_APPROVERS=ProviderEmailNotifications_CM1_CM2" >> $GITHUB_ENV
+            echo "CM3_BUSINESS_APPROVERS=ProviderEmailNotifications_CM3_Business" >> $GITHUB_ENV
+            echo "CM3_IT_APPROVERS=ProviderEmailNotifications_CM3_IT" >> $GITHUB_ENV
+            echo "SECURITY_SCANS=SONAR:com.optum.pen:pen-api,SONAR:com.optum.pen:pen-batch" >> $GITHUB_ENV
+            echo "ASK_ID=UHGWM110-026131" >> $GITHUB_ENV
+          elif [ "${{ github.event.inputs.application }}" = "PDO" ]; then
+            echo "USER_STORY_APPROVERS=PaperlessDeliveryOptions_CM1_CM2" >> $GITHUB_ENV
+            echo "CM3_BUSINESS_APPROVERS=PaperlessDeliveryOptions_CM3_Business" >> $GITHUB_ENV
+            echo "CM3_IT_APPROVERS=PaperlessDeliveryOptions_CM3_IT" >> $GITHUB_ENV
+            echo "SECURITY_SCANS=SONAR:com.optum.pdo:pdo-api,SONAR:com.optum.pdo:pdo-batch" >> $GITHUB_ENV
+            echo "ASK_ID=UHGWM110-017971" >> $GITHUB_ENV
+          fi
+
+      - name: Generate SECURITY_SCANS_PARAMETERS
+        run: |
+          SECURITY_SCANS_PARAMETERS=$(jq -c -n --arg scans "${{env.SECURITY_SCANS}}" '
+          ($scans | split(",") | map(
+           . as $scan |
+           ($scan | capture("^(?<scanTool>[^:]+):(?<recordName>.+)$"))
+          ) | group_by(.scanTool) | map({
+           scanTool: .[0].scanTool,
+           recordLabels: [],
+           recordNames: map(.recordName)
+          }))
+          ')
+          echo "SECURITY_SCANS_PARAMETERS=$SECURITY_SCANS_PARAMETERS" >> $GITHUB_ENV    
+
+      - name: Compliance API Full Report
+        uses: optum-eeps/comauto-action@v2
+        id: generate_report
+        with :
+          rallyToken: ${{ env.RALLY_API_TOKEN }}
+          askId: ${{ env.ASK_ID }}
+          rallyWorkspaceId: "14457696030"
+          userStoryApprovers: ${{ env.USER_STORY_APPROVERS }}
+          cm3ItApprovers: ${{ env.CM3_IT_APPROVERS }}
+          cm3BusinessApprovers: ${{ env.CM3_BUSINESS_APPROVERS }}
+          rallyMilestoneId: ${{ github.event.inputs.milestone }}
+          precheck: "false"
+          additionalReportRecipients: "ppl_support@ds.uhc.com"  # separated by comma without spaces (to send precheck report)
+          comAutoClientId: ${{ env.COMAUTO_CLIENT_ID }}
+          comAutoClientSecret: ${{ env.COMAUTO_CLIENT_SECRET }}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+name: deploy
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'stage'
+        type: string
+      dockerImage:
+        description: 'Docker image to deploy'
+        required: true
+        type: string
+    secrets:
+      KUBECONFIG:
+        description: 'Kubeconfig for cluster access'
+        required: true
+      STAGE_VAULT_ROLE_ID:
+        description: 'Vault role ID for stage'
+        required: true
+      STAGE_VAULT_SECRET_ID:
+        description: 'Vault secret ID for stage'
+        required: true
+      STAGE_KEYSTORE_PASS:
+        description: 'Keystore password for stage'
+        required: true
+      STAGE_SPLUNK_TOKEN:
+        description: 'Splunk token for PRUN stage'
+        required: true
+      STAGE_DT_TOKEN:
+        description: 'Dynatrace token for PRUN stage'
+        required: false
+      PROD_VAULT_ROLE_ID:
+        description: 'Vault role ID for prod'
+        required: true
+      PROD_VAULT_SECRET_ID:
+        description: 'Vault secret ID for prod'
+        required: true
+      PROD_KEYSTORE_PASS:
+        description: 'Keystore password for prod'
+        required: true
+      PROD_SPLUNK_TOKEN:
+        description: 'Splunk token for PRUN prod'
+        required: true
+      PROD_DT_TOKEN:
+        description: 'Dynatrace token for PRUN prod'
+        required: false
+
+jobs:
+  get-env-data:
+    runs-on: uhg-runner
+    outputs:
+      matrix: ${{ steps.set.outputs.matrix}}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install yq
+        run: |
+          mkdir -p ~/.local/bin
+          wget -qO ~/.local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          chmod +x ~/.local/bin/yq
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          echo "✅ Installed yq"  
+      
+      - name: Extract config
+        uses: uhc-tech-provider/ppl-prun-github-actions/.github/actions/extract-config@main
+        with:
+          environment: ${{ inputs.environment}}
+
+      # Use matrix to parallelize deployments across datacenters (CTC and ELR)
+      - name: Export matrix
+        id: set
+        env:
+          ENVIRONMENT: ${{ inputs.environment || 'stage' }}
+        run: |
+          # MATRIX=$(jq -c '{include: map({datacenter, cluster, namespace, api_server, cert_b64, cert_path, token_name, app_name, subdomain, f5value})}' deploy_data.json)
+
+          MATRIX=$(jq -c '{include: map({datacenter, cluster_dns, cluster_name, namespace, app_name, api_server})}' deploy_data.json)
+          
+          
+          echo "matrix<<EOF" >> $GITHUB_OUTPUT
+          echo "$MATRIX" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+  deploy:
+    runs-on: uhg-runner
+    needs: get-env-data
+    environment:
+      name: approvalToDeploy
+    strategy:
+      matrix: ${{ fromJson(needs.get-env-data.outputs.matrix) }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4.0.0
+        with:
+          version: 'latest'
+
+      - name: Install yq
+        run: |
+          mkdir -p ~/.local/bin
+          wget -qO ~/.local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          chmod +x ~/.local/bin/yq
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          echo "✅ Installed yq"  
+
+      - name: Merge env files
+        id: merged
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+        run: |
+          # mkdir -p chart
+          INPUT_ENV="helm/values-$ENVIRONMENT.yml"
+          INPUT_COMMON="pipeline.yml"
+          MERGED_FILE="helm/merged-values-$ENVIRONMENT.yml"
+          ls pipeline.yml  1> /dev/null 2>&1 || { echo "::error::pipeline.yml file not found"; exit 1; }
+          ls helm/values-$ENVIRONMENT.yml 1> /dev/null 2>&1 || { echo "::error::Input values-$ENVIRONMENT.yml file not found"; exit 1; }
+          yq eval-all '... comments="" | . as $item ireduce ({}; . *+ $item)' "$INPUT_COMMON" "$INPUT_ENV" > "$MERGED_FILE" \
+                || { echo "::error::Merge failed for $file"; exit 1; }  
+          cat "$MERGED_FILE"
+
+      - name: Print matrix values
+        run: |
+          echo "Datacenter: ${{ matrix.datacenter }}"
+          echo "Cluster: ${{ matrix.cluster_dns }}"
+          echo "Cluster Name: ${{ matrix.cluster_name }}"
+          echo "Namespace: ${{ matrix.namespace }}"
+          echo "API Server: ${{ matrix.api_server }}"
+          echo "App Name: ${{ matrix.app_name }}"
+
+      - name: Fetch secrets
+        id: fetch-secrets
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+          STAGE_VAULT_ROLE_ID: ${{ secrets.STAGE_VAULT_ROLE_ID }}
+          STAGE_VAULT_SECRET_ID: ${{ secrets.STAGE_VAULT_SECRET_ID }}
+          STAGE_KEYSTORE_PASS: ${{ secrets.STAGE_KEYSTORE_PASS }}
+          STAGE_SPLUNK_TOKEN: ${{ secrets.STAGE_SPLUNK_TOKEN }}
+          PROD_VAULT_ROLE_ID: ${{ secrets.PROD_VAULT_ROLE_ID }}
+          PROD_VAULT_SECRET_ID: ${{ secrets.PROD_VAULT_SECRET_ID }}
+          PROD_KEYSTORE_PASS: ${{ secrets.PROD_KEYSTORE_PASS }}
+          PROD_SPLUNK_TOKEN: ${{ secrets.PROD_SPLUNK_TOKEN }}
+          STAGE_DT_TOKEN: ${{ secrets.STAGE_DT_TOKEN }}
+          PROD_DT_TOKEN: ${{ secrets.PROD_DT_TOKEN }}
+        run: |
+          if [[ "$ENVIRONMENT" == "stage" || "$ENVIRONMENT" == "stage-pra" ]]; then
+            vaultRoleId="$STAGE_VAULT_ROLE_ID"
+            vaultSecretId="$STAGE_VAULT_SECRET_ID"
+            keystorePass="$STAGE_KEYSTORE_PASS"
+            splunkToken="$STAGE_SPLUNK_TOKEN"
+            dynatraceToken="$STAGE_DT_TOKEN"
+          elif [[ "$ENVIRONMENT" == "prod" || "$ENVIRONMENT" == "prod-pra" ]]; then
+            vaultRoleId="$PROD_VAULT_ROLE_ID"
+            vaultSecretId="$PROD_VAULT_SECRET_ID"
+            keystorePass="$PROD_KEYSTORE_PASS"
+            splunkToken="$PROD_SPLUNK_TOKEN"
+            dynatraceToken="$PROD_DT_TOKEN"
+          else
+            echo "::error::Unknown environment: $ENVIRONMENT"
+            exit 1
+          fi
+
+          echo "$STAGE_DT_TOKEN"
+          echo "$PROD_DT_TOKEN"
+          echo "Using Dynatrace token: $dynatraceToken"
+
+          echo "vaultRoleId=$vaultRoleId" >> $GITHUB_ENV
+          echo "vaultSecretId=$vaultSecretId" >> $GITHUB_ENV
+          echo "keystorePass=$keystorePass" >> $GITHUB_ENV
+          echo "splunkToken=$splunkToken" >> $GITHUB_ENV
+          echo "dynatraceToken=$dynatraceToken" >> $GITHUB_ENV
+
+      - name: Validate KUBECONFIG secret
+        run: |
+          if [ -z "${{ secrets.KUBECONFIG }}" ]; then
+            echo "::error::KUBECONFIG secret is empty or missing."
+            exit 1
+          fi
+
+      - name: Deploy to Kubernetes using helm
+        id: deploy-k8s
+        env:
+          splunkToken: ${{ env.splunkToken }}
+          vaultRoleId: ${{ env.vaultRoleId }}
+          vaultSecretId: ${{ env.vaultSecretId }}
+          keystorePass: ${{ env.keystorePass }}
+          kubeconfig: ${{ secrets.KUBECONFIG }}
+          dynatraceToken: ${{ env.dynatraceToken }}
+          ENVIRONMENT: ${{ inputs.environment }}
+          APP_NAME: ${{ matrix.app_name }}
+        run: |
+          set -e
+          mkdir -p $HOME/.kube
+          echo "$kubeconfig" > $HOME/.kube/config
+          export KUBECONFIG=$HOME/.kube/config
+
+          app_name="$APP_NAME"
+
+          if [[ $ENVIRONMENT == "stage-pra" || $ENVIRONMENT == "prod-pra" ]]; then
+            app_name="${APP_NAME}-pra"
+          fi
+
+          # Deploy App
+          echo "Deploying app: $app_name"
+
+          kubectl config get-contexts --kubeconfig $HOME/.kube/config
+
+          context_name="${{ matrix.cluster_name }}-admin-token_${{ matrix.namespace }}"
+
+          echo "Using context: $context_name"
+          kubectl config use-context $context_name 
+
+          kubectl auth whoami
+          
+          kubectl get pods
+
+          helm upgrade $app_name ./helm \
+            --install \
+            --timeout 10m \
+            --values ./helm/merged-values-$ENVIRONMENT.yml \
+            --set dockerImage="${{inputs.dockerImage}}" \
+            --set environment="$ENVIRONMENT" \
+            --set datacenter="${{ matrix.datacenter }}" \
+            --set keystorePassword="$keystorePass" \
+            --set vaultRoleId="$vaultRoleId" \
+            --set vaultSecretId="$vaultSecretId" \
+            --set splunkToken="$splunkToken" \
+            --set dynatraceToken="$dynatraceToken" \
+            
+
+            # --atomic \
+            # --namespace ${{ matrix.namespace }} \
+            # --kube-apiserver ${{ matrix.api_server }} \
+            # --kubeconfig $HOME/.kube/config \
+            # --set cluster="${{ matrix.cluster_name }}" \
+            # --set cluster-port=443 \
+
+          echo "✅ Successfully deployed to Datacenter: ${{ matrix.datacenter }}, Namespace: ${{ matrix.namespace }}"
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+name: Build and Deploy on EKS 
+permissions:
+  actions: read
+  contents: write
+  id-token: write
+  pull-requests: read
+  security-events: write
+on:
+  workflow_call:
+    inputs:
+      application-name:
+        description: 'application name'
+        required: true
+        type: string
+        default: 'pen'
+env:
+  AWS_REGION: us-east-1
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  prepare:
+    runs-on: [ uhg-runner ]
+    outputs:
+      image_url: ${{ steps.prepare.outputs.image_url }}
+      image_central_url: ${{ steps.prepare.outputs.image_central_url }}
+      build_version: ${{ steps.prepare.outputs.build_version }}
+      current_date: ${{ steps.prepare.outputs.current_date }}
+      JFROG_PROJECT_KEY: ${{ steps.prepare.outputs.JFROG_PROJECT_KEY }}
+    steps:              
+    - name: Prepare environment variables
+      id: prepare
+      uses: uhc-tech-provider/ppl-prun-github-actions/.github/actions/prepare@main
+      with:
+        jfrogUsername: ${{ secrets.JFROG_USERNAME }}
+        jfrogToken: ${{ secrets.JFROG_TOKEN }}
+
+  build-and-quality-scans:
+    needs: prepare
+    if: needs.prepare.outputs.skip_build != 'true' && (github.event_name == 'pull_request' || startsWith(github.ref, 'refs/heads/MI') 
+      || startsWith(github.ref, 'refs/heads/release/') || github.ref == 'refs/heads/develop'
+      || github.ref == 'refs/heads/master')
+    uses: uhg-pipelines/ci-workflows/.github/workflows/java-maven-ci.yml@v2.38.0
+    with:
+      docker-tags: ${{ needs.prepare.outputs.image_central_url }}
+      jfrog-project-key: ${{ needs.prepare.outputs.JFROG_PROJECT_KEY }}
+      java-version: "17"
+      jfrog-create-release-bundle: false
+      sonar-continue-on-error: true
+
+  stage-deployment:
+    # if: github.ref == 'refs/heads/aws-cloud-migration'
+    if: always() && 
+      !contains(needs.*.result, 'failure') &&
+      !contains(needs.*.result, 'cancelled') &&
+      (github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/heads/MI') || startsWith(github.ref, 'refs/heads/release/'))
+    needs: [prepare, build-and-quality-scans]
+    runs-on: [ uhg-runner ]
+    environment:
+      name: approvalToDeploy
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Get secrets for AWS account access                                               
+        id: secrets-from-immerse-vault
+        uses: uhc-tech/volcan-ci/actions/secrets/get-secrets@v1.3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          environment: 'stage'
+          required-secrets: '["CODE_DEPLOY_ROLE", "EKS_CLUSTER_NAME", "NAMESPACE"]'
+    
+      - name: Configure AWS authentication                                           
+        uses: aws-actions/configure-aws-credentials@v3
+        with:
+          role-to-assume: ${{ steps.secrets-from-immerse-vault.outputs.CODE_DEPLOY_ROLE }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Print Docker Artifact Info
+        run: |
+          echo "Docker Image Tag: ${{ needs.prepare.outputs.image_url }}"
+
+      - name: Setup kube-config and deploy at AWS EKS
+        run: |
+          aws eks --region ${{ env.AWS_REGION }} update-kubeconfig --name ${{ steps.secrets-from-immerse-vault.outputs.EKS_CLUSTER_NAME }}
+          echo "-----------------------------------------------"
+          echo "------DEPLOYING BELOW TEMPLATE ON AWS EKS------"
+          echo "-----------------------------------------------"
+          helm upgrade --install ${{ inputs.application-name }} ./helm \
+            --namespace ${{ steps.secrets-from-immerse-vault.outputs.NAMESPACE }} \
+            --values ./helm/values-stage.yaml \
+            --set image.imagePath=${{ needs.prepare.outputs.image_url }} \
+            --history-max 5
+          echo "------DEPLOYED BELOW MANIFESTS SUCCESSFULLY ON AWS EKS------"
+          helm template tmt -f ./helm/values-stage.yaml --set image.imagePath=${{ needs.prepare.outputs.image_url }} ./helm > final.yaml
+          cat final.yaml
+
+  prod-deployment:
+    # if: github.ref == 'refs/heads/aws-prod-release'
+    if: always() && 
+      !contains(needs.*.result, 'failure') &&
+      !contains(needs.*.result, 'cancelled') &&
+      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/master'))
+    needs: [prepare, build-and-quality-scans]
+    runs-on: [ uhg-runner ]
+    environment:
+      name: approvalToDeploy
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Get secrets for AWS account access                                               
+        id: secrets-from-immerse-vault
+        uses: uhc-tech/volcan-ci/actions/secrets/get-secrets@v1.3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          environment: 'prod'
+          required-secrets: '["CODE_DEPLOY_ROLE", "EKS_CLUSTER_NAME", "NAMESPACE"]'
+    
+      - name: Configure AWS authentication                                           
+        uses: aws-actions/configure-aws-credentials@v3
+        with:
+          role-to-assume: ${{ steps.secrets-from-immerse-vault.outputs.CODE_DEPLOY_ROLE }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Print Docker Artifact Info
+        run: |
+          echo "Docker Image Tag: ${{ needs.prepare.outputs.image_url }}"
+
+      - name: Setup kube-config and deploy at AWS EKS
+        run: |
+          aws eks --region ${{ env.AWS_REGION }} update-kubeconfig --name ${{ steps.secrets-from-immerse-vault.outputs.EKS_CLUSTER_NAME }}
+          echo "-----------------------------------------------"
+          echo "------DEPLOYING BELOW TEMPLATE ON AWS EKS------"
+          echo "-----------------------------------------------"
+          helm upgrade --install ${{ inputs.application-name }} ./helm \
+            --namespace ${{ steps.secrets-from-immerse-vault.outputs.NAMESPACE }} \
+            --values ./helm/values-prod.yaml \
+            --set image.imagePath=${{ needs.prepare.outputs.image_url }} \
+            --history-max 5
+          echo "------DEPLOYED BELOW MANIFESTS SUCCESSFULLY ON AWS EKS------"
+          helm template tmt -f ./helm/values-prod.yaml --set image.imagePath=${{ needs.prepare.outputs.image_url }} ./helm > final.yaml
+          cat final.yaml
+
+  tag-release:
+    #if: false # Always skip this job till cutover
+    runs-on: uhg-runner
+    needs: [prepare, build-and-quality-scans, prod-deployment]
+    if: always() && 
+      !contains(needs.*.result, 'failure') &&
+      !contains(needs.*.result, 'cancelled') && (github.ref == 'refs/heads/master')
+    steps:
+      - name: Tag release
+        uses: actions/create-release@latest
+        with:
+          tag_name: "v${{ needs.prepare.outputs.build_version }}"
+          release_name: "Release v${{ needs.prepare.outputs.build_version }}"
+          body: |
+            Version ${{ needs.prepare.outputs.build_version }} ${{ needs.prepare.outputs.current_date }}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+name: RCA PreCheck
+
+on:
+  workflow_dispatch:
+    inputs:
+      milestone:
+        description: 'Milestone'
+        required: true
+        type: string
+      application:
+        description: 'Application'
+        required: true
+        type: choice
+        options:
+          - PRUN
+          - PEN
+          - PDO
+
+env:
+  RALLY_API_TOKEN: ${{ secrets.PEN_RCA_TOKEN }}
+  COMAUTO_CLIENT_ID: ${{ secrets.COMAUTO_CLIENT_ID }}
+  COMAUTO_CLIENT_SECRET: ${{ secrets.COMAUTO_CLIENT_SECRET }}
+
+
+jobs:
+  precheck:
+    runs-on: uhg-runner
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set variables
+        run: |
+          if [ "${{ github.event.inputs.application }}" = "PRUN" ]; then
+            echo "USER_STORY_APPROVERS=PaperlessRulesEngine_CM1_CM2" >> $GITHUB_ENV
+            echo "CM3_BUSINESS_APPROVERS=PaperlessRulesEngine_CM3_Business" >> $GITHUB_ENV
+            echo "CM3_IT_APPROVERS=PaperlessRulesEngine_CM3_IT" >> $GITHUB_ENV
+            echo "SECURITY_SCANS=SONAR:com.optum.fds:fds-paperless-processor-listener,SONAR:com.optum.fds:fds-paperless-activiti,SONAR:com.optum.fds:message-service,SONAR:com.optum.fds:ppl-prun-services,SONAR:com.optum.pen:pen-api,SONAR:com.optum.pen:pen-batch" >> $GITHUB_ENV
+            echo "ASK_ID=UHGWM110-023810" >> $GITHUB_ENV
+          elif [ "${{ github.event.inputs.application }}" = "PEN" ]; then
+            echo "USER_STORY_APPROVERS=ProviderEmailNotifications_CM1_CM2" >> $GITHUB_ENV
+            echo "CM3_BUSINESS_APPROVERS=ProviderEmailNotifications_CM3_Business" >> $GITHUB_ENV
+            echo "CM3_IT_APPROVERS=ProviderEmailNotifications_CM3_IT" >> $GITHUB_ENV
+            echo "SECURITY_SCANS=SONAR:com.optum.pen:pen-api,SONAR:com.optum.pen:pen-batch" >> $GITHUB_ENV
+            echo "ASK_ID=UHGWM110-026131" >> $GITHUB_ENV
+          elif [ "${{ github.event.inputs.application }}" = "PDO" ]; then
+            echo "USER_STORY_APPROVERS=PaperlessDeliveryOptions_CM1_CM2" >> $GITHUB_ENV
+            echo "CM3_BUSINESS_APPROVERS=PaperlessDeliveryOptions_CM3_Business" >> $GITHUB_ENV
+            echo "CM3_IT_APPROVERS=PaperlessDeliveryOptions_CM3_IT" >> $GITHUB_ENV
+            echo "SECURITY_SCANS=SONAR:com.optum.pdo:pdo-api,SONAR:com.optum.pdo:pdo-batch" >> $GITHUB_ENV
+            echo "ASK_ID=UHGWM110-017971" >> $GITHUB_ENV
+          fi
+          echo "SECURITY_SCANS=${{env.SECURITY_SCANS}}"
+      - name: Generate SECURITY_SCANS_PARAMETERS
+        run: |
+          SECURITY_SCANS_PARAMETERS=$(jq -c -n --arg scans "${{env.SECURITY_SCANS}}" '
+          ($scans | split(",") | map(
+           . as $scan |
+           ($scan | capture("^(?<scanTool>[^:]+):(?<recordName>.+)$"))
+          ) | group_by(.scanTool) | map({
+           scanTool: .[0].scanTool,
+           recordLabels: [],
+           recordNames: map(.recordName)
+          }))
+          ')
+          echo "SECURITY_SCANS_PARAMETERS=$SECURITY_SCANS_PARAMETERS" >> $GITHUB_ENV     
+          echo "SECURITY_SCANS_PARAMETERS=$SECURITY_SCANS_PARAMETERS"
+      - name: Fail if SECURITY_SCANS is empty
+        run: |
+          if [ -z "${{env.SECURITY_SCANS}}" ]; then
+            echo "${{env.SECURITY_SCANS}} is not set"
+            exit 1
+          fi
+
+#      - name: Debug variables and payload
+#        run: |
+#          echo "USER_STORY_APPROVERS=$USER_STORY_APPROVERS"
+#          echo "SECURITY_SCANS=${{env.SECURITY_SCANS}}"
+#          echo "RALLY_API_TOKEN=${{ env.RALLY_API_TOKEN }}"
+#          echo "COMPLIANCE_API_URL=$COMPLIANCE_API_URL"
+#          echo "RALLY_API_URL=$RALLY_API_URL"
+#          echo "Milestone=${{ github.event.inputs.milestone }}"
+#          ./scripts/glComplianceApiGenerateReport.sh \
+#            --complianceApiUrl "$COMPLIANCE_API_URL" \
+#            --rallyApiUrl "$RALLY_API_URL" \
+#            --rallyCredentialId "${{ env.RALLY_API_TOKEN }}" \
+#            --rallyWorkspaceId "14457696030" \
+#            --rallyMilestoneFormattedId "${{ github.event.inputs.milestone }}" \
+#            --securityScansParameters "${{env.SECURITY_SCANS}}" \
+#            --preCheckTest true \
+#            --additionalReportRecipients "ppl_support@ds.uhc.com" \
+#            --userStoryApprovers "$USER_STORY_APPROVERS"
+
+      - name: Debug SECURITY_SCANS
+        run: |
+          echo "SECURITY_SCANS=${{env.SECURITY_SCANS}}"
+
+      - name: Compliance API PreCheck
+        uses: optum-eeps/comauto-action@v2
+        id: generate_report
+        with :
+          rallyToken: ${{ env.RALLY_API_TOKEN }}
+          askId: ${{ env.ASK_ID }}
+          rallyWorkspaceId: "14457696030"
+          userStoryApprovers: ${{ env.USER_STORY_APPROVERS }}
+          cm3ItApprovers: ${{ env.CM3_IT_APPROVERS }}
+          cm3BusinessApprovers: ${{ env.CM3_BUSINESS_APPROVERS }}
+          rallyMilestoneId: ${{ github.event.inputs.milestone }}
+          precheck: "true"
+          additionalReportRecipients: "ppl_support@ds.uhc.com"  # separated by comma without spaces (to send precheck report)
+          comAutoClientId: ${{ env.COMAUTO_CLIENT_ID }}
+          comAutoClientSecret: ${{ env.COMAUTO_CLIENT_SECRET }}
+
+
