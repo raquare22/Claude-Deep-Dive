@@ -1,103 +1,75 @@
-# Extract Config Composite Action (`action.yml`)
+import glob
+import os
+from datetime import datetime, timedelta
 
-This composite GitHub Action extracts Kubernetes deployment configuration for multiple datacenters and environments from your YAML configuration files. It generates a `deploy_data.json` file containing all the necessary information for downstream deployment jobs.
+import paramiko
+# if not os.path.exists('myfolder'):
+#     os.makedirs('myfolder')
+# spaceId = 10074
+# file = open("myfolder/bdpass_" + str(spaceId) + ".txt", "a")
 
-## What It Does
+files = glob.glob('report/*.txt')
+print(files)
+for f in files:
+    try:
+        os.remove(f)
+    except OSError as e:
+        print("Error: %s : %s" % (f, e.strerror))
 
-- **Reads configuration** from `pipeline.yml` and `helm/assets/hcck8s.yml`.
-- **Supports filtering** by environment and (optionally) by a comma-separated list of datacenters.
-- **Resolves cluster DNS names to IP addresses** for each datacenter.
-- **Builds a deployment matrix** with details such as datacenter, app name, cluster DNS, cluster name, namespace, and API server.
-- **Outputs a summary** of all deployments to the workflow log.
-- **Creates a `deploy_data.json`** file for use in matrix deployments.
+# remotepath = "/app1/bdpass/testPython/" + datetime.today().strftime('%Y-%m-%d') + "/"
 
-## Inputs
+date_yesterday = datetime.today() - timedelta(days=1)
+str_date = date_yesterday.strftime('%d-%m-%Y')
+str_month = date_yesterday.strftime('%Y')+"_"+date_yesterday.strftime('%m')
 
-- `environment` (string, required): The target environment to extract config for (default: `stage`).
-- `datacenters` (string, optional): Comma-separated list of datacenters to filter (default: all in environment).
+print(str_month)
+remotepath = "/app1/bdpass/testPython/" + str_month + "/" + str_date + "/"
 
-## Outputs
+print(remotepath)
+# host = 'rn000019322'
+# password = 'iHqdN87Q'
+# username = 'pren'
+#
+# ssh = paramiko.SSHClient()
+# ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+# ssh.connect(hostname=host, username=username, password=password )
+#
+# sftp = ssh.open_sftp()
+#
+# remotepath = '/app1/bdpass/testPython'
+# localpath = 'myfolder/'
+#
+# for root, dirs, files in os.walk(localpath):
+#     for fname in files:
+#         full_fname = os.path.join(root, fname)
+#         print(full_fname)
+#         sftp.put(full_fname, os.path.join(remotepath, fname))
+#
+# sftp.close()
+# ssh.close()
+# print("connection closed !")
 
-- This action writes a `deploy_data.json` file to the workspace, which can be used as a matrix for subsequent deployment jobs.
 
-## Usage Example
 
-```yaml
-jobs:
-  extract-config:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Extract deployment config
-        uses: ./.github/actions/extract-config/
-        with:
-          environment: stage
-          datacenters: "ctc,elr"
-```
 
-## Requirements
 
-- Your repository must contain:
-  - `pipeline.yml` with application and environment info.
-  - `helm/assets/hcck8s.yml` with cluster and namespace info.
-- The runner must have `yq`, `jq`, and `awk` installed (standard on most Linux runners).
 
-## Notes
 
-- If a datacenter is missing required info or its DNS cannot be resolved, it will be skipped with a warning.
-- The resulting `deploy_data.json` can be used as a matrix for parallel deployments in downstream jobs.
-- This action is intended to be used as a setup step before deploying to Kubernetes clusters.
 
----
-```# Extract Config Composite Action (`action.yml`)
 
-This composite GitHub Action extracts Kubernetes deployment configuration for multiple datacenters and environments from your YAML configuration files. It generates a `deploy_data.json` file containing all the necessary information for downstream deployment jobs.
 
-## What It Does
 
-- **Reads configuration** from `pipeline.yml` and `helm/assets/hcck8s.yml`.
-- **Supports filtering** by environment and (optionally) by a comma-separated list of datacenters.
-- **Resolves cluster DNS names to IP addresses** for each datacenter.
-- **Builds a deployment matrix** with details such as datacenter, app name, cluster DNS, cluster name, namespace, and API server.
-- **Outputs a summary** of all deployments to the workflow log.
-- **Creates a `deploy_data.json`** file for use in matrix deployments.
 
-## Inputs
 
-- `environment` (string, required): The target environment to extract config for (default: `stage`).
-- `datacenters` (string, optional): Comma-separated list of datacenters to filter (default: all in environment).
 
-## Outputs
 
-- This action writes a `deploy_data.json` file to the workspace, which can be used as a matrix for subsequent deployment jobs.
 
-## Usage Example
 
-```yaml
-jobs:
-  extract-config:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Extract deployment config
-        uses: ./.github/actions/extract-config/
-        with:
-          environment: stage
-          datacenters: "ctc,elr"
-```
 
-## Requirements
 
-- Your repository must contain:
-  - `pipeline.yml` with application and environment info.
-  - `helm/assets/hcck8s.yml` with cluster and namespace info.
-- The runner must have `yq`, `jq`, and `awk` installed (standard on most Linux runners).
 
-## Notes
 
-- If a datacenter is missing required info or its DNS cannot be resolved, it will be skipped with a warning.
-- The resulting `deploy_data.json` can be used as a matrix for parallel deployments in downstream jobs.
-- This action is intended to be used as a setup step before deploying to Kubernetes clusters.
 
----
 
 
 
@@ -107,189 +79,1746 @@ jobs:
 
 
 
+import os
+import traceback
+from datetime import datetime, timedelta
+from base64 import decodebytes
+import paramiko
+import glob
+import logging as logger
+from paramiko.ssh_exception import SSHException, AuthenticationException, NoValidConnectionsError
 
 
+def uploadFilesBackup():
+    try:
+        host = os.getenv('BACKUP_HOST')
+        password = os.getenv('BACKUP_PASSWORD')
+        username = os.getenv('BACKUP_USERNAME')
+        logger.info(f"Connecting with host - {host}, username - {username}")
 
+        logger.info("Starting SSH Handshake !!")
+        ssh = paramiko.SSHClient()
+        # ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        keydata = os.getenv('BACKUP_KEYDATA')
+        keydata_bytes = keydata.encode()
+        key = paramiko.RSAKey(data=decodebytes(keydata_bytes))
+        ssh.get_host_keys().add(host, 'ssh-rsa', key)
+        ssh.connect(hostname=host, username=username, password=password)
+        sftp = ssh.open_sftp()
+        logger.info("SSH Connection started !!")
+
+        date_yesterday = datetime.today() - timedelta(days=1)
+        str_date = date_yesterday.strftime('%d-%m-%Y')
+        str_month = date_yesterday.strftime('%Y') + "_" + date_yesterday.strftime('%m')
+
+        remotepathMonth = "/app1/bdpass/BDPassData/BDPass_" + str_month + "/"
+        localpath = "report/"
+
+        create_remote_directory(sftp, remotepathMonth)
+
+        remotepathDate = remotepathMonth + str_date + "/"
+
+        create_remote_directory(sftp, remotepathDate)
+
+        logger.info("Uploading files to path : %s", remotepathDate)
+
+        upload_files_to_sftp(sftp, localpath, remotepathDate)
+
+        sftp.close()
+        ssh.close()
+        logger.info("SSH Connection closed !!")
+
+    except AuthenticationException as auth_error:
+        logger.error(f"Authentication error: {auth_error}\nTraceback: {traceback.format_exc()}")
+    except NoValidConnectionsError as conn_error:
+        logger.error(f"Connection error: {conn_error}\nTraceback: {traceback.format_exc()}")
+    except SSHException as ssh_error:
+        logger.error(f"SSH error: {ssh_error}\n Traceback: {traceback.format_exc()}")
+    except FileNotFoundError as fnf_error:
+        logger.error(f"File not found error: {fnf_error}\n Traceback: {traceback.format_exc()}")
+    except PermissionError as perm_error:
+        logger.error(f"Permission error: {perm_error}\n Traceback: {traceback.format_exc()}")
+    except OSError as os_error:
+        logger.error(f"OS error: {os_error}\n Traceback: {traceback.format_exc()}")
+    except Exception as e:
+        logger.error(f"An unexpected error occurred: {e}\n Traceback: {traceback.format_exc()}")
 
 
+def uploadFilesBdpass():
+    try:
+        host = os.getenv('BDPASS_HOST')
+        password = os.getenv('BDPASS_PASSWORD')
+        username = os.getenv('BDPASS_USERNAME')
+        logger.info("Connecting with host - " + host + " ,username - " + username)
 
+        logger.info("Starting SSH Handshake !!")
+        ssh = paramiko.SSHClient()
+        # ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        keydata = os.getenv('BDPASS_KEYDATA')
+        keydata_bytes = keydata.encode()
+        key = paramiko.Ed25519Key(data=decodebytes(keydata_bytes))
+        ssh.get_host_keys().add(host, 'ssh-rsa', key)
+        ssh.connect(hostname=host, username=username, password=password)
+        sftp = ssh.open_sftp()
+        logger.info("SSH Connection started !!")
 
+        date_yesterday = datetime.today() - timedelta(days=1)
+        str_date = date_yesterday.strftime('%d-%m-%Y')
+        str_month = date_yesterday.strftime('%Y') + "_" + date_yesterday.strftime('%m')
 
+        remotepathMonth = "/mapr/datalake/optum/optuminsight/ssir_data/FDS/BDPass_" + str_month + "/"
+        localpath = "report/"
 
+        create_remote_directory(sftp, remotepathMonth)
 
+        remotepathDate = remotepathMonth + str_date + "/"
 
+        create_remote_directory(sftp, remotepathDate)
 
+        logger.info("Uploading files to path : %s", remotepathDate)
 
+        upload_files_to_sftp(sftp, localpath, remotepathDate)
 
+        sftp.close()
+        ssh.close()
+        logger.info("SSH Connection closed !!")
 
+    except AuthenticationException as auth_error:
+        logger.error(f"Authentication error: {auth_error}\nTraceback: {traceback.format_exc()}")
+    except NoValidConnectionsError as conn_error:
+        logger.error(f"Connection error: {conn_error}\nTraceback: {traceback.format_exc()}")
+    except SSHException as ssh_error:
+        logger.error(f"SSH error: {ssh_error}\n Traceback: {traceback.format_exc()}")
+    except FileNotFoundError as fnf_error:
+        logger.error(f"File not found error: {fnf_error}\n Traceback: {traceback.format_exc()}")
+    except PermissionError as perm_error:
+        logger.error(f"Permission error: {perm_error}\n Traceback: {traceback.format_exc()}")
+    except OSError as os_error:
+        logger.error(f"OS error: {os_error}\n Traceback: {traceback.format_exc()}")
+    except Exception as e:
+        logger.error(f"An unexpected error occurred: {e}\n Traceback: {traceback.format_exc()}")
 
 
+def create_remote_directory(sftp, remotepath):
+    try:
+        sftp.chdir(remotepath)
+    except IOError:
+        sftp.mkdir(remotepath)
+        sftp.chdir(remotepath)
 
-# Prepare Composite Action (`action.yml`)
 
-This composite GitHub Action prepares environment variables and validates project prerequisites before building and deploying your application. It is intended to be used as the first step in your CI/CD workflow.
+def upload_files_to_sftp(sftp, localpath, remotepath):
+    try:
+        for root, dirs, files in os.walk(localpath):
+            for fname in files:
+                full_fname = os.path.join(root, fname)
+                logger.info(f"Uploading: {full_fname}")
+                sftp.put(full_fname, os.path.join(remotepath, fname))
+    except FileNotFoundError as fnf_error:
+        logger.error(f"File not found: {fnf_error}\n Traceback: {traceback.format_exc()}")
+    except PermissionError as perm_error:
+        logger.error(f"Permission error: {perm_error}\n Traceback: {traceback.format_exc()}")
+    except Exception as e:
+        logger.error(f"An unexpected error occurred: {e}\n Traceback: {traceback.format_exc()}")
 
----
 
-## What It Does
+def deleteFiles():
+    logger.info("Deleting the files locally !!")
+    files = glob.glob('report/*.txt')
+    for f in files:
+        try:
+            logger.info(f"Removing: {f}")
+            os.remove(f)
+        except OSError as e:
+            logger.error(f"Error: {f} : {e.strerror}")
 
-- **Checks out the repository.**
-- **Extracts application metadata** from `pipeline.yml`, including application name, registry host, image path, and JFrog project key.
-- **Determines if the application should deploy to PRA** (Production Ready Area) namespaces based on the application name.
-- **Reads chart version and name** from `helm/Chart.yaml`.
-- **Reads Maven version** from `pom.xml`.
-- **Reads Sonar project key and askId** from `vitals.yaml`.
-- **Compares chart and Maven versions/names** to ensure consistency. Fails the workflow if they do not match.
-- **Sets the build version** based on the event type (pull request or branch build).
-- **Constructs Docker image path and tag** for use in later steps.
-- **Checks if the Docker image already exists in JFrog Artifactory** and sets a flag to skip build and push if so.
-- **Outputs all relevant variables** for downstream jobs.
-- **Summarizes all used variables** in the GitHub Actions summary for easy debugging.
 
----
 
-## Inputs
 
-- `jfrogUsername` (required): JFrog Artifactory username.
-- `jfrogToken` (required): JFrog Artifactory token.
 
----
 
-## Outputs
 
-- `image_url`: Docker image URL with build version.
-- `docker_host`: Docker host URL.
-- `image_path`: Docker image path.
-- `build_version`: Build version (from chart or PR).
-- `artifact_name`: Application name.
-- `application_name`: Application name.
-- `latest_version`: Latest available version (if enabled).
-- `DEPLOY_TO_PRA`: Whether to deploy to PRA namespaces.
-- `JFROG_PROJECT_KEY`: JFrog project key.
-- `skip_build`: Whether to skip build if the image already exists.
 
----
 
-## Usage Example
 
-```yaml
-jobs:
-  prepare:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Prepare environment
-        id: prepare
-        uses: ./.github/actions/prepare/
-        with:
-          jfrogUsername: ${{ secrets.JFROG_USERNAME }}
-          jfrogToken: ${{ secrets.JFROG_TOKEN }}
-    outputs:
-      image_url: ${{ steps.prepare.outputs.image_url }}
-      build_version: ${{ steps.prepare.outputs.build_version }}
-```
 
----
 
-## Requirements
 
-- Your repository must contain:
-  - `pipeline.yml` with application and registry info.
-  - `helm/Chart.yaml` with chart metadata.
-  - `pom.xml` with Maven version.
-  - `vitals.yaml` with Sonar project key and askId.
-- The runner must have `awk`, `grep`, `cat`, and `curl` available (standard on most Linux runners).
 
----
 
-## Notes
 
-- This action is designed to be reusable and modular for any Java/Kubernetes project following the same conventions.
-- It will fail the workflow if there is a version or name mismatch between your Maven and Helm chart files.
-- The action is intended to be used as a prerequisite for build and deploy steps in your workflow.
-- The action prints all important environment variables to the GitHub Actions summary for traceability.
 
----
-```# Prepare Composite Action (`action.yml`)
 
-This composite GitHub Action prepares environment variables and validates project prerequisites before building and deploying your application. It is intended to be used as the first step in your CI/CD workflow.
 
----
 
-## What It Does
 
-- **Checks out the repository.**
-- **Extracts application metadata** from `pipeline.yml`, including application name, registry host, image path, and JFrog project key.
-- **Determines if the application should deploy to PRA** (Production Ready Area) namespaces based on the application name.
-- **Reads chart version and name** from `helm/Chart.yaml`.
-- **Reads Maven version** from `pom.xml`.
-- **Reads Sonar project key and askId** from `vitals.yaml`.
-- **Compares chart and Maven versions/names** to ensure consistency. Fails the workflow if they do not match.
-- **Sets the build version** based on the event type (pull request or branch build).
-- **Constructs Docker image path and tag** for use in later steps.
-- **Checks if the Docker image already exists in JFrog Artifactory** and sets a flag to skip build and push if so.
-- **Outputs all relevant variables** for downstream jobs.
-- **Summarizes all used variables** in the GitHub Actions summary for easy debugging.
 
----
 
-## Inputs
 
-- `jfrogUsername` (required): JFrog Artifactory username.
-- `jfrogToken` (required): JFrog Artif token.
 
----
 
-## Outputs
 
-- `image_url`: Docker image URL with build version.
-- `docker_host`: Docker host URL.
-- `image_path`: Docker image path.
-- `build_version`: Build version (from chart or PR).
-- `artifact_name`: Application name.
-- `application_name`: Application name.
-- `latest_version`: Latest available version (if enabled).
-- `DEPLOY_TO_PRA`: Whether to deploy to PRA namespaces.
-- `JFROG_PROJECT_KEY`: JFrog project key.
-- `skip_build`: Whether to skip build if the image already exists.
 
----
 
-## Usage Example
 
-```yaml
-jobs:
-  prepare:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Prepare environment
-        id: prepare
-        uses: ./.github/actions/prepare/
-        with:
-          jfrogUsername: ${{ secrets.JFROG_USERNAME }}
-          jfrogToken: ${{ secrets.JFROG_TOKEN }}
-    outputs:
-      image_url: ${{ steps.prepare.outputs.image_url }}
-      build_version: ${{ steps.prepare.outputs.build_version }}
-```
 
----
 
-## Requirements
 
-- Your repository must contain:
-  - `pipeline.yml` with application and registry info.
-  - `helm/Chart.yaml` with chart metadata.
-  - `pom.xml` with Maven version.
-  - `vitals.yaml` with Sonar project key and askId.
-- The runner must have `awk`, `grep`, `cat`, and `curl` available (standard on most Linux runners).
 
----
 
-## Notes
 
-- This action is designed to be reusable and modular for any Java/Kubernetes project following the same conventions.
-- It will fail the workflow if there is a version or name mismatch between your Maven and Helm chart files.
-- The action is intended to be used as a prerequisite for build and deploy steps in your workflow.
-- The action prints all important environment variables to the GitHub Actions summary for traceability.
 
----
+
+
+
+
+
+
+
+
+
+
+
+import logging as logger
+import os
+import traceback
+import hvac
+from hvac.adapters import JSONAdapter
+from hvac.api.auth_methods.approle import AppRole
+from dotenv import load_dotenv
+
+load_dotenv()
+
+logger.basicConfig(
+    format="[%(levelname)s] [%(asctime)s] %(message)s",
+    level=logger.INFO,
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+
+
+class __VaultService:
+    def __init__(self):
+        logger.info("Instantiating Vault Service")
+
+        try:
+            self.base_namespace: str = "OPTUM/APP/FDS-PAPERLESS-LETTERS"
+            self.config_path: str = "/secret/ppl-prun-utils/stage-properties"
+            self.namespace: str = f"{self.base_namespace}/STAGE"
+            self.vault_adapter = JSONAdapter(
+                base_uri="https://pam-dev.uhc.com:443",
+                verify=False,
+                namespace=self.namespace,
+            )
+            # exposing app configs from vault as environment variable
+            self.update_app_config()
+            logger.info("Vault Service Instantiated Successfully")
+        except Exception as ex:
+            logger.error(
+                f"Exception while initializing Vault Service: {str(ex)}. Trace: {traceback.format_exc()}"
+            )
+            raise
+
+    def update_app_config(self) -> None:
+        app_secrets: dict = self.__get_vault_secrets()
+        for key, value in app_secrets.items():
+            try:
+                if key and value:
+                    os.environ[key] = value
+                else:
+                    logger.error(f"Invalid key or value found")
+            except Exception as e:
+                logger.error(
+                    f"Error setting some environment variable:, Error: {e}, Trace: {traceback.format_exc()}"
+                )
+
+    def __get_vault_token(self) -> str:
+        try:
+            approle = AppRole(adapter=self.vault_adapter)
+            response = approle.login(
+                role_id=os.getenv("VAULT_ROLE_ID"),
+                secret_id=os.getenv("VAULT_SECRET_ID"),
+                mount_point="approle",
+                use_token=True,
+            )
+        except Exception as ex:
+            logger.error(f"Exception while getting Vault Token: {str(ex)}. Trace: {traceback.format_exc()}")
+            raise
+
+        return self.vault_adapter.get_login_token(response)
+
+    def __get_vault_secrets(self, client: hvac.Client = None) -> dict:
+        vault_client = client if client else self.__get_vault_client()
+        vault_data = vault_client.read(path=self.config_path)
+        # print(vault_data)
+        return vault_data["data"]
+
+    def __get_vault_client(self) -> hvac.Client:
+        token = self.__get_vault_token()
+        return hvac.Client(
+            url="https://pam-dev.uhc.com:443",
+            token=token,
+            verify=False,
+            namespace=self.namespace,
+        )
+
+
+vault_service = __VaultService()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+import os
+from mysql import connector
+from mysql.connector import errorcode
+from pymongo import MongoClient
+import mysql.connector
+from src.bdpass.vaultconnection import vault_service
+
+vault_service.update_app_config()
+
+
+def mongo_db():
+    url = os.getenv("MONGO_URI_PRD")
+    if not url:
+        raise EnvironmentError("MONGO_URI_PRD environment variable is not set.")
+    try:
+        client = MongoClient(url, timeoutMS=180000, connectTimeoutMS=180000, maxPoolSize=150, minPoolSize=10, maxIdleTimeMS=60000)
+    except Exception as e:
+        # Log the error appropriately (replace print with proper logging in production)
+        print(f"Failed to connect to MongoDB: {e}")
+        raise
+    return client['rulesEngineStore']
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+headData = """
+  <body>
+    Hi All,<br> <br>
+     HCR report [6 Hrs Window] for paperless clients for {reportDate}.<br>
+     TimeStamp ->{startTime} to {endTime} <br><br>
+    <table style="width:100%">
+      <thead>
+        <tr style="border: 1px solid #1b1e24;">
+          <th bgcolor="LimeGreen" style="vertical-align : middle;text-align:center;">Date</th>
+          <th bgcolor="LimeGreen" style="vertical-align : middle;text-align:center;">Space Id</th>
+          <th bgcolor="LimeGreen" colspan="9" style="vertical-align : middle;text-align:center;">Zip file Processed count				</th>
+          <th bgcolor="LimeGreen" colspan="7" style="vertical-align : middle;text-align:center;">processorFileTask count				</th>
+          <th bgcolor="LimeGreen" colspan="3" style="vertical-align : middle;text-align:center;" >PrePost </th>
+          <th bgcolor="LimeGreen" colspan="3" style="vertical-align : middle;text-align:center;" >DocLib 		</th>
+          <th bgcolor="LimeGreen" colspan="2" style="vertical-align : middle;text-align:center;" >Provider EmailId 	</th>
+          <th bgcolor="LimeGreen" colspan="5" style="vertical-align : middle;text-align:center;" >Provider Email Notification 	</th>
+          <th bgcolor="LimeGreen" colspan="2" style="vertical-align : middle;text-align:center;" >Shutterfly 	</th>
+          <th bgcolor="LimeGreen" colspan="3" style="vertical-align : middle;text-align:center;">CorpMPIN. PES Call	</th>
+          <th bgcolor="LimeGreen" colspan="3" style="vertical-align : middle;text-align:center;">STORAGE_ERROR	</th>
+          <th bgcolor="LimeGreen" colspan="2" style="vertical-align : middle;text-align:center;">Response File	</th>
+          <th bgcolor="LimeGreen" colspan="5" style="vertical-align : middle;text-align:center;">Bounce Email	</th>
+        </tr>          
+      </thead>
+      <tbody>
+        <tr>
+            <td bgcolor="LimeGreen" style="vertical-align : middle;text-align:center;">{reportDate}</td>
+            <td bgcolor="LimeGreen" ></td>
+            <td bgcolor="LimeGreen" style="vertical-align : middle;text-align:center;">Success</td>
+            <td bgcolor="Red" style="vertical-align : middle;text-align:center;">Ack File Issue</td>
+            <td bgcolor="Yellow" colspan="6" style="vertical-align : middle;text-align:center;" >In-Process	</td>
+            <td bgcolor="Red" style="vertical-align : middle;text-align:center;">Failure</td>
+            <td bgcolor="LimeGreen" style="vertical-align : middle;text-align:center;">Success</td>
+            <td bgcolor="Yellow"  colspan="4"  style="vertical-align : middle;text-align:center;">In-Process	</td>
+            <td bgcolor="Red" colspan="2" style="vertical-align : middle;text-align:center;" >Failure	</td>
+            <td bgcolor="LimeGreen" style="vertical-align : middle;text-align:center;">Success</td>
+            <td bgcolor="Red" colspan="2" style="vertical-align : middle;text-align:center;">Failure</td>
+            <td bgcolor="LimeGreen" style="vertical-align : middle;text-align:center;">Success</td>
+            <td bgcolor="Yellow" style="vertical-align : middle;text-align:center;"> Last 1 day BackUp</td>
+            <td bgcolor="Yellow" style="vertical-align : middle;text-align:center;">Last 7 days BackUp</td>
+            <td bgcolor="LimeGreen" style="vertical-align : middle;text-align:center;">Success</td>
+            <td bgcolor="Red" style="vertical-align : middle;text-align:center;">Failure</td>
+            <td bgcolor="LimeGreen" style="vertical-align : middle;text-align:center;">Success</td>
+            <td bgcolor="Yellow" colspan="2" style="vertical-align : middle;text-align:center;">Ready(PenApi False)</td>
+            <td bgcolor="Yellow" colspan="2" style="vertical-align : middle;text-align:center;">InProcess(PenApi True)</td>
+            <td bgcolor="LimeGreen" style="vertical-align : middle;text-align:center;">Success</td>
+            <td bgcolor="Red" style="vertical-align : middle;text-align:center;">Failure</td>
+            <td bgcolor="LimeGreen" style="vertical-align : middle;text-align:center;">Success</td>
+            <td bgcolor="Yellow" style="vertical-align : middle;text-align:center;">Invalid Failure(missing TIN)</td>
+            <td bgcolor="Red" style="vertical-align : middle;text-align:center;">Valid Failure(missing CorpMPIN)</td>
+            <td bgcolor="LimeGreen" style="vertical-align : middle;text-align:center;">Success</td>
+            <td bgcolor="Red" colspan="2" style="vertical-align : middle;text-align:center;">Failure</td>
+            <td bgcolor="LimeGreen" style="vertical-align : middle;text-align:center;">Success</td>
+            <td bgcolor="Yellow" style="vertical-align : middle;text-align:center;">InProcess</td>
+            <td bgcolor="LimeGreen" style="vertical-align : middle;text-align:center;"> COMPLETE </td>
+            <td bgcolor="Yellow" colspan="2" style="vertical-align : middle;text-align:center;"> IN_PROCESS </td>
+            <td bgcolor="Yellow" colspan="2" style="vertical-align : middle;text-align:center;"> AVAILABLE </td>
+        </tr>
+        <tr>
+            <td ></td>
+            <td ></td>
+            <td ></td>
+            <td ></td>
+            <td bgcolor="Yellow" style="vertical-align : middle;text-align:center;">NEW	</td>
+            <td bgcolor="Yellow" style="vertical-align : middle;text-align:center;">NEW last 7 days</td>
+            <td bgcolor="Yellow" style="vertical-align : middle;text-align:center;">IN_PROCESS</td>
+            <td bgcolor="Yellow" style="vertical-align : middle;text-align:center;">IN_PROCESS last 7 days</td>       
+            <td bgcolor="Yellow" style="vertical-align : middle;text-align:center;">READY</td>
+            <td bgcolor="Yellow" style="vertical-align : middle;text-align:center;">READY last 7 days</td> 
+            <td bgcolor="Red" style="vertical-align : middle;text-align:center;">FATAL_ERROR</td>
+            <td ></td>
+            <td bgcolor="Yellow" style="vertical-align : middle;text-align:center;">NEW	</td>
+            <td bgcolor="Yellow" style="vertical-align : middle;text-align:center;">NEW last 7 days</td>
+            <td bgcolor="Yellow" style="vertical-align : middle;text-align:center;">IN_PROCESS</td>
+            <td bgcolor="Yellow" style="vertical-align : middle;text-align:center;">IN_PROCESS last 7 days</td>   
+            <td bgcolor="Red" style="vertical-align : middle;text-align:center;">SEVERE_ERROR	</td>
+            <td bgcolor="Red" style="vertical-align : middle;text-align:center;">FATAL_ERROR	</td>
+            <td ></td>  
+            <td bgcolor="Red" style="vertical-align : middle;text-align:center;">Last 1 day	</td>
+            <td bgcolor="Red" style="vertical-align : middle;text-align:center;">Last 7 days	</td>
+            <td ></td>
+            <td ></td>
+            <td ></td>
+            <td ></td>
+            <td ></td>
+            <td ></td>
+            <td bgcolor="Yellow" style="vertical-align : middle;text-align:center;">Last 1 day	</td>
+            <td bgcolor="Yellow" style="vertical-align : middle;text-align:center;">Last 7 days	</td>
+            <td bgcolor="Yellow" style="vertical-align : middle;text-align:center;">Last 1 day	</td>
+            <td bgcolor="Yellow" style="vertical-align : middle;text-align:center;">Last 7 days	</td>
+            <td ></td>
+            <td ></td>
+            <td ></td>
+            <td ></td>
+            <td ></td>
+            <td ></td>
+            <td bgcolor="Red" style="vertical-align : middle;text-align:center;">Last 1 day</td>
+            <td bgcolor="Red" style="vertical-align : middle;text-align:center;">Last 7 days</td>
+            <td ></td>
+            <td ></td>
+            <td ></td>
+            <td bgcolor="Yellow" style="vertical-align : middle;text-align:center;">Last 1 day</td>
+            <td bgcolor="Yellow" style="vertical-align : middle;text-align:center;">Last 7 days</td>
+            <td bgcolor="Yellow" style="vertical-align : middle;text-align:center;">Last 1 day</td>
+            <td bgcolor="Yellow" style="vertical-align : middle;text-align:center;">Last 7 days</td>
+        </tr>
+        <tr>
+          <td bgcolor=""></td>
+          <td>Total</td>
+          <td bgcolor="LimeGreen">{zipSuccessTotal}</td>    
+          <td bgcolor="Red">{zipAckFileIssueTotal}</td>
+          <td bgcolor="Yellow">{zipInProcessNewTotal}</td>
+          <td bgcolor="Yellow">{zipInProcessNewTotal7days}</td>
+          <td bgcolor="Yellow">{zipInProcessInProcessTotal}</td>
+          <td bgcolor="Yellow">{zipInProcessInProcessTotal7days}</td>
+          <td bgcolor="Yellow">{zipInProcessReadyTotal}</td>
+          <td bgcolor="Yellow">{zipInProcessReadyTotal7days}</td>
+          <td bgcolor="Red">{zipFailureFatalErrorTotal}</td>
+          <td bgcolor="LimeGreen">{processorFileTaskCountInProcessSuccessTotal}</td>
+          <td bgcolor="Yellow">{processorFileTaskCountInProcessNewTotal}</td>
+          <td bgcolor="Yellow">{processorFileTaskCountInProcessNewTotal7days}</td>
+          <td bgcolor="Yellow">{processorFileTaskCountInProcessInProcessTotal}</td>
+          <td bgcolor="Yellow">{processorFileTaskCountInProcessInProcessTotal7days}</td>
+          <td bgcolor="Red">{processorFileTaskCountFailureSevereErrorTotal}</td>
+          <td bgcolor="Red">{processorFileTaskCountFailureFatalErrorTotal}</td>
+          <td bgcolor="LimeGreen">{prePostSuccessTotal}</td>
+          <td bgcolor="Red">{prePostFailure1dayTotal}</td>
+          <td bgcolor="Red">{prePostFailure7daysTotal}</td>
+          <td bgcolor="LimeGreen">{docLibSuccessTotal}</td>
+          <td bgcolor="Yellow">{docLibLast1DayBackUpTotal}</td>
+          <td bgcolor="Yellow">{docLibLast7DayBackUpTotal}</td>
+          <td bgcolor="LimeGreen">{providerEmailSuccessTotal}</td>
+          <td bgcolor="Red">{providerEmailFailureTotal}</td>
+          <td bgcolor="LimeGreen">{providerEmailNotificationSuccessTotal}</td>
+          <td bgcolor="Yellow">{providerEmailNotificationReadyTotal1day}</td>
+          <td bgcolor="Yellow">{providerEmailNotificationReadyTotal7days}</td>
+          <td bgcolor="Yellow">{providerEmailNotificationInProcessTotal1day}</td>
+          <td bgcolor="Yellow">{providerEmailNotificationInProcessTotal7days}</td>
+          <td bgcolor="LimeGreen">{shutterflySuccessTotal}</td>
+          <td bgcolor="Red">{shutterflyFailureTotal}</td>
+          <td bgcolor="LimeGreen">{corpMPINPESCallSuccessTotal}</td>
+          <td bgcolor="Yellow">{corpMPINPESCallFailureInvalidTotal}</td>
+          <td bgcolor="Red">{corpMPINPESCallFailureValidTotal}</td>
+          <td bgcolor="LimeGreen">{storageErrorSuccessTotal}</td>
+          <td bgcolor="Red">{storageErrorFailureTotal1day}</td>
+          <td bgcolor="Red">{storageErrorFailureTotal7days}</td>
+          <td bgcolor="LimeGreen">{responseFileSuccessTotal}</td>
+          <td bgcolor="Yellow">{responseFileInProcessTotal}</td>
+          <td bgcolor="LimeGreen">{bouncedEmailCompleteTotal}</td>
+          <td bgcolor="Yellow">{bouncedEmailInProcessTotal}</td>
+          <td bgcolor="Yellow">{bouncedEmailInProcess7daysTotal}</td>
+          <td bgcolor="Yellow">{bouncedEmailAvailableTotal}</td>
+          <td bgcolor="Yellow">{bouncedEmailAvailable7daysTotal}</td>
+        </tr>
+"""
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+from src.hcr.hcrSpaceIdRowHtml import spaceIdRowHtml
+# import src.util.utils as utils
+from ..util import utils
+from src.util.dateValues import get_date_created_7days_6hrwin, get_date_created_6hrwin, \
+    get_date_created_6hrwin_10075sfly
+
+
+def getZipSuccess(spaceId, dateCreated):
+    print("starting querying for : ", spaceId)
+    query = {"configSpaceId": spaceId,
+             "fileName": {'$regex': '^.*\.zip', '$options': 'i'},
+             "dateCreated": dateCreated,
+             "status": {"$in": ["COMPLETE", "COMPLETE_WITH_ERRORS"]}}
+    return utils.processorTransactionQuery(query)
+
+
+def getZipAckFileIssue(spaceId, dateCreated):
+    query = {"configSpaceId": spaceId,
+             "fileName": {'$regex': '^.*\.zip', '$options': 'i'},
+             "dateCreated": dateCreated,
+             "status": "READY"}
+    return utils.processorTransactionQuery(query)
+
+
+def getZipInProcessNew(spaceId, dateCreated):
+    query = {"configSpaceId": spaceId,
+             "fileName": {'$regex': '^.*\.zip', '$options': 'i'},
+             "dateCreated": dateCreated,
+             "status": "NEW"}
+    return utils.processorTransactionQuery(query)
+
+
+def getZipInProcessNew7days(spaceId, dateCreated7):
+    query = {"configSpaceId": spaceId,
+             "fileName": {'$regex': '^.*\.zip', '$options': 'i'},
+             "dateCreated": dateCreated7,
+             "status": "NEW"}
+    return utils.processorTransactionQuery(query)
+
+
+def getZipInProcessInProcess(spaceId, dateCreated):
+    query = {"configSpaceId": spaceId,
+             "fileName": {'$regex': '^.*\.zip', '$options': 'i'},
+             "dateCreated": dateCreated,
+             "status": "IN_PROCESS"}
+    return utils.processorTransactionQuery(query)
+
+
+def getZipInProcessInProcess7days(spaceId, dateCreated7):
+    query = {"configSpaceId": spaceId,
+             "fileName": {'$regex': '^.*\.zip', '$options': 'i'},
+             "dateCreated": dateCreated7,
+             "status": "IN_PROCESS"}
+    return utils.processorTransactionQuery(query)
+
+def getZipInProcessReady(spaceId, dateCreated):
+    query = {"configSpaceId": spaceId,
+             "fileName": {'$regex': '^.*\.zip', '$options': 'i'},
+             "dateCreated": dateCreated,
+             "status": "READY"}
+    return utils.processorTransactionQuery(query)
+
+
+def getZipInProcessReady7days(spaceId, dateCreated7):
+    query = {"configSpaceId": spaceId,
+             "fileName": {'$regex': '^.*\.zip', '$options': 'i'},
+             "dateCreated": dateCreated7,
+             "status": "READY"}
+    return utils.processorTransactionQuery(query)
+
+
+def getZipFailureFatalError(spaceId, dateCreated):
+    query = {"configSpaceId": spaceId,
+             "fileName": {'$regex': '^.*\.zip', '$options': 'i'},
+             "dateCreated": dateCreated,
+             "status": "FATAL_ERROR"}
+    return utils.processorTransactionQuery(query)
+
+
+def getProcessorFileTaskInProcessSuccess(spaceId, dateCreated):
+    query = {"configSpaceId": spaceId,
+             "processorRecordType": 'processorFileTask',
+             "status": {"$in": ["COMPLETE", "COMPLETE_WITH_ERRORS"]},
+             "dateCreated": dateCreated}
+    return utils.processorFileTaskQuery(query)
+
+
+def getProcessorFileTaskInProcessNew(spaceId, dateCreated):
+    query = {"configSpaceId": spaceId,
+             "processorRecordType": 'processorFileTask',
+             "status": "NEW",
+             "targetId": {"$exists": False},
+             "dateCreated": dateCreated}
+    return utils.processorFileTaskQuery(query)
+
+
+def getProcessorFileTaskInProcessNew7days(spaceId, dateCreated7):
+    query = {"configSpaceId": spaceId,
+             "processorRecordType": 'processorFileTask',
+             "status": "NEW",
+             "targetId": {"$exists": False},
+             "dateCreated": dateCreated7}
+    return utils.processorFileTaskQuery(query)
+
+
+def getProcessorFileTaskInProcessInProcess(spaceId, dateCreated):
+    query = {"configSpaceId": spaceId,
+             "processorRecordType": 'processorFileTask',
+             "status": "IN_PROCESS",
+             # "targetId": {"$exists": False},
+             "dateCreated": dateCreated}
+    return utils.processorFileTaskQuery(query)
+
+
+def getProcessorFileTaskInProcessInProcess7days(spaceId, dateCreated7):
+    query = {"configSpaceId": spaceId,
+             "processorRecordType": 'processorFileTask',
+             "status": "IN_PROCESS",
+             # "targetId": {"$exists": False},
+             "dateCreated": dateCreated7}
+    return utils.processorFileTaskQuery(query)
+
+
+def getProcessorFileTaskFailureSevereError(spaceId, dateCreated):
+    query = {"configSpaceId": spaceId,
+             "processorRecordType": 'processorFileTask',
+             "status": "SEVERE_ERROR",
+             "targetId": {"$exists": True},
+             "dateCreated": dateCreated}
+    return utils.processorFileTaskQuery(query)
+
+
+def getProcessorFileTaskFailureFatalError(spaceId, dateCreated):
+    query = {"configSpaceId": spaceId,
+             "processorRecordType": 'processorFileTask',
+             "status": "FATAL_ERROR",
+             "targetId": {"$exists": False},
+             "dateCreated": dateCreated}
+    return utils.processorFileTaskQuery(query)
+
+
+def getPrePostSuccess(spaceId, dateCreated):
+    query = {"spaceId": spaceId,
+             "metadata.prepostStarted": True,
+             "metadata.prepostEnded": True,
+             "dateCreated": dateCreated}
+    return utils.documentQuery(query)
+
+
+def getPrePostFailure1day(spaceId, dateCreated):
+    query = {"spaceId": spaceId,
+             "metadata.prepostStarted": True,
+             "metadata.prepostEnded": {"$exists": False},
+             "dateCreated": dateCreated}
+    return utils.documentQuery(query)
+
+
+def getPrePostFailure7days(spaceId, dateCreated7):
+    query = {"spaceId": spaceId,
+             "metadata.prepostStarted": True,
+             "metadata.prepostEnded": {"$exists": False},
+             "dateCreated": dateCreated7}
+    return utils.documentQuery(query)
+
+
+def getDocLibSuccess(spaceId, dateCreated):
+    query = {"spaceId": spaceId,
+             "metadata.sendToDocVault": True,
+             "metadata.docLibAPIResponse": {"$exists": True},
+             "metadata.docLibAPIResponse": True,
+             "dateCreated": dateCreated}
+    return utils.documentQuery(query)
+
+
+def getDocLibLast1DayBackUp_1(spaceId, dateCreated):
+    query = {"spaceId": spaceId,
+             "metadata.sendToDocVault": True,
+             "metadata.docLibAPIResponse": {"$exists": False},
+             "dateCreated": dateCreated}
+    return utils.documentQuery(query)
+
+
+def getDocLibLast1DayBackUp_2(spaceId, dateCreated):
+    query = {"spaceId": spaceId,
+             "metadata.sendToDocVault": True,
+             "metadata.docLibAPIResponse": False,
+             "dateCreated": dateCreated}
+    return utils.documentQuery(query)
+
+
+def getDocLibLast1DayBackUp_3(spaceId, dateCreated):
+    query = {"spaceId": spaceId,
+             "metadata.sendToDocVault": True,
+             "metadata.docLibAPIResponse": None,
+             "dateCreated": dateCreated}
+    return utils.documentQuery(query)
+
+
+def getDocLibLast7DayBackUp_1(spaceId, dateCreated7):
+    query = {"spaceId": spaceId,
+             "metadata.sendToDocVault": True,
+             "metadata.docLibAPIResponse": {"$exists": False},
+             "status": "AVAILABLE",
+             "dateCreated": dateCreated7}
+    return utils.documentQuery(query)
+
+
+def getDocLibLast7DayBackUp_2(spaceId, dateCreated7):
+    query = {"spaceId": spaceId,
+             "metadata.sendToDocVault": True,
+             "metadata.docLibAPIResponse": False,
+             "dateCreated": dateCreated7}
+    return utils.documentQuery(query)
+
+
+def getDocLibLast7DayBackUp_3(spaceId, dateCreated7):
+    query = {"spaceId": spaceId,
+             "metadata.sendToDocVault": True,
+             "metadata.docLibAPIResponse": None,
+             "dateCreated": dateCreated7}
+    return utils.documentQuery(query)
+
+
+def getProviderEmailSuccess(spaceId, dateCreated):
+    query = {"spaceId": spaceId,
+             "metadata.emailAlertReq": "Y",
+             "metadata.providerEmailId": {"$ne": ""},
+             "dateCreated": dateCreated}
+    return utils.documentQuery(query)
+
+
+def getProviderEmailFailure(spaceId, dateCreated):
+    if spaceId in [10074, 10075, 10403, 10803]:
+        query = {"spaceId": spaceId,
+                 "metadata.emailAlertReq": "Y",
+                 "metadata.providerEmailId": "",
+                 "metadata.prepostEnded": {"$exists": True},
+                 "metadata.EFT_Ind": "N",
+                 "dateCreated": dateCreated}
+    else:
+        query = {"spaceId": spaceId,
+                 "metadata.emailAlertReq": "Y",
+                 "metadata.providerEmailId": "",
+                 "metadata.prepostEnded": {"$exists": True},
+                 "dateCreated": dateCreated}
+    return utils.documentQuery(query)
+
+
+def getProviderEmailNotificationSuccesss(spaceId, dateCreated):
+    query = {"spaceId": spaceId,
+             "metadata.emailAlertReq": "Y",
+             "metadata.subscribeToEmail": "Y",
+             "metadata.providerEmailId": {"$ne": ""},
+             "metadata.docLibAPIResponse": True,
+             "metadata.sendPENAPIRequest": True,
+             "metadata.sendEmailNotifications": True,
+             "dateCreated": dateCreated}
+    return utils.documentQuery(query)
+
+
+def getProviderEmailNotificationReady1day(spaceId, dateCreated):
+    query = {"spaceId": spaceId,
+             "metadata.emailAlertReq": "Y",
+             "metadata.subscribeToEmail": "Y",
+             "metadata.providerEmailId": {"$ne": ""},
+             "metadata.docLibAPIResponse": True,
+             "metadata.sendPENAPIRequest": False,
+             "metadata.eDeliveryError": {"$exists": False},
+             "dateCreated": dateCreated}
+    return utils.documentQuery(query)
+
+
+def getProviderEmailNotificationReady7days(spaceId, dateCreated7):
+    query = {"spaceId": spaceId,
+             "metadata.emailAlertReq": "Y",
+             "metadata.subscribeToEmail": "Y",
+             "metadata.providerEmailId": {"$ne": ""},
+             "metadata.docLibAPIResponse": True,
+             "metadata.sendPENAPIRequest": False,
+             "metadata.eDeliveryError": {"$exists": False},
+             "dateCreated": dateCreated7}
+    return utils.documentQuery(query)
+
+
+def getProviderEmailNotificationInProcess1day(spaceId, dateCreated):
+    query = {"spaceId": spaceId,
+             "metadata.emailAlertReq": "Y",
+             "metadata.subscribeToEmail": "Y",
+             "metadata.providerEmailId": {"$ne": ""},
+             "metadata.docLibAPIResponse": True,
+             "metadata.sendPENAPIRequest": True,
+             "metadata.sendEmailNotifications": False,
+             "dateCreated": dateCreated}
+    return utils.documentQuery(query)
+
+
+def getProviderEmailNotificationInProcess7days(spaceId, dateCreated7):
+    query = {"spaceId": spaceId,
+             "metadata.emailAlertReq": "Y",
+             "metadata.subscribeToEmail": "Y",
+             "metadata.providerEmailId": {"$ne": ""},
+             "metadata.docLibAPIResponse": True,
+             "metadata.sendPENAPIRequest": True,
+             "metadata.sendEmailNotifications": False,
+             "dateCreated": dateCreated7}
+    return utils.documentQuery(query)
+
+
+def getShutterflySuccess(spaceId, dateCreated):
+    query = {"spaceId": spaceId,
+             "metadata.sendToShutterfly": True,
+             "metadata.rprntSentToSF": {"$exists": True},
+             "dateCreated": dateCreated}
+    return utils.documentQuery(query)
+
+
+def getShutterflyFailure(spaceId, dateCreated):
+    if spaceId == 10075:
+        dateCreated = get_date_created_6hrwin_10075sfly()
+        query = {"spaceId": spaceId,
+                 "metadata.sendToShutterfly": True,
+                 "metadata.rprntSentToSF": {"$exists": False},
+                 "dateCreated": dateCreated}
+    else:
+        query = {"spaceId": spaceId,
+                 "metadata.sendToShutterfly": True,
+                 "metadata.rprntSentToSF": {"$exists": False},
+                 "dateCreated": dateCreated}
+
+    return utils.documentQuery(query)
+
+
+def getCorpMPINPESCallSuccess(spaceId, dateCreated):
+    query = {"spaceId": spaceId,
+             "status": "AVAILABLE",
+             "metadata.tin": {"$nin": [""]},
+             "metadata.corporateMpin": {"$exists": True},
+             "dateCreated": dateCreated}
+    return utils.documentQuery(query)
+
+
+def getCorpMPINPESCallFailureValid(spaceId, dateCreated):
+    query = {"spaceId": spaceId,
+             "status": "AVAILABLE",
+             "metadata.tin": {"$nin": ["", "000000000", "0"]},
+             "metadata.eDeliveryError": {"$regex": "corporateMpin"},
+             "dateCreated": dateCreated}
+    return utils.documentQuery(query)
+
+
+def getCorpMPINPESCallFailureInvalid(spaceId, dateCreated):
+    query = {"spaceId": spaceId,
+             "status": "AVAILABLE",
+             "metadata.tin": {"$in": ["", "000000000", "0"]},
+             "metadata.eDeliveryError": {"$regex": "corporateMpin"},
+             "dateCreated": dateCreated}
+    return utils.documentQuery(query)
+
+
+def getStorageErrorSuccess(spaceId, dateCreated):
+    query = {"spaceId": spaceId,
+             "metadata.rprntSentToSF": True,
+             "status": "STORAGE_ERROR",
+             "dateCreated": dateCreated}
+    return utils.documentQuery(query)
+
+
+def getStorageErrorFailure1day(spaceId, dateCreated):
+    query = {"spaceId": spaceId,
+             "metadata.rprntSentToSF": {"$exists": False},
+             "status": "STORAGE_ERROR",
+             "dateCreated": dateCreated}
+    return utils.documentQuery(query)
+
+
+def getStorageErrorFailure7days(spaceId, dateCreated7):
+    query = {"spaceId": spaceId,
+             "metadata.rprntSentToSF": {"$exists": False},
+             "status": "STORAGE_ERROR",
+             "dateCreated": dateCreated7}
+    return utils.documentQuery(query)
+
+
+def getResponseFileSuccess(spaceId, dateCreated):
+    query = {"spaceId": spaceId,
+             "metadata.addedToResponseFile": True,
+             "dateCreated": dateCreated}
+    return utils.documentQuery(query)
+
+
+def getResponseFileInProcess(spaceId, dateCreated):
+    if spaceId in [8936, 8937, 8938, 10503, 10603, 8889, 10903]:
+        query = {
+            "spaceId": spaceId,
+            "status": "AVAILABLE",
+            "metadata.emailAlertReq": "Y",
+            "metadata.prepostEnded": {"$exists": True},
+            "metadata.addedToResponseFile": {"$exists": False},
+            "$or": [{"metadata.subscribeToEmail": "Y", "metadata.providerEmailId": {"$ne": ""},
+                     "metadata.sendEmailNotifications": True,
+                     "metadata.docLibAPIResponse": True},
+                    {"metadata.eDeliveryError": {"$regex": "providerEmailId"}, "metadata.docLibAPIResponse": True},
+                    {"metadata.subscribeToEmail": "N", "metadata.docLibAPIResponse": True},
+                    {"metadata.corporateMpin": {"$exists": False}, "metadata.rprntSentToSF": {"$exists": True}}
+                    ],
+            "dateCreated": dateCreated}
+
+    elif spaceId == 10703:
+        query = {
+            "spaceId": spaceId,
+            "status": "AVAILABLE",
+            "metadata.emailAlertReq": "Y",
+            "metadata.prepostEnded": {"$exists": True},
+            "metadata.addedToResponseFile": {"$exists": False},
+            "$or": [{"metadata.docLibAPIResponse": True},
+                    {"metadata.corporateMpin": {"$exists": False}, "metadata.rprntSentToSF": {"$exists": True}}
+                    ],
+            "dateCreated": dateCreated}
+    else:
+        return 0
+    return utils.documentQuery(query)
+
+
+def getBouncedEmailComplete(spaceId, dateCreated):
+    query = {
+        "metadata.message_id": {'$regex': f'{spaceId}/*'},
+        "spaceId": 8897,
+        "status": "COMPLETE",
+        "dateCreated": dateCreated
+    }
+    return utils.documentQuery(query)
+
+
+def getBouncedEmailInProcess(spaceId, dateCreated):
+    query = {
+        "metadata.message_id": {'$regex': f'{spaceId}/*'},
+        "spaceId": 8897,
+        "status": "IN_PROCESS",
+        "dateCreated": dateCreated
+    }
+    return utils.documentQuery(query)
+
+
+def getBouncedEmailInProcess7days(spaceId, dateCreated7):
+    query = {
+        "metadata.message_id": {'$regex': f'{spaceId}/*'},
+        "spaceId": 8897,
+        "status": "IN_PROCESS",
+        "dateCreated": dateCreated7
+    }
+    return utils.documentQuery(query)
+
+
+def getBouncedEmailAvailable(spaceId, dateCreated):
+    query = {
+        "metadata.message_id": {'$regex': f'{spaceId}/*'},
+        "spaceId": 8897,
+        "status": "AVAILABLE",
+        "dateCreated": dateCreated
+    }
+    return utils.documentQuery(query)
+
+
+def getBouncedEmailAvailable7days(spaceId, dateCreated7):
+    query = {
+        "metadata.message_id": {'$regex': f'{spaceId}/*'},
+        "spaceId": 8897,
+        "status": "AVAILABLE",
+        "dateCreated": dateCreated7
+    }
+    return utils.documentQuery(query)
+
+
+def _populate_spaceIdRowHtml(spaceId):
+    dateCreated = get_date_created_6hrwin()
+    dateCreated7 = get_date_created_7days_6hrwin()
+    return spaceIdRowHtml.format(spaceId=spaceId,
+                                 zipSuccess=getZipSuccess(spaceId, dateCreated),
+                                 zipAckFileIssue=getZipAckFileIssue(spaceId, dateCreated),
+                                 zipInProcessNew=getZipInProcessNew(spaceId, dateCreated),
+                                 zipInProcessNew7days=getZipInProcessNew7days(spaceId, dateCreated7),
+                                 zipInProcessInProcess=getZipInProcessInProcess(spaceId, dateCreated),
+                                 zipInProcessInProcess7days=getZipInProcessInProcess7days(spaceId, dateCreated7),
+                                 zipInProcessReady=getZipInProcessReady(spaceId, dateCreated),
+                                 zipInProcessReady7days=getZipInProcessReady7days(spaceId, dateCreated7),
+                                 zipFailureFatalError=getZipFailureFatalError(spaceId, dateCreated),
+                                 processorFileTaskCountInProcessSuccess=getProcessorFileTaskInProcessSuccess(spaceId,
+                                                                                                             dateCreated),
+                                 processorFileTaskCountInProcessNew=getProcessorFileTaskInProcessNew(spaceId,
+                                                                                                     dateCreated),
+                                 processorFileTaskCountInProcessNew7days=getProcessorFileTaskInProcessNew7days(spaceId,
+                                                                                                               dateCreated7),
+                                 processorFileTaskCountInProcessInProcess=getProcessorFileTaskInProcessInProcess(
+                                     spaceId, dateCreated),
+                                 processorFileTaskCountInProcessInProcess7days=getProcessorFileTaskInProcessInProcess7days(
+                                     spaceId, dateCreated7),
+                                 processorFileTaskCountFailureSevereError=getProcessorFileTaskFailureSevereError(
+                                     spaceId, dateCreated),
+                                 processorFileTaskCountFailureFatalError=getProcessorFileTaskFailureFatalError(spaceId,
+                                                                                                               dateCreated),
+                                 prePostSuccess=getPrePostSuccess(spaceId, dateCreated),
+                                 prePostFailure1day=getPrePostFailure1day(spaceId, dateCreated),
+                                 prePostFailure7days=getPrePostFailure7days(spaceId, dateCreated7),
+                                 docLibSuccess=getDocLibSuccess(spaceId, dateCreated),
+                                 docLibLast1DayBackUp=(
+                                         getDocLibLast1DayBackUp_1(spaceId, dateCreated) + getDocLibLast1DayBackUp_2(
+                                     spaceId, dateCreated) + getDocLibLast1DayBackUp_3(spaceId, dateCreated)),
+                                 docLibLast7DayBackUp=(
+                                         getDocLibLast7DayBackUp_1(spaceId, dateCreated7) + getDocLibLast7DayBackUp_2(
+                                     spaceId, dateCreated7) + getDocLibLast7DayBackUp_3(spaceId, dateCreated7)),
+                                 providerEmailSuccess=getProviderEmailSuccess(spaceId, dateCreated),
+                                 providerEmailFailure=getProviderEmailFailure(spaceId, dateCreated),
+                                 providerEmailNotificationSuccess=getProviderEmailNotificationSuccesss(spaceId,
+                                                                                                       dateCreated),
+                                 providerEmailNotificationReady1day=getProviderEmailNotificationReady1day(spaceId,
+                                                                                                          dateCreated),
+                                 providerEmailNotificationReady7days=getProviderEmailNotificationReady7days(spaceId,
+                                                                                                            dateCreated7),
+                                 providerEmailNotificationInProcess1day=getProviderEmailNotificationInProcess1day(
+                                     spaceId, dateCreated),
+                                 providerEmailNotificationInProcess7days=getProviderEmailNotificationInProcess7days(
+                                     spaceId, dateCreated7),
+                                 shutterflySuccess=getShutterflySuccess(spaceId, dateCreated),
+                                 shutterflyFailure=getShutterflyFailure(spaceId, dateCreated),
+                                 corpMPINPESCallSuccess=getCorpMPINPESCallSuccess(spaceId, dateCreated),
+                                 corpMPINPESCallFailureValid=getCorpMPINPESCallFailureValid(spaceId, dateCreated),
+                                 corpMPINPESCallFailureInvalid=getCorpMPINPESCallFailureInvalid(spaceId, dateCreated),
+                                 storageErrorSuccess=getStorageErrorSuccess(spaceId, dateCreated),
+                                 storageErrorFailure1day=getStorageErrorFailure1day(spaceId, dateCreated),
+                                 storageErrorFailure7days=getStorageErrorFailure7days(spaceId, dateCreated7),
+                                 responseFileSuccess=getResponseFileSuccess(spaceId, dateCreated),
+                                 responseFileInProcess=getResponseFileInProcess(spaceId, dateCreated),
+                                 bouncedEmailComplete=getBouncedEmailComplete(spaceId, dateCreated),
+                                 bouncedEmailInProcess=getBouncedEmailInProcess(spaceId, dateCreated),
+                                 bouncedEmailInProcess7days=getBouncedEmailInProcess7days(spaceId, dateCreated7),
+                                 bouncedEmailAvailable=getBouncedEmailAvailable(spaceId, dateCreated),
+                                 bouncedEmailAvailable7days=getBouncedEmailAvailable7days(spaceId, dateCreated7)
+                                 )
+
+
+def _populate_spaceIdsRowHtml(spaceIds):
+    print("inside populate space id row html", spaceIds)
+    spaceIdRowHtmlTags = ""
+    for spaceId in spaceIds:
+        spaceIdRowHtmlTags = spaceIdRowHtmlTags + _populate_spaceIdRowHtml(spaceId)
+    return spaceIdRowHtmlTags
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+from src.hcr.hcrHeadDataHtml import headData
+from ..util import utils
+# import src.util.utils as utils
+from src.util.dateValues import get_current_midnight_6hrwin, get_end_time_6hrwin, get_hcr_report_date_6hrwin, \
+    get_date_created_6hrwin, get_date_created_7days_6hrwin, get_date_created_6hrwin_10075sfly
+from functools import wraps
+from concurrent.futures import ThreadPoolExecutor
+
+
+def log_method(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        print(f">>> Entering {func.__name__}")
+        result = func(*args, **kwargs)
+        print(f"<<< Exiting {func.__name__} - Process completed successfully")
+        return result
+    return wrapper
+
+@log_method
+def getZipSuccessTotal(spaceIds, dateCreated):
+    query = {"configSpaceId": {"$in": spaceIds},
+             "fileName": {'$regex': '^.*\.zip', '$options': 'i'},
+             "dateCreated": dateCreated,
+             "status": {"$in": ["COMPLETE", "COMPLETE_WITH_ERRORS"]}}
+    return utils.processorTransactionQuery(query)
+
+@log_method
+def getZipAckFileIssueTotal(spaceIds, dateCreated):
+    query = {"configSpaceId": {"$in": spaceIds},
+             "fileName": {'$regex': '^.*\.zip', '$options': 'i'},
+             "dateCreated": dateCreated,
+             "status": "READY"}
+    return utils.processorTransactionQuery(query)
+
+@log_method
+def getZipInProcessNewTotal(spaceIds, dateCreated):
+    query = {"configSpaceId": {"$in": spaceIds},
+             "fileName": {'$regex': '^.*\.zip', '$options': 'i'},
+             "dateCreated": dateCreated,
+             "status": "NEW"}
+    return utils.processorTransactionQuery(query)
+
+@log_method
+def getZipInProcessNewTotal7days(spaceIds, dateCreated7):
+    query = {"configSpaceId": {"$in": spaceIds},
+             "fileName": {'$regex': '^.*\.zip', '$options': 'i'},
+             "dateCreated": dateCreated7,
+             "status": "NEW"}
+    return utils.processorTransactionQuery(query)
+
+@log_method
+def getZipInProcessInProcessTotal(spaceIds, dateCreated):
+    query = {"configSpaceId": {"$in": spaceIds},
+             "fileName": {'$regex': '^.*\.zip', '$options': 'i'},
+             "dateCreated": dateCreated,
+             "status": "IN_PROCESS"}
+    return utils.processorTransactionQuery(query)
+
+@log_method
+def getZipInProcessInProcessTotal7days(spaceIds, dateCreated7):
+    query = {"configSpaceId": {"$in": spaceIds},
+             "fileName": {'$regex': '^.*\.zip', '$options': 'i'},
+             "dateCreated": dateCreated7,
+             "status": "IN_PROCESS"}
+    return utils.processorTransactionQuery(query)
+
+@log_method
+def getZipInProcessReadyTotal(spaceIds, dateCreated):
+    query = {"configSpaceId": {"$in": spaceIds},
+             "fileName": {'$regex': '^.*\.zip', '$options': 'i'},
+             "dateCreated": dateCreated,
+             "status": "READY"}
+    return utils.processorTransactionQuery(query)
+
+@log_method
+def getZipInProcessReadyTotal7days(spaceIds, dateCreated7):
+    query = {"configSpaceId": {"$in": spaceIds},
+             "fileName": {'$regex': '^.*\.zip', '$options': 'i'},
+             "dateCreated": dateCreated7,
+             "status": "READY"}
+    return utils.processorTransactionQuery(query)
+
+@log_method
+def getZipFailureFatalErrorTotal(spaceIds, dateCreated):
+    query = {"configSpaceId": {"$in": spaceIds},
+             "fileName": {'$regex': '^.*\.zip', '$options': 'i'},
+             "dateCreated": dateCreated,
+             "status": "FATAL_ERROR"}
+    return utils.processorTransactionQuery(query)
+
+@log_method
+def getProcessorFileTaskSuccessTotal(spaceIds, dateCreated):
+    query = {"configSpaceId": {"$in": spaceIds},
+             "processorRecordType": 'processorFileTask',
+             "status": {"$in": ["COMPLETE", "COMPLETE_WITH_ERRORS"]},
+             "dateCreated": dateCreated}
+    return utils.processorFileTaskQuery(query)
+
+@log_method
+def getProcessorFileTaskInProcessNewTotal(spaceIds, dateCreated):
+    query = {"configSpaceId": {"$in": spaceIds},
+             "processorRecordType": 'processorFileTask',
+             "status": "NEW",
+             "targetId": {"$exists": False},
+             "dateCreated": dateCreated}
+    return utils.processorFileTaskQuery(query)
+
+@log_method
+def getProcessorFileTaskInProcessNewTotal7days(spaceIds, dateCreated7):
+    query = {"configSpaceId": {"$in": spaceIds},
+             "processorRecordType": 'processorFileTask',
+             "status": "NEW",
+             "targetId": {"$exists": False},
+             "dateCreated": dateCreated7}
+    return utils.processorFileTaskQuery(query)
+
+@log_method
+def getProcessorFileTaskInProcessInProcessTotal(spaceIds, dateCreated):
+    query = {"configSpaceId": {"$in": spaceIds},
+             "processorRecordType": 'processorFileTask',
+             "status": "IN_PROCESS",
+             "dateCreated": dateCreated}
+    return utils.processorFileTaskQuery(query)
+
+@log_method
+def getProcessorFileTaskInProcessInProcessTotal7days(spaceIds, dateCreated7):
+    query = {"configSpaceId": {"$in": spaceIds},
+             "processorRecordType": 'processorFileTask',
+             "status": "IN_PROCESS",
+             "dateCreated": dateCreated7}
+    return utils.processorFileTaskQuery(query)
+
+@log_method
+def getProcessorFileTaskFailureSevereErrorTotal(spaceIds, dateCreated):
+    query = {"configSpaceId": {"$in": spaceIds},
+             "processorRecordType": 'processorFileTask',
+             "status": "SEVERE_ERROR",
+             "targetId": {"$exists": True},
+             "dateCreated": dateCreated}
+    return utils.processorFileTaskQuery(query)
+
+@log_method
+def getProcessorFileTaskFailureFatalErrorTotal(spaceIds, dateCreated):
+    query = {"configSpaceId": {"$in": spaceIds},
+             "processorRecordType": 'processorFileTask',
+             "status": "FATAL_ERROR",
+             "targetId": {"$exists": False},
+             "dateCreated": dateCreated}
+    return utils.processorFileTaskQuery(query)
+
+@log_method
+def getPrePostSuccessTotal(spaceIds, dateCreated):
+    query = {"spaceId": {"$in": spaceIds},
+             "metadata.prepostStarted": True,
+             "metadata.prepostEnded": True,
+             "dateCreated": dateCreated}
+    return utils.documentQuery(query)
+
+@log_method
+def getPrePostFailure1dayTotal(spaceIds, dateCreated):
+    query = {"spaceId": {"$in": spaceIds},
+             "metadata.prepostStarted": True,
+             "metadata.prepostEnded": {"$exists": False},
+             "dateCreated": dateCreated}
+    return utils.documentQuery(query)
+
+@log_method
+def getPrePostFailure7daysTotal(spaceIds, dateCreated7):
+    query = {"spaceId": {"$in": spaceIds},
+             "metadata.prepostStarted": True,
+             "metadata.prepostEnded": {"$exists": False},
+             "dateCreated": dateCreated7}
+    return utils.documentQuery(query)
+
+@log_method
+def getDocLibSuccessTotal(spaceIds, dateCreated):
+    query = {"spaceId": {"$in": spaceIds},
+             "metadata.sendToDocVault": True,
+             "metadata.docLibAPIResponse": True,
+             "dateCreated": dateCreated}
+    return utils.documentQuery(query)
+
+@log_method
+def getDocLibLast1DayBackUp_1Total(spaceIds, dateCreated):
+    query = {"spaceId": {"$in": spaceIds},
+             "metadata.sendToDocVault": True,
+             "metadata.docLibAPIResponse": {"$exists": False},
+             "dateCreated": dateCreated}
+    return utils.documentQuery(query)
+
+@log_method
+def getDocLibLast1DayBackUp_2Total(spaceIds, dateCreated):
+    query = {"spaceId": {"$in": spaceIds},
+             "metadata.sendToDocVault": True,
+             "metadata.docLibAPIResponse": False,
+             "dateCreated": dateCreated}
+    return utils.documentQuery(query)
+
+@log_method
+def getDocLibLast1DayBackUp_3Total(spaceIds, dateCreated):
+    query = {"spaceId": {"$in": spaceIds},
+             "metadata.sendToDocVault": True,
+             "metadata.docLibAPIResponse": None,
+             "dateCreated": dateCreated}
+    return utils.documentQuery(query)
+
+@log_method
+def getDocLibLast7DayBackUp_1Total(spaceIds, dateCreated7):
+    query = {"spaceId": {"$in": spaceIds},
+             "metadata.sendToDocVault": True,
+             "metadata.docLibAPIResponse": {"$exists": False},
+             "status": "AVAILABLE",
+             "dateCreated": dateCreated7}
+    return utils.documentQuery(query)
+
+@log_method
+def getDocLibLast7DayBackUp_2Total(spaceIds, dateCreated7):
+    query = {"spaceId": {"$in": spaceIds},
+             "metadata.sendToDocVault": True,
+             "metadata.docLibAPIResponse": False,
+             "dateCreated": dateCreated7}
+    return utils.documentQuery(query)
+
+@log_method
+def getDocLibLast7DayBackUp_3Total(spaceIds, dateCreated7):
+    query = {"spaceId": {"$in": spaceIds},
+             "metadata.sendToDocVault": True,
+             "metadata.docLibAPIResponse": None,
+             "dateCreated": dateCreated7}
+    return utils.documentQuery(query)
+
+@log_method
+def getProviderEmailSuccessTotal(spaceIds, dateCreated):
+    query = {"spaceId": {"$in": spaceIds},
+             "metadata.emailAlertReq": "Y",
+             "metadata.providerEmailId": {"$ne": ""},
+             "dateCreated": dateCreated}
+    return utils.documentQuery(query)
+
+@log_method
+def getProviderEmailFailureTotal_withoutEFT(spaceIds, dateCreated):
+    spaceIds = [8889, 8935, 8936, 8937, 8938, 10103, 10303, 10503, 10603, 10703, 10903]
+    query = {"spaceId": {"$in": spaceIds},
+             "metadata.emailAlertReq": "Y",
+             "metadata.providerEmailId": "",
+             "metadata.prepostEnded": {"$exists": True},
+             "dateCreated": dateCreated}
+    return utils.documentQuery(query)
+
+@log_method
+def getProviderEmailFailureTotal_withEFT(spaceIds, dateCreated):
+    spaceIds = [10074, 10075, 10403, 10803]
+    query = {"spaceId": {"$in": spaceIds},
+             "metadata.emailAlertReq": "Y",
+             "metadata.providerEmailId": "",
+             "metadata.prepostEnded": {"$exists": True},
+             "metadata.EFT_Ind": "N",
+             "dateCreated": dateCreated}
+    return utils.documentQuery(query)
+
+@log_method
+def getProviderEmailNotificationSuccessTotal(spaceIds, dateCreated):
+    query = {"spaceId": {"$in": spaceIds},
+             "metadata.emailAlertReq": "Y",
+             "metadata.subscribeToEmail": "Y",
+             "metadata.providerEmailId": {"$ne": ""},
+             "metadata.docLibAPIResponse": True,
+             "metadata.sendPENAPIRequest": True,
+             "metadata.sendEmailNotifications": True,
+             "dateCreated": dateCreated}
+    return utils.documentQuery(query)
+
+@log_method
+def getProviderEmailNotificationReadyTotal1day(spaceIds, dateCreated):
+    query = {"spaceId": {"$in": spaceIds},
+             "metadata.emailAlertReq": "Y",
+             "metadata.subscribeToEmail": "Y",
+             "metadata.providerEmailId": {"$ne": ""},
+             "metadata.docLibAPIResponse": True,
+             "metadata.sendPENAPIRequest": False,
+             "metadata.eDeliveryError": {"$exists": False},
+             "dateCreated": dateCreated}
+    return utils.documentQuery(query)
+
+@log_method
+def getProviderEmailNotificationReadyTotal7days(spaceIds, dateCreated7):
+    query = {"spaceId": {"$in": spaceIds},
+             "metadata.emailAlertReq": "Y",
+             "metadata.subscribeToEmail": "Y",
+             "metadata.providerEmailId": {"$ne": ""},
+             "metadata.docLibAPIResponse": True,
+             "metadata.sendPENAPIRequest": False,
+             "metadata.eDeliveryError": {"$exists": False},
+             "dateCreated": dateCreated7}
+    return utils.documentQuery(query)
+
+@log_method
+def getProviderEmailNotificationInProcessTotal1day(spaceIds, dateCreated):
+    query = {"spaceId": {"$in": spaceIds},
+             "metadata.emailAlertReq": "Y",
+             "metadata.subscribeToEmail": "Y",
+             "metadata.providerEmailId": {"$ne": ""},
+             "metadata.docLibAPIResponse": True,
+             "metadata.sendPENAPIRequest": True,
+             "metadata.sendEmailNotifications": False,
+             "dateCreated": dateCreated}
+    return utils.documentQuery(query)
+
+@log_method
+def getProviderEmailNotificationInProcessTotal7days(spaceIds, dateCreated7):
+    query = {"spaceId": {"$in": spaceIds},
+             "metadata.emailAlertReq": "Y",
+             "metadata.subscribeToEmail": "Y",
+             "metadata.providerEmailId": {"$ne": ""},
+             "metadata.docLibAPIResponse": True,
+             "metadata.sendPENAPIRequest": True,
+             "metadata.sendEmailNotifications": False,
+             "dateCreated": dateCreated7}
+    return utils.documentQuery(query)
+
+@log_method
+def getShutterflySuccessTotal(spaceIds, dateCreated):
+    query = {"spaceId": {"$in": spaceIds},
+             "metadata.sendToShutterfly": True,
+             "metadata.rprntSentToSF": {"$exists": True},
+             "dateCreated": dateCreated}
+    return utils.documentQuery(query)
+
+@log_method
+def getShutterflyFailureTotal1(spaceIds, dateCreated):
+    spaceIds = [8889, 8935, 8936, 8937, 8938, 10074, 10103, 10303, 10403, 10503, 10603, 10703, 10803, 10903]
+    query = {"spaceId": {"$in": spaceIds},
+             "metadata.sendToShutterfly": True,
+             "metadata.rprntSentToSF": {"$exists": False},
+             "dateCreated": dateCreated}
+    return utils.documentQuery(query)
+
+@log_method
+def getShutterflyFailureTotal2_10075(spaceIds, dateCreated):
+    spaceId = 10075
+    query = {"spaceId": spaceId,
+             "metadata.sendToShutterfly": True,
+             "metadata.rprntSentToSF": {"$exists": False},
+             "dateCreated": dateCreated}
+    return utils.documentQuery(query)
+
+@log_method
+def getCorpMPINPESCallSuccessTotal(spaceIds, dateCreated):
+    query = {"spaceId": {"$in": spaceIds},
+             "status": "AVAILABLE",
+             "metadata.tin": {"$nin": [""]},
+             "metadata.corporateMpin": {"$exists": True},
+             "dateCreated": dateCreated}
+    return utils.documentQuery(query)
+
+@log_method
+def getCorpMPINPESCallFailureValidTotal(spaceIds, dateCreated):
+    query = {"spaceId": {"$in": spaceIds},
+             "status": "AVAILABLE",
+             "metadata.tin": {"$nin": ["", "000000000", "0"]},
+             "metadata.eDeliveryError": {"$regex": "corporateMpin"},
+             "dateCreated": dateCreated}
+    return utils.documentQuery(query)
+
+@log_method
+def getCorpMPINPESCallFailureInvalidTotal(spaceIds, dateCreated):
+    query = {"spaceId": {"$in": spaceIds},
+             "status": "AVAILABLE",
+             "metadata.tin": {"$in": ["", "000000000", "0"]},
+             "metadata.eDeliveryError": {"$regex": "corporateMpin"},
+             "dateCreated": dateCreated}
+    return utils.documentQuery(query)
+
+@log_method
+def getStorageErrorSuccessTotal(spaceIds, dateCreated):
+    query = {"spaceId": {"$in": spaceIds},
+             "metadata.rprntSentToSF": True,
+             "status": "STORAGE_ERROR",
+             "dateCreated": dateCreated}
+    return utils.documentQuery(query)
+
+@log_method
+def getStorageErrorFailureTotal1day(spaceIds, dateCreated):
+    query = {"spaceId": {"$in": spaceIds},
+             "metadata.rprntSentToSF": {"$exists": False},
+             "status": "STORAGE_ERROR",
+             "dateCreated": dateCreated}
+    return utils.documentQuery(query)
+
+@log_method
+def getStorageErrorFailureTotal7days(spaceIds, dateCreated7):
+    query = {"spaceId": {"$in": spaceIds},
+             "metadata.rprntSentToSF": {"$exists": False},
+             "status": "STORAGE_ERROR",
+             "dateCreated": dateCreated7}
+    return utils.documentQuery(query)
+
+@log_method
+def getResponseFileSuccessTotal(spaceIds, dateCreated):
+    spaceIds = [8936, 8937, 8938, 10503, 10603, 8889, 10703, 10903]
+    query = {"spaceId": {"$in": spaceIds},
+             "metadata.addedToResponseFile": True,
+             "dateCreated": dateCreated}
+    return utils.documentQuery(query)
+
+@log_method
+def getResponseFileSuccessTotal7days(spaceIds, dateCreated7):
+    spaceIds = [8936, 8937, 8938, 10503, 10603, 8889, 10703, 10903]
+    query = {"spaceId": {"$in": spaceIds},
+             "metadata.addedToResponseFile": True,
+             "dateCreated": dateCreated7}
+    return utils.documentQuery(query)
+
+@log_method
+def getResponseFileInProcessTotal_1(spaceIds, dateCreated):
+    spaceIds = [8936, 8937, 8938, 10503, 10603, 8889, 10903]
+    query = {
+            "spaceId": {"$in": spaceIds},
+            "status": "AVAILABLE",
+            "metadata.emailAlertReq": "Y",
+            "metadata.prepostEnded": {"$exists": True},
+            "metadata.addedToResponseFile": {"$exists": False},
+            "$or": [{"metadata.subscribeToEmail": "Y", "metadata.providerEmailId": {"$ne": ""}, "metadata.sendEmailNotifications": True,
+                     "metadata.docLibAPIResponse": True},
+                    {"metadata.eDeliveryError": {"$regex": "providerEmailId"}, "metadata.docLibAPIResponse": True},
+                    {"metadata.subscribeToEmail": "N", "metadata.docLibAPIResponse": True},
+                    {"metadata.corporateMpin": {"$exists": False}, "metadata.rprntSentToSF": {"$exists": True}}
+                    ],
+            "dateCreated": dateCreated}
+    return utils.documentQuery(query)
+
+@log_method
+def getResponseFileInProcessTotal_2(spaceIds, dateCreated):
+    spaceId = 10703
+    query = {
+            "spaceId": spaceId,
+            "status": "AVAILABLE",
+            "metadata.emailAlertReq": "Y",
+            "metadata.prepostEnded": {"$exists": True},
+            "metadata.addedToResponseFile": {"$exists": False},
+            "$or": [{"metadata.docLibAPIResponse": True},
+                    {"metadata.corporateMpin": {"$exists": False}, "metadata.rprntSentToSF": {"$exists": True}}
+                    ],
+            "dateCreated": dateCreated}
+    return utils.documentQuery(query)
+
+@log_method
+def getBouncedEmailCompleteTotal(spaceIds, dateCreated):
+    query = {
+            "metadata.message_id": {'$regex': f'{spaceIds}/*'},
+            "spaceId": 8897,
+            "status": "COMPLETE",
+            "dateCreated":  dateCreated
+        }
+    return utils.documentQuery(query)
+
+@log_method
+def getBouncedEmailInProcessTotal(spaceIds, dateCreated):
+    query = {
+            "metadata.message_id": {'$regex': f'{spaceIds}/*'},
+            "spaceId": 8897,
+            "status": "IN_PROCESS",
+            "dateCreated":  dateCreated
+        }
+    return utils.documentQuery(query)
+
+@log_method
+def getBouncedEmailInProcess7daysTotal(spaceIds, dateCreated7):
+    query = {
+            "metadata.message_id": {'$regex': f'{spaceIds}/*'},
+            "spaceId": 8897,
+            "status": "IN_PROCESS",
+            "dateCreated":  dateCreated7
+        }
+    return utils.documentQuery(query)
+
+@log_method
+def getBouncedEmailAvailableTotal(spaceIds, dateCreated):
+    query = {
+            "metadata.message_id": {'$regex': f'{spaceIds}/*'},
+            "spaceId": 8897,
+            "status": "AVAILABLE",
+            "dateCreated":  dateCreated
+    }
+    return utils.documentQuery(query)
+
+@log_method
+def getBouncedEmailAvailable7daysTotal(spaceIds, dateCreated7):
+    query = {
+            "metadata.message_id"   : {'$regex': f'{spaceIds}/*'},
+            "spaceId": 8897,
+            "status": "AVAILABLE",
+            "dateCreated":  dateCreated7
+    }
+    return utils.documentQuery(query)
+
+def _populate_spaceIdsHtmlTotal(spaceIds):
+    print("inside populate space ids html", spaceIds)
+    hcr_report_date = get_hcr_report_date_6hrwin()
+    startTime = get_current_midnight_6hrwin()
+    endTime = get_end_time_6hrwin()
+    dateCreated = get_date_created_6hrwin()
+    dateCreated_10075sfly = get_date_created_6hrwin_10075sfly()
+    dateCreated7 = get_date_created_7days_6hrwin()
+
+    # Define tasks to be executed concurrently
+    tasks = {
+        "zipSuccessTotal": lambda: getZipSuccessTotal(spaceIds, dateCreated),
+        "zipAckFileIssueTotal": lambda: getZipAckFileIssueTotal(spaceIds, dateCreated),
+        "zipInProcessNewTotal": lambda: getZipInProcessNewTotal(spaceIds, dateCreated),
+        "zipInProcessNewTotal7days": lambda: getZipInProcessNewTotal7days(spaceIds, dateCreated7),
+        "zipInProcessInProcessTotal": lambda: getZipInProcessInProcessTotal(spaceIds, dateCreated),
+        "zipInProcessInProcessTotal7days": lambda: getZipInProcessInProcessTotal7days(spaceIds, dateCreated7),
+        "zipInProcessReadyTotal": lambda: getZipInProcessReadyTotal(spaceIds, dateCreated),
+        "zipInProcessReadyTotal7days": lambda: getZipInProcessReadyTotal7days(spaceIds, dateCreated7),
+        "zipFailureFatalErrorTotal": lambda: getZipFailureFatalErrorTotal(spaceIds, dateCreated),
+        "processorFileTaskCountInProcessSuccessTotal": lambda: getProcessorFileTaskSuccessTotal(spaceIds, dateCreated),
+        "processorFileTaskCountInProcessNewTotal": lambda: getProcessorFileTaskInProcessNewTotal(spaceIds, dateCreated),
+        "processorFileTaskCountInProcessNewTotal7days": lambda: getProcessorFileTaskInProcessNewTotal7days(spaceIds, dateCreated7),
+        "processorFileTaskCountInProcessInProcessTotal7days": lambda: getProcessorFileTaskInProcessInProcessTotal7days(spaceIds, dateCreated7),
+        "processorFileTaskCountFailureSevereErrorTotal": lambda: getProcessorFileTaskFailureSevereErrorTotal(spaceIds, dateCreated),
+        "processorFileTaskCountFailureFatalErrorTotal": lambda: getProcessorFileTaskFailureFatalErrorTotal(spaceIds, dateCreated),
+        "prePostSuccessTotal": lambda: getPrePostSuccessTotal(spaceIds, dateCreated),
+        "prePostFailure1dayTotal": lambda: getPrePostFailure1dayTotal(spaceIds, dateCreated),
+        "prePostFailure7daysTotal": lambda: getPrePostFailure7daysTotal(spaceIds, dateCreated7),
+        "docLibSuccessTotal": lambda: getDocLibSuccessTotal(spaceIds, dateCreated),
+        "docLibLast1DayBackUpTotal": lambda: (
+            getDocLibLast1DayBackUp_1Total(spaceIds, dateCreated) +
+            getDocLibLast1DayBackUp_2Total(spaceIds, dateCreated) +
+            getDocLibLast1DayBackUp_3Total(spaceIds, dateCreated)
+        ),
+        "docLibLast7DayBackUpTotal": lambda: (
+            getDocLibLast7DayBackUp_1Total(spaceIds, dateCreated7) +
+            getDocLibLast7DayBackUp_2Total(spaceIds, dateCreated7) +
+            getDocLibLast7DayBackUp_3Total(spaceIds, dateCreated7)
+        ),
+        "providerEmailSuccessTotal": lambda: getProviderEmailSuccessTotal(spaceIds, dateCreated),
+        "providerEmailFailureTotal": lambda: (
+            getProviderEmailFailureTotal_withoutEFT(spaceIds, dateCreated) +
+            getProviderEmailFailureTotal_withEFT(spaceIds, dateCreated)
+        ),
+        "providerEmailNotificationSuccessTotal": lambda: getProviderEmailNotificationSuccessTotal(spaceIds, dateCreated),
+        "providerEmailNotificationReadyTotal1day": lambda: getProviderEmailNotificationReadyTotal1day(spaceIds, dateCreated),
+        "providerEmailNotificationReadyTotal7days": lambda: getProviderEmailNotificationReadyTotal7days(spaceIds, dateCreated7),
+        "providerEmailNotificationInProcessTotal1day": lambda: getProviderEmailNotificationInProcessTotal1day(spaceIds, dateCreated),
+        "providerEmailNotificationInProcessTotal7days": lambda: getProviderEmailNotificationInProcessTotal7days(spaceIds, dateCreated7),
+        "shutterflySuccessTotal": lambda: getShutterflySuccessTotal(spaceIds, dateCreated),
+        "shutterflyFailureTotal": lambda: (
+            getShutterflyFailureTotal1(spaceIds, dateCreated) +
+            getShutterflyFailureTotal2_10075(spaceIds, dateCreated_10075sfly)
+        ),
+        "corpMPINPESCallSuccessTotal": lambda: getCorpMPINPESCallSuccessTotal(spaceIds, dateCreated),
+        "corpMPINPESCallFailureValidTotal": lambda: getCorpMPINPESCallFailureValidTotal(spaceIds, dateCreated),
+        "corpMPINPESCallFailureInvalidTotal": lambda: getCorpMPINPESCallFailureInvalidTotal(spaceIds, dateCreated),
+        "storageErrorSuccessTotal": lambda: getStorageErrorSuccessTotal(spaceIds, dateCreated),
+        "storageErrorFailureTotal1day": lambda: getStorageErrorFailureTotal1day(spaceIds, dateCreated),
+        "storageErrorFailureTotal7days": lambda: getStorageErrorFailureTotal7days(spaceIds, dateCreated7),
+        "responseFileSuccessTotal": lambda: getResponseFileSuccessTotal(spaceIds, dateCreated),
+        "responseFileInProcessTotal": lambda: (
+            getResponseFileInProcessTotal_1(spaceIds, dateCreated) +
+            getResponseFileInProcessTotal_2(spaceIds, dateCreated)
+        ),
+        "bouncedEmailCompleteTotal": lambda: getBouncedEmailCompleteTotal(spaceIds, dateCreated),
+        "bouncedEmailInProcessTotal": lambda: getBouncedEmailInProcessTotal(spaceIds, dateCreated),
+        "bouncedEmailInProcess7daysTotal": lambda: getBouncedEmailInProcess7daysTotal(spaceIds, dateCreated7),
+        "bouncedEmailAvailableTotal": lambda: getBouncedEmailAvailableTotal(spaceIds, dateCreated),
+        "bouncedEmailAvailable7daysTotal": lambda: getBouncedEmailAvailable7daysTotal(spaceIds, dateCreated7),
+    }
+
+    # Execute tasks concurrently
+    results = {}
+    with ThreadPoolExecutor() as executor:
+        future_to_key = {executor.submit(task): key for key, task in tasks.items()}
+        for future in future_to_key:
+            key = future_to_key[future]
+            results[key] = future.result()
+
+    # Format the final output
+    return headData.format(
+        reportDate=hcr_report_date,
+        startTime=startTime,
+        endTime=endTime,
+        processorFileTaskCountInProcessInProcessTotal=0,
+        **results
+    )
+
+
+
+
+
+
+
