@@ -1,112 +1,122 @@
-#!/bin/bash
-set -e
-
-COMMON_YML="pipeline.yml"
-PROFILE_YML="helm/assets/hcck8s.yml"
-
-# Function to resolve cluster host to IP
-resolve_cluster_ip() {
-  local cluster_host="$1"
-  getent hosts "$cluster_host" | awk '{ print $1 }' || {
-    echo "[ERROR] Failed to resolve $cluster_host"
-    echo ""
-  }
-}
-
-# Read environment variables
-ENVIRONMENT="${ENVIRONMENT:-}"
-# DATACENTERS="${DATACENTERS:-}"
+name: cicd-pipeline
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - release/*
+  workflow_dispatch:
+    secrets:
+      JFROG_USERNAME:
+        description: 'JFrog username'
+        required: true
+      JFROG_SECRET:
+        description: 'JFrog secret token'
+        required: true
+      KUBECONFIG:
+        description: 'Kubeconfig for kubectl'
+        required: true
+      STAGE_VAULT_ROLE_ID:
+        description: 'Vault role ID for stage environment'
+        required: true
+      STAGE_VAULT_SECRET_ID:
+        description: 'Vault secret ID for stage environment'
+        required: true
+
+
+jobs:
+  build-and-push:
+    runs-on: uhg-runner
+    outputs:
+      BUILD_VERSION: ${{ steps.version.outputs.BUILD_VERSION }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-if [[ -z "$ENVIRONMENT" ]]; then
-  echo "ENVIRONMENT variable not set"
-  exit 1
-fi
+      - name: Fetch version from pyproject.toml
+        id: version
+        run: |
+          VERSION=$(grep -oP '(?<=^version = ")[^"]*' pyproject.toml)
+          echo "BUILD_VERSION=$VERSION" >> $GITHUB_ENV
+          echo "BUILD_VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "Build version: $VERSION"
 
-# Load YAML files using yq
-common=$(yq eval '.' "$COMMON_YML")
-profile=$(echo "$common" | yq eval '.k8s.profile' -)
-hcck8s=$(yq eval '.' "$PROFILE_YML")
+      - name: Log in to JFrog Artifactory Docker Registry
+        env: 
+          JFROG_USERNAME: ${{ secrets.JFROG_USERNAME }}
+          JFROG_SECRET: ${{ secrets.JFROG_SECRET }}
+        uses: docker/login-action@v3
+        with:
+          registry: centraluhg.jfrog.io
+          username: ${{ env.JFROG_USERNAME }}
+          password: ${{ env.JFROG_SECRET }}
 
-# Get datacenters list
-datacenters_raw=$(echo "$common" | yq eval ".k8s.environments.$ENVIRONMENT.deploy" -)
-IFS=',' read -ra datacenters <<< "$datacenters_raw"
-datacenters=("${datacenters[@]// /}")
+      - name: Build and push Docker image
+        id: build-push
+        uses: docker/build-push-action@v5
+        env:
+          JFROG_USERNAME: ${{ secrets.JFROG_USERNAME }}
+          JFROG_SECRET: ${{ secrets.JFROG_SECRET }}
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: centraluhg.jfrog.io/ppl-docker-np-loc/ppl/ppl-prun-utils:${{ env.BUILD_VERSION }}
+          secrets: |
+            JFROG_USERNAME=${{ env.JFROG_USERNAME }}
+            JFROG_SECRET=${{ env.JFROG_SECRET }}
 
-# Optional: filter datacenters if DATACENTERS is set
-if [[ -n "$DATACENTERS" ]]; then
-  IFS=',' read -ra filter_set <<< "$DATACENTERS"
-  filtered=()
-  for dc in "${datacenters[@]}"; do
-    for f in "${filter_set[@]}"; do
-      if [[ "$dc" == "$f" ]]; then
-        filtered+=("$dc")
-      fi
-    done
-  done
-  datacenters=("${filtered[@]}")
-fi
+  deployment:
+    runs-on: uhg-runner
+    needs: build-and-push
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-result="[]"
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
 
-for datacenter in "${datacenters[@]}"; do
-  cluster=$(echo "$hcck8s" | yq eval ".hcck8sProfile.$profile.$ENVIRONMENT.$datacenter.cluster" -)
-  namespace=$(echo "$hcck8s" | yq eval ".hcck8sProfile.$profile.$ENVIRONMENT.$datacenter.namespace" -)
+      - name: Configure kubectl and apply deployment
+        env:
+          BUILD_VERSION: ${{ needs.build-and-push.outputs.BUILD_VERSION }}
+          KUBECONFIG: ${{ secrets.KUBECONFIG }}
+          STAGE_VAULT_ROLE_ID: ${{ secrets.STAGE_VAULT_ROLE_ID }}
+          STAGE_VAULT_SECRET_ID: ${{ secrets.STAGE_VAULT_SECRET_ID }}
+        run: |
+          set -e
 
-  if [[ -z "$cluster" || -z "$namespace" || "$cluster" == "null" || "$namespace" == "null" ]]; then
-    echo "[WARN] Skipping $datacenter - missing cluster or namespace."
-    continue
-  fi
+          echo $BUILD_VERSION
 
-  ip=$(resolve_cluster_ip "$cluster")
-  if [[ -z "$ip" ]]; then
-    echo "[WARN] Skipping $datacenter - unable to resolve $cluster."
-    continue
-  fi
+          echo ${{ needs.build-and-push.outputs.BUILD_VERSION }}
 
-  app_name=$(echo "$common" | yq eval '.pipeline.application.name' -)
-  api_server="https://${ip}:443"
+          mkdir -p $HOME/.kube
+          echo "$KUBECONFIG" > $HOME/.kube/config
+          export KUBECONFIG=$HOME/.kube/config
 
-  entry=$(jq -n \
-    --arg datacenter "$datacenter" \
-    --arg app_name "$app_name" \
-    --arg cluster "$cluster" \
-    --arg namespace "$namespace" \
-    --arg api_server "$api_server" \
-    '{
-      datacenter: $datacenter,
-      app_name: $app_name,
-      cluster: $cluster,
-      namespace: $namespace,
-      api_server: $api_server
-    }')
-  result=$(echo "$result" | jq ". += [$entry]")
-done
+          docker_image='edgeinternal1uhg.optum.com/ppl-docker-np-loc/ppl/ppl-prun-utils:${{ needs.build-and-push.outputs.BUILD_VERSION }}'
 
-echo "$result" > deploy_data.json
+          echo ${docker_image}
 
-echo -e "\n[INFO] Created deploy_data.json with the following deployments:\n"
-for row in $(jq -c '.[]' deploy_data.json); do
-  datacenter=$(echo "$row" | jq -r '.datacenter')
-  app_name=$(echo "$row" | jq -r '.app_name')
-  cluster=$(echo "$row" | jq -r '.cluster')
-  namespace=$(echo "$row" | jq -r '.namespace')
-  api_server=$(echo "$row" | jq -r '.api_server')
-  echo "  • Datacenter   : $datacenter"
-  echo "    App Name  : $app_name"
-  echo "    Cluster   : $cluster"
-  echo "    Namespace : $namespace"
-  echo "    API Server: $api_server"
-  echo ""
-done
+          sed -i "s/@vault_role_id/${{ env.STAGE_VAULT_ROLE_ID }}/g" deployment/deployment.yml
 
-echo "[INFO] Total datacenters ready for deployment: $(jq '. | length' deploy_data.json)"
+          sed -i "s/@vault_secret_id/${{ env.STAGE_VAULT_SECRET_ID }}/g" deployment/deployment.yml
 
+          sed -i "s,@docker_image,$docker_image,g" deployment/deployment.yml
 
+          cat deployment/deployment.yml
 
+          kubectl config get-contexts --kubeconfig $HOME/.kube/config
 
+          kubectl config use-context ctcnonprdusr101-admin-token_provider-paperless-stage
 
+          kubectl auth whoami
 
+          kubectl get pods
 
+          kubectl apply -f deployment/deployment.yml
+        shell: bash
 
 
 
@@ -123,34 +133,10 @@ echo "[INFO] Total datacenters ready for deployment: $(jq '. | length' deploy_da
 
 
 
-#!/bin/bash
-set -e
 
-ls -al scripts/
-chmod +x "$0"
 
-# Parse arguments
-while [[ $# -gt 0 ]]; do
-  key="$1"
-  case $key in
-    --complianceApiUrl) COMPLIANCE_API_URL="$2"; shift; shift ;;
-    --reportId) REPORT_ID="$2"; shift; shift ;;
-    --outputPath) OUTPUT_PATH="$2"; shift; shift ;;
-    *) echo "Unknown option $1"; exit 1 ;;
-  esac
-done
 
-: "${COMPLIANCE_API_URL:?Missing --complianceApiUrl}"
-: "${REPORT_ID:?Missing --reportId}"
-: "${OUTPUT_PATH:?Missing --outputPath}"
 
-curl -f -o "$OUTPUT_PATH" "$COMPLIANCE_API_URL/api/report/$REPORT_ID/spreadsheet.xls"
-if [ $? -eq 0 ]; then
-  echo "CM3 report archived at $OUTPUT_PATH"
-else
-  echo "Failed to download CM3 report."
-  exit 1
-fi
 
 
 
@@ -164,10 +150,29 @@ fi
 
 
 
+name: AI based Agent to Review Code in PRs
 
+on:
+  pull_request:
+    types: ["ready_for_review", "opened" , "synchronize"] # This check allows to trigger a PR when converting a draft PR to a regular PR and when a regular PR is opened and manage PR updates
+    branches: ["*"]   #you can change/limit to any branch you wish to
 
+  pull_request_target: # Needed if you raise PRs from forks
 
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write      # Make sure this is in 'write', as the action
+  security-events: write    # displays the review through th PR comments
+  checks: write
+  id-token: write
 
+jobs:
+    code-reviewer:
+        if: ${{ github.event.pull_request.draft == false }} # This check prevents to execute code review agent on draft PRs
+        uses: optum-eeps/Code-Review-Agent/.github/workflows/pr-code-review.yml@v2
+        secrets:
+          github-token: ${{ secrets.GITHUB_TOKEN }} # Must add this, this auto-generates a token neccessary for the action to issue comments to the PR
 
 
 
@@ -177,155 +182,19 @@ fi
 
 
 
-#!/bin/bash
-set -e
 
-PRECHECK=false
 
-while [[ $# -gt 0 ]]; do
-  key="$1"
-  case $key in
-    --complianceApiUrl) COMPLIANCE_API_URL="$2"; shift; shift ;;
-    --rallyApiUrl) RALLY_API_URL="$2"; shift; shift ;;
-    --rallyCredentialId) RALLY_CREDENTIAL_ID="$2"; shift; shift ;;
-    --rallyWorkspaceId) RALLY_WORKSPACE_ID="$2"; shift; shift ;;
-    --rallyMilestoneFormattedId) RALLY_MILESTONE_FORMATTED_ID="$2"; shift; shift ;;
-    --userStoryApprovers) USER_STORY_APPROVERS="$2"; shift; shift ;;
-    --securityScansParameters) SECURITY_SCANS_PARAMETERS="$2"; shift; shift ;;
-    --additionalReportRecipients) ADDITIONAL_REPORT_RECIPIENTS="$2"; shift; shift ;;
-    --cm3BusinessApprovers) CM3_BUSINESS_APPROVERS="$2"; shift; shift ;;
-    --cm3BusinessApproversThreshold) CM3_BUSINESS_APPROVERS_THRESHOLD="$2"; shift; shift ;;
-    --cm3ItApprovers) CM3_IT_APPROVERS="$2"; shift; shift ;;
-    --cm3ItApproversThreshold) CM3_IT_APPROVERS_THRESHOLD="$2"; shift; shift ;;
-    --preCheckTest) PRECHECK="$2"; shift; shift ;;
-    --askId) ASK_ID="$2"; shift; shift ;;
-    *) echo "Unknown option $1"; exit 1 ;;
-  esac
-done
 
-: "${COMPLIANCE_API_URL:?Missing --complianceApiUrl}"
-: "${RALLY_API_URL:?Missing --rallyApiUrl}"
-: "${RALLY_CREDENTIAL_ID:?Missing --rallyCredentialId}"
-: "${RALLY_WORKSPACE_ID:?Missing --rallyWorkspaceId}"
-: "${RALLY_MILESTONE_FORMATTED_ID:?Missing --rallyMilestoneFormattedId}"
-: "${USER_STORY_APPROVERS:?Missing --userStoryApprovers}"
-: "${SECURITY_SCANS_PARAMETERS:?Missing --securityScansParameters}"
-: "${ADDITIONAL_REPORT_RECIPIENTS:?Missing --additionalReportRecipients}"
-: "${ASK_ID:?Missing --askId}"
 
-if [ -z "$SECURITY_SCANS_PARAMETERS" ]; then
-  echo "Error: SECURITY_SCANS_PARAMETERS is empty or not set."
-  exit 1
-fi
 
 
-# Debug: print and validate JSON
-echo "COMPLIANCE_API_URL=$COMPLIANCE_API_URL"
-echo "RALLY_API_URL=$RALLY_API_URL"
-echo "RALLY_CREDENTIAL_ID=$RALLY_CREDENTIAL_ID"
-echo "RALLY_WORKSPACE_ID=$RALLY_WORKSPACE_ID"
-echo "RALLY_MILESTONE_FORMATTED_ID=$RALLY_MILESTONE_FORMATTED_ID"
-echo "USER_STORY_APPROVERS=$USER_STORY_APPROVERS"
-echo "SECURITY_SCANS_PARAMETERS=$SECURITY_SCANS"
-echo "SECURITY_SCANS_PARAMETERS=$SECURITY_SCANS_PARAMETERS"
-echo "ADDITIONAL_REPORT_RECIPIENTS=$ADDITIONAL_REPORT_RECIPIENTS"
-echo "CM3_BUSINESS_APPROVERS=$CM3_BUSINESS_APPROVERS"
-echo "CM3_BUSINESS_APPROVERS_THRESHOLD=$CM3_BUSINESS_APPROVERS_THRESHOLD"
-echo "CM3_IT_APPROVERS=$CM3_IT_APPROVERS"
-echo "CM3_IT_APPROVERS_THRESHOLD=$CM3_IT_APPROVERS_THRESHOLD"
-echo "ASK_ID=$ASK_ID"
 
-#if ! echo "$SECURITY_SCANS_PARAMETERS" | jq -e . > /dev/null; then
-#          echo "Error: SECURITY_SCANS_PARAMETERS is not valid JSON."
-#          exit 1
-#fi
 
-if [[ $PRECHECK == true ]]; then
-  payload=$(jq -n \
-    --arg rallyCredentialId "$RALLY_CREDENTIAL_ID" \
-    --arg rallyWorkspaceId "$RALLY_WORKSPACE_ID" \
-    --arg rallyMilestoneFormattedId "$RALLY_MILESTONE_FORMATTED_ID" \
-    --arg userStoryApprovers "$USER_STORY_APPROVERS" \
-    --arg additionalReportRecipients "$ADDITIONAL_REPORT_RECIPIENTS" \
-    --arg cm3BusinessApprovers "$CM3_BUSINESS_APPROVERS" \
-    --arg cm3BusinessApproversThreshold "${CM3_BUSINESS_APPROVERS_THRESHOLD:-1}" \
-    --arg cm3ItApprovers "$CM3_IT_APPROVERS" \
-    --arg cm3ItApproversThreshold "${CM3_IT_APPROVERS_THRESHOLD:-1}" \
-    --arg askId "$ASK_ID" \
-    --argjson cm2TestFailureThresholds '{}' \
-    --argjson securityScansParameters $SECURITY_SCANS_PARAMETERS \
-    '{
-      "rallyCredentialId": $rallyCredentialId,
-      "rallyWorkspaceId": $rallyWorkspaceId,
-      "rallyMilestoneFormattedId": $rallyMilestoneFormattedId,
-      "userStoryApprovers": $userStoryApprovers,
-      "cm3BusinessApprovers": $cm3BusinessApprovers,
-      "cm3BusinessApproversThreshold": ($cm3BusinessApproversThreshold | tonumber),
-      "cm3ItApprovers": $cm3ItApprovers,
-      "cm3ItApproversThreshold": ($cm3ItApproversThreshold | tonumber),
-      "cm2TestFailureThresholds": $cm2TestFailureThresholds,
-      "projectReportParameters": {
-        "caAgileId": "616574105167",
-        "askId": [$askId],
-        "projectKey": "com.optum.automatedcompliance"
-      },
-      "additionalReportRecipients": [$additionalReportRecipients],
-      "preCheckTest": true,
-      "rallyShowApplications": false,
-      "securityScansParameters": $securityScansParameters
-    }')
-else
-  payload=$(jq -n \
-    --arg rallyCredentialId "$RALLY_CREDENTIAL_ID" \
-    --arg rallyWorkspaceId "$RALLY_WORKSPACE_ID" \
-    --arg rallyMilestoneFormattedId "$RALLY_MILESTONE_FORMATTED_ID" \
-    --arg userStoryApprovers "$USER_STORY_APPROVERS" \
-    --arg cm3BusinessApprovers "$CM3_BUSINESS_APPROVERS" \
-    --arg cm3BusinessApproversThreshold "${CM3_BUSINESS_APPROVERS_THRESHOLD:-1}" \
-    --arg cm3ItApprovers "$CM3_IT_APPROVERS" \
-    --arg cm3ItApproversThreshold "${CM3_IT_APPROVERS_THRESHOLD:-1}" \
-    --argjson securityScansParameters "$SECURITY_SCANS_PARAMETERS" \
-    --arg askId "$ASK_ID" \
-    --arg emailReminder "${EMAIL_REMINDER:-true}" \
-    --arg emailReminderInterval "${EMAIL_REMINDER_INTERVAL:-24}" \
-    --arg additionalReportRecipients "$ADDITIONAL_REPORT_RECIPIENTS" \
-    '{
-      "rallyCredentialId": $rallyCredentialId,
-      "rallyWorkspaceId": $rallyWorkspaceId,
-      "rallyMilestoneFormattedId": $rallyMilestoneFormattedId,
-      "userStoryApprovers": $userStoryApprovers,
-      "securityScansParameters": $securityScansParameters,
-      "cm3BusinessApprovers": $cm3BusinessApprovers,
-      "cm3BusinessApproversThreshold": ($cm3BusinessApproversThreshold | tonumber),
-      "cm3ItApprovers": $cm3ItApprovers,
-      "cm3ItApproversThreshold": ($cm3ItApproversThreshold | tonumber),
-      "projectReportParameters": {
-        "caAgileId": "616574105167",
-        "askId": [$askId],
-        "projectKey": "com.optum.automatedcompliance"
-      },
-      "emailReminder": ($emailReminder | test("true"; "i")),
-      "emailReminderInterval": ($emailReminderInterval | tonumber),
-      "additionalReportRecipients": [$additionalReportRecipients]
-    }')
-fi
 
-echo "Sending payload to $COMPLIANCE_API_URL/api/report:"
-echo "$payload"
 
-response=$(curl -s -X POST "$COMPLIANCE_API_URL/api/report" \
-  -H "Content-Type: application/json" \
-  -d "$payload")
 
-report_id="$response"
 
-if [ -z "$report_id" ]; then
-  echo "Failed to generate report: $response"
-  exit 1
-fi
 
-echo "$report_id"
-echo "$report_id" > report_id.txt
 
 
 
@@ -335,6 +204,55 @@ echo "$report_id" > report_id.txt
 
 
 
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: hcr-report
+spec:
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  # 0 6 * * MON-FRI
+  schedule: "0 */1 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: hcr-report
+              image: docker.repo1.uhc.com/fds-paperless/ppl-prun-utils:latest
+              imagePullPolicy: Always
+              # command:
+              # - /bin/sh
+              # - -c
+              # - date; echo "Hello from the Kubernetes cluster"
+              command: ["python"]
+              args: ["./src/hcr/sendEmail.py"]
+              # args: ["main.py"]
+              securityContext:
+                runAsUser: 1000
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - KILL
+                    - MKNOD
+                    - SYS_CHROOT
+              resources:
+                limits:
+                  cpu: "1"
+                  memory: 1Gi
+                requests:
+                  cpu: "0.5"
+                  memory: "500Mi"
+              readinessProbe:
+                exec:
+                  command:
+                    - /bin/true
+              livenessProbe:
+                exec:
+                  command:
+                    - /bin/true
+          restartPolicy: OnFailure
 
 
 
@@ -360,62 +278,96 @@ echo "$report_id" > report_id.txt
 
 
 
-#!/bin/bash
-set -e
 
-ls -al scripts/
-chmod +x "$0"
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: ppl-prun-utils
+  name: ppl-prun-utils
+  namespace: provider-paperless-stage
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app: ppl-prun-utils
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: ppl-prun-utils
+    spec:
+      imagePullSecrets:
+        - name: edge-docker-registry-secret
+      containers:
+        - name: ppl-prun-utils
+          image: @docker_image
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          env:
+            - name: VAULT_ROLE_ID
+              value: @vault_role_id
+            - name: VAULT_SECRET_ID
+              value: @vault_secret_id
+          readinessProbe:
+            tcpSocket:
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          livenessProbe:
+            tcpSocket:
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          # readinessProbe:
+          #   exec:
+          #     command:
+          #       - /bin/sh
+          #       - -c
+          #       - cat
+          #       - /tmp
+          #   initialDelaySeconds: 60
+          #   periodSeconds: 60
+          # livenessProbe:
+          #   exec:
+          #     command:
+          #       - /bin/sh
+          #       - -c
+          #       - cat
+          #       - /tmp
+          #   initialDelaySeconds: 60
+          #   periodSeconds: 60
+          resources:
+            limits:
+              cpu: "4"
+              memory: 6Gi
+            requests:
+              cpu: "2"
+              memory: "4Gi"
+          securityContext:
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop:
+                - KILL
+                - MKNOD
+                - SYS_CHROOT
 
-# Parse arguments
-while [[ $# -gt 0 ]]; do
-  key="$1"
-  case $key in
-    --complianceApiUrl) COMPLIANCE_API_URL="$2"; shift; shift ;;
-    --reportId) REPORT_ID="$2"; shift; shift ;;
-    *) echo "Unknown option $1"; exit 1 ;;
-  esac
-done
 
-: "${COMPLIANCE_API_URL:?Missing --complianceApiUrl}"
-: "${REPORT_ID:?Missing --reportId}"
 
-MAX_WAIT_MINUTES=${MAX_WAIT_MINUTES:-60}
-POLL_INTERVAL=20
 
-end_time=$(( $(date +%s) + MAX_WAIT_MINUTES * 60 ))
 
-while [ $(date +%s) -lt $end_time ]; do
-  echo "Calling: $COMPLIANCE_API_URL/api/report/$REPORT_ID"
-  response=$(curl -v -s -w "\n%{http_code}" "$COMPLIANCE_API_URL/api/report/$REPORT_ID" || true)
-  body=$(echo "$response" | head -n -1)
-  code=$(echo "$response" | tail -n1)
 
-  # Debug output
-    echo "HTTP code: $code"
-    echo "Response body: $body"
 
-  case "$code" in
-    202|200|203)
-      echo "CM1CM2 report ready or precheck complete."
-      exit 0
-      ;;
-    406|400)
-      echo "Error in CM1CM2 report: $body"
-      exit 2
-      ;;
-    404|102)
-      echo "Report not ready (HTTP $code), retrying in $POLL_INTERVAL seconds..."
-      sleep $POLL_INTERVAL
-      ;;
-    *)
-      echo "Unexpected response: $code $body"
-      sleep $POLL_INTERVAL
-      ;;
-  esac
-done
 
-echo "Timed out waiting for CM1CM2 report."
-exit 1
 
 
 
@@ -445,68 +397,48 @@ exit 1
 
 
 
-#!/bin/bash
-set -e
 
-ls -al scripts/
-chmod +x "$0"
 
-# Parse arguments
-while [[ $# -gt 0 ]]; do
-  key="$1"
-  case $key in
-    --complianceApiUrl) COMPLIANCE_API_URL="$2"; shift; shift ;;
-    --reportId) REPORT_ID="$2"; shift; shift ;;
-    --time) TIME="$2"; shift; shift ;;
-    --unit) UNIT="$2"; shift; shift ;;
-    *) echo "Unknown option $1"; exit 1 ;;
-  esac
-done
 
-: "${COMPLIANCE_API_URL:?Missing --complianceApiUrl}"
-: "${REPORT_ID:?Missing --reportId}"
 
-TIME=${TIME:-1}
-UNIT=${UNIT:-DAYS}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ppl-prun-utils-network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app: ppl-prun-utils
+  policyTypes:
+    - Egress
+    - Ingress
+  ingress:
+    - ports:
+        - port: 8080
+          protocol: TCP
+        - port: 80
+          protocol: TCP
+        - port: 3306
+          protocol: TCP
+        - port: 25
+          protocol: TCP
+  egress:
+    - ports:
+        - port: 8080
+          protocol: TCP
+        - port: 80
+          protocol: TCP
+        - port: 3306
+          protocol: TCP
+        - port: 25
+          protocol: TCP
+        - port: 445
+          protocol: TCP
 
-case "$UNIT" in
-  SECONDS) max_wait=$((TIME));;
-  MINUTES) max_wait=$((TIME * 60));;
-  HOURS)   max_wait=$((TIME * 3600));;
-  DAYS)    max_wait=$((TIME * 86400));;
-  *) echo "Invalid unit: $UNIT"; exit 1;;
-esac
 
-POLL_INTERVAL=100
-end_time=$(( $(date +%s) + max_wait ))
 
-while [ $(date +%s) -lt $end_time ]; do
-  response=$(curl -s -w "\n%{http_code}" "$COMPLIANCE_API_URL/api/report/$REPORT_ID/approvalstatus")
-  body=$(echo "$response" | head -n -1)
-  code=$(echo "$response" | tail -n1)
 
-  case "$code" in
-    200)
-      echo "CM3 approvals complete."
-      exit 0
-      ;;
-    406|400|424)
-      echo "Error in CM3 approval: $body"
-      exit 2
-      ;;
-    202)
-      echo "Approval not ready, retrying in $POLL_INTERVAL seconds..."
-      sleep $POLL_INTERVAL
-      ;;
-    *)
-      echo "Unexpected response: $code $body"
-      sleep $POLL_INTERVAL
-      ;;
-  esac
-done
 
-echo "Timed out waiting for CM3 approval."
-exit 1
 
 
 
@@ -534,6 +466,26 @@ exit 1
 
 
 
+apiVersion: v1
+kind: Service
+metadata:
+  name: ppl-prun-utils
+  labels:
+    app: ppl-prun-utils
+  annotations:
+    # these 2 annotations will create a DNS
+    external-dns.alpha.kubernetes.io/hostname: "ppl-prun-utils-nonprod.hcck8s-ctc.optum.com"
+    external-dns.alpha.kubernetes.io/ttl: "3600"
+spec:
+  type: LoadBalancer
+  selector:
+    app: ppl-prun-utils
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 8080
+  internalTrafficPolicy: Local
 
 
 
@@ -542,50 +494,20 @@ exit 1
 
 
 
-#!/bin/bash
 
-#KIND=deployment
-#NAME=fds-paperless-activiti-stage
-#RELEASE=fds-paperless-activiti
-#kubectl annotate $KIND $NAME meta.helm.sh/release-name=$RELEASE
-#kubectl annotate $KIND $NAME meta.helm.sh/release-namespace=$NAMESPACE
-#kubectl label $KIND $NAME app.kubernetes.io/managed-by=Helm
 
 
-### Update resources for non-pra namespace
 
-# NAMESPACE=paperless-delivery-options-stage
 
-# ENV=stage
 
-# APPS="paperless-letters-connector"
 
-NAMESPACE=provider-email-notifications
 
-ENV=stage
 
 
-APPS="fds-pen-batch,fds-paperless-pen-api"
-# APPS="fds-paperless-activiti-pra,fds-paperless-message-service-pra,ppl-paperless-processor-listener-pra,ppl-prun-filestore-pra,ppl-prun-services-pra"
 
-for app in $(echo "$APPS" | tr ',' ' '); do
-  echo "App: $app"
-  # deployment
-  kubectl annotate deployment $app-$ENV meta.helm.sh/release-name=$app
-  kubectl annotate deployment $app-$ENV meta.helm.sh/release-namespace=$NAMESPACE-$ENV
-  kubectl label deployment $app-$ENV app.kubernetes.io/managed-by=Helm
 
-  # service
-  kubectl annotate service $app-$ENV-service meta.helm.sh/release-name=$app
-  kubectl annotate service $app-$ENV-service meta.helm.sh/release-namespace=$NAMESPACE-$ENV
-  kubectl label service $app-$ENV-service app.kubernetes.io/managed-by=Helm
 
-  # ingress
-  kubectl annotate ingress $app-$ENV-ingress meta.helm.sh/release-name=$app
-  kubectl annotate ingress $app-$ENV-ingress meta.helm.sh/release-namespace=$NAMESPACE-$ENV
-  kubectl label ingress $app-$ENV-ingress app.kubernetes.io/managed-by=Helm
 
-done
 
 
 
@@ -593,4 +515,492 @@ done
 
 
 
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: utils-hcr-app
+spec:
+  selector:
+    matchLabels:
+      app: utils-hcr-app
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: utils-hcr-app
+    spec:
+      containers:
+      - name: utils-hcr-app
+        image: ppl-hcr-report:trial
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 5000
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+from calendar import monthrange
+from datetime import datetime, timedelta
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from src.ADTReport.tableHead import head
+from src.ADTReport.tableTail import tail
+from src.util.utils import SERVER, SENDER_EMAIL, ADT_RECEIVER_EMAIL, document
+from src.ADTReport.tableHeadDataHtml1 import headData1
+from src.ADTReport.mailTail import mailTail
+
+
+
+def get_previous_month_year():
+    today = datetime.utcnow()
+    first_of_this_month = today.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    last_of_prev_month = first_of_this_month - timedelta(seconds=1)
+    return last_of_prev_month.year, last_of_prev_month.month
+
+
+def get_monthly_notification_counts(year, month, space_id):
+    import traceback
+    first_day = datetime(year, month, 1)
+    last_day = datetime(year, month, monthrange(year, month)[1], 23, 59, 59)
+    # Bounced: sendEmailNotifications true, eDeliveryError contains 'bounce'
+    try:
+        bounced_count = document.count_documents({
+            "spaceId": space_id,
+            "dateCreated": {"$gte": first_day, "$lte": last_day},
+            "metadata.sendEmailNotifications": True,
+            "metadata.eDeliveryError": {"$regex": "bounce", "$options": "i"}
+        })
+    except Exception as e:
+        print("Exception in bounced_count query:", e)
+        traceback.print_exc()
+        bounced_count = -1
+    # Successful: sendEmailNotifications true, providerEmailId is not empty, split into 5-day intervals
+    successful_count = 0
+    interval_start = first_day
+    while interval_start < last_day:
+        interval_end = min(interval_start + timedelta(days=4, hours=23, minutes=59, seconds=59), last_day)
+        try:
+            successful_count += document.count_documents({
+                "spaceId": space_id,
+                "dateCreated": {"$gte": interval_start, "$lte": interval_end},
+                "metadata.sendEmailNotifications": True,
+                "metadata.providerEmailId": {"$ne": ""}
+            })
+        except Exception as e:
+            print(f"Exception in successful_count query for interval {interval_start} to {interval_end}:", e)
+            traceback.print_exc()
+        interval_start = interval_end + timedelta(seconds=1)
+    return first_day.strftime("%B %Y"), bounced_count, successful_count
+
+
+def _generate_message(receiverEmail) -> MIMEMultipart:
+    SUBJECT = 'ADT Notifications Monthly Report'
+    year, month = get_previous_month_year()
+    space_id = 11903
+    month_label, bounced, successful = get_monthly_notification_counts(year, month, space_id)
+    # Build table row for previous month
+    rows = f"<tr><td>{month_label}</td><td>{bounced}</td><td>{successful}</td></tr>\n"
+    # Build the email HTML (only pass the date/time to headData1)
+    table_html = head + headData1.format(datetime.utcnow()) + rows + tail + mailTail
+    message = MIMEMultipart("alternative", None, [MIMEText(table_html, 'html')])
+    message['Subject'] = SUBJECT
+    message['From'] = SENDER_EMAIL
+    message['To'] = ", ".join(receiverEmail)
+    return message
+
+
+def send_failed_status():
+    message = _generate_message(ADT_RECEIVER_EMAIL)
+    server = smtplib.SMTP(SERVER)
+    server.ehlo()
+    server.sendmail(SENDER_EMAIL, ADT_RECEIVER_EMAIL, message.as_string())
+    server.quit()
+
+
+if __name__ == '__main__':
+    print("job started via cron : ", datetime.now())
+    send_failed_status()
+    print("job completed at :", datetime.now())
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+=bdpass2
+
+
+from datetime import datetime, timedelta, date
+from src.bdpass.bdpassUtil import formatAMPM, getStrDate, record_Ind_835, record_EFT_Ind, record_default
+from pymongo import MongoClient
+import sys
+import os
+import logging as logger
+
+sys.path.append('.')
+
+
+def bdPassDownload(spaceId, freqDays, EFT_flag):
+    logger.info("starting prunDownload data for : " + str(spaceId))
+
+    if not os.path.exists('report'):
+        os.makedirs('report')
+
+    url = os.getenv("MONGO_URI_PRD")
+    client = MongoClient(url)
+    dbname = client['rulesEngineStore']
+    collection = dbname['document']
+
+    currentMidNight = datetime.combine(date.today(), datetime.min.time())
+    query = {
+        "spaceId": spaceId,
+        "dateCreated": {
+            "$gte": (currentMidNight - timedelta(days=freqDays)),
+            "$lt": currentMidNight
+        }
+    }
+    logger.info(f"query ==> {query}")
+    cursor = collection.find(query)
+
+    file = open("report/FDS_RAW_" + str(spaceId) + "_" + getStrDate() + ".txt", "a")
+    for doc in cursor:
+        dateObj = doc.get("dateCreated")
+        dateStr = str(dateObj)
+        mmmdd = dateObj.strftime("%b %d")
+        fullDate = mmmdd + formatAMPM(datetime.fromisoformat(dateStr))
+
+        if spaceId == 10403 and str(doc.get("metadata").get("Ind_835")) != "None":
+            record = record_Ind_835(doc, fullDate)
+
+        elif EFT_flag == True:
+            record = record_EFT_Ind(doc, fullDate)
+
+        else:
+            record = record_default(doc, fullDate)
+
+        # print("this a RECORD : ", record)
+        file.write(record)
+    file.close()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+from datetime import datetime, timedelta
+
+
+def formatAMPM(date):
+    hours = date.hour
+    minutes = date.minute
+    seconds = date.second
+    year = date.year
+    ampm = "PM" if hours >= 12 else "AM"
+    hours = hours % 12
+    hours = hours if hours != 0 else 12  # the hour '0' should be '12'
+    minutes = "0" + str(minutes) if minutes < 10 else minutes
+    strTime = ", " + str(year) + " " + str(hours) + ":" + str(minutes) + ":" + str(seconds) + " " + str(ampm)
+    return strTime
+
+
+def getStrDate():
+    date_yesterday = datetime.today() - timedelta(days=1)
+    return date_yesterday.strftime('%d-%m-%Y')
+
+
+def record_Ind_835(doc, fullDate):
+    return ('{"record":{"dateCreated":"' +
+            fullDate +
+            '","metadata":{"category":"' +
+            str(doc.get("metadata").get("fileDescription")) +
+            '","corporateMpin":"' +
+            str(doc.get("metadata").get("corporateMpin")) +
+            '","emailAlertReq":"' +
+            str(doc.get("metadata").get("emailAlertReq")) +
+            '","filePath":"' +
+            str(doc.get("metadata").get("filePath")) +
+            '","mpin":"' +
+            str(doc.get("metadata").get("mpin")) +
+            '","originalPrintTrail":"' +
+            str(doc.get("metadata").get("originalPrintTrail")) +
+            '","subCategory":"' +
+            str(doc.get("metadata").get("subCategory")) +
+            '","tin":"' +
+            str(doc.get("metadata").get("tin")) +
+            '","EFT_Ind":"' +
+            str(doc.get("metadata").get("EFT_Ind")) +
+            '","Ind_835":"' +
+            str(doc.get("metadata").get("Ind_835")) +
+            '"},"spaceId":{"$numberInt":' +
+            str(doc.get("spaceId")) +
+            '},"status":"' +
+            str(doc.get("status")) +
+            '"}}\r')
+
+
+def record_EFT_Ind(doc,fullDate):
+    return ('{"record":{"dateCreated":"' +
+                      fullDate +
+                      '","metadata":{"category":"' +
+                      str(doc.get("metadata").get("fileDescription")) +
+                      '","corporateMpin":"' +
+                      str(doc.get("metadata").get("corporateMpin")) +
+                      '","emailAlertReq":"' +
+                      str(doc.get("metadata").get("emailAlertReq")) +
+                      '","filePath":"' +
+                      str(doc.get("metadata").get("filePath")) +
+                      '","mpin":"' +
+                      str(doc.get("metadata").get("mpin")) +
+                      '","originalPrintTrail":"' +
+                      str(doc.get("metadata").get("originalPrintTrail")) +
+                      '","subCategory":"' +
+                      str(doc.get("metadata").get("subCategory")) +
+                      '","tin":"' +
+                      str(doc.get("metadata").get("tin")) +
+                      '","EFT_Ind":"' +
+                      str(doc.get("metadata").get("EFT_Ind")) +
+                      '"},"spaceId":{"$numberInt":' +
+                      str(doc.get("spaceId")) +
+                      '},"status":"' +
+                      str(doc.get("status")) +
+                      '"}}\r')
+
+
+def record_default(doc,fullDate):
+    return ('{"record":{"dateCreated":"' +
+                      fullDate +
+                      '","metadata":{"category":"' +
+                      str(doc.get("metadata").get("fileDescription")) +
+                      '","corporateMpin":"' +
+                      str(doc.get("metadata").get("corporateMpin")) +
+                      '","emailAlertReq":"' +
+                      str(doc.get("metadata").get("emailAlertReq")) +
+                      '","filePath":"' +
+                      str(doc.get("metadata").get("filePath")) +
+                      '","mpin":"' +
+                      str(doc.get("metadata").get("mpin")) +
+                      '","originalPrintTrail":"' +
+                      str(doc.get("metadata").get("originalPrintTrail")) +
+                      '","subCategory":"' +
+                      str(doc.get("metadata").get("subCategory")) +
+                      '","tin":"' +
+                      str(doc.get("metadata").get("tin")) +
+                      '"},"spaceId":{"$numberInt":' +
+                      str(doc.get("spaceId")) +
+                      '},"status":"' +
+                      str(doc.get("status")) +
+                      '"}}\r')
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+from datetime import datetime
+
+from src.util.utils import document
+
+#change the start and the end date
+start = datetime(2023, 9, 16, 0, 0, 0)
+end = datetime(2023, 9, 17, 0, 0, 0)
+
+spaceIds = [8889, 8935, 8936, 8937, 8938, 10074, 10075, 10103, 10303, 10403, 10503, 10603, 10703, 10803, 10903,
+            11103]
+
+# mongo query
+def monthlyCount(spaceId):
+    query = {"spaceId": spaceId,
+             "dateCreated": {'$lt': end, '$gte': start}}
+    return document.count_documents(query)
+
+
+for spaceId in spaceIds:
+    print("spaceId:", spaceId, "count:", monthlyCount(spaceId))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+from datetime import datetime
+from src.bdpass.uploadReport import uploadFilesBackup, uploadFilesBdpass, deleteFiles
+from src.bdpass.bdpassMain import bdPassDownload
+import logging as logger
+
+
+def run_bdpass():
+    logger.info(f"bdpass job started via cron : {datetime.now()}")
+    freqDays = 1
+
+    # without EFT weekly
+    weftSpaceIds = [8889, 8935, 8936, 8937, 8938, 10103, 10503, 10603, 10703, 10903, 11103, 11203, 11503, 11803, 20103]
+    for weftSpaceId in weftSpaceIds:
+        EFT_flag = False
+        bdPassDownload(weftSpaceId, freqDays, EFT_flag)
+
+    # with EFT daily
+    eftSpaceIds = [10074, 10075, 10303, 10403, 10803]
+    for eftSpaceId in eftSpaceIds:
+        EFT_flag = True
+        bdPassDownload(eftSpaceId, freqDays, EFT_flag)
+
+    logger.info(f"report download finished at : {datetime.now()}")
+
+    uploadFilesBackup()
+    uploadFilesBdpass()
+    deleteFiles()
+
+    logger.info(f"bdpass job completed at : {datetime.now()}")
+
+# if __name__ == '__main__':
+#     logger.info(f"job started at : {datetime.now()}")
+#     run_bdpass()
+#     logger.info(f"job completed at : {datetime.now()}")
