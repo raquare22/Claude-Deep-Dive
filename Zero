@@ -1,98 +1,79 @@
-from datetime import datetime
-import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-from src.processorReport.tableHead import head
-from src.processorReport.tableTail import tail
-from src.processorReport.spaceIdData import _populate_spaceIdsRowHtml
-from src.util.utils import SERVER, SENDER_EMAIL, RECEIVER_EMAIL
-from src.processorReport.tableHeadDataHtml1 import headData1
-from src.processorReport.tableHeadDataHtml2 import headData2
-from src.processorReport.mailTail import mailTail
+# Stage 1: Build Stage
+# use python dev image to build the app as it has all the required tools
 
+FROM centraluhg.jfrog.io/glb-docker-uhg-loc/uhg-goldenimages/python:3.13-latest-dev
+# FROM optum-docker-auth-prod.repo1.uhc.com/chainguard/python/dev:3.13-latest-dev AS builder
 
+# ENV PATH="/app/venv/bin:$PATH"
 
-def _generate_message(receiverEmail) -> MIMEMultipart:
-    SUBJECT = 'Processor Statuses'
-    spaceIds = [8889, 8935, 8936, 8937, 8938, 10074, 10075, 10103, 10303, 10403, 10503, 10603, 10703, 10803, 10903, 11103, 11203, 11303, 11403, 11503, 11603, 11803]
-    rowData = _populate_spaceIdsRowHtml(spaceIds)
-    fmtMail = head + headData1.format(datetime.utcnow()) + rowData[0] + tail + headData2 + rowData[1] + mailTail
-    message = MIMEMultipart("alternative", None, [MIMEText(fmtMail, 'html')])
-    message['Subject'] = SUBJECT
-    message['From'] = SENDER_EMAIL
-    message['To'] = ", ".join(receiverEmail)
-    return message
+USER root
 
+WORKDIR /app
+ENV PATH="/venv/bin:$PATH"
 
-def send_processor_status():
-    message = _generate_message(RECEIVER_EMAIL)
-    server = smtplib.SMTP(SERVER)
-    server.ehlo()
-    server.sendmail(SENDER_EMAIL, RECEIVER_EMAIL, message.as_string())
-    server.quit()
+#Defining package Artifactory URL
+# RUN python -m pip config set global.index https://repo1.uhc.com/artifactory/api/pypi/pypi-virtual
+# RUN python -m pip config set global.index-url https://repo1.uhc.com/artifactory/api/pypi/pypi-virtual/simple
 
 
-# if __name__ == '__main__':
-#     print("job started via cron : ", datetime.now())
-#     send_processor_status()
-#     print("job completed at :", datetime.now())
+# Create a new virtual environment to cleanly hold the application’s dependencies
+RUN python -m venv /venv
+# Copy requirements.txt from the current directory to the /app location in the container
+COPY requirements.txt .
 
+# Install all dependencies
+RUN pip install --no-cache-dir -r requirements.txt
 
+# Uninstall pip to reduce the image size
+RUN python3 -m pip uninstall -y pip
 
+# Stage 2: Final Stage
+# Use python minimal runtime image to run the app as it is lightweight
+# FROM centraluhg.jfrog.io/glb-docker-uhg-loc/uhg-goldenimages/python/dev:3.13-latest-dev AS builder
+# FROM optum-docker-auth-prod.repo1.uhc.com/chainguard/python:3.13-latest
 
+# WORKDIR /app
 
+# ENV PATH="/venv/bin:$PATH"
 
+# # Use dev image again as it contains shell
+# FROM optum-docker-auth-prod.repo1.uhc.com/chainguard/python/dev:3.13-latest-dev
 
+# # 1) become root so we can create/chown a writable folder
+# USER root
+# WORKDIR /app
 
+# # pre-create report/ and give ownership to UID 1000
+# # (replace “1000:0” with non-root UID:GID if different)
+# RUN mkdir -p report && chown -R 1000:0 report
 
+# # preserve your original venv path
+# ENV PATH="/venv/bin:$PATH"
 
+RUN mkdir -p report && chown -R 1000:0 report
 
 
+# 2) copy in your built venv and source
+# COPY --from=builder /app/venv /venv
+COPY . ./
 
 
+# 3) drop back to non-root
+USER 1000
 
+ENV PYTHONUNBUFFERED=0
 
+EXPOSE 8080
 
-from src.processorReport.spaceIdRowHtml import spaceIdRowHtml
-from src.processorReport.spaceIdRowHtmlShutdown import spaceIdRowHtmlShutdown
-from src.util.utils import processor
-from src.util.clientName import getClient
+ENTRYPOINT [ "python3", "-u", "/app/main.py" ]
 
 
-def searchProcessor(id):
-    tempProcessor = []
-    cursor = processor.find({"configSpaceId": id},
-                            {"configSpaceId": 1, "status": 1, "process.config.ftp_rootdir": 1})
-    for rec in cursor:
-        tempId = rec['configSpaceId']
-        tempStatus = rec['status']
-        tempRootdr = rec['process']['config']['ftp_rootdir']
-        tempProcessor.append((tempId, tempStatus, tempRootdr))
 
-    return tempProcessor
 
 
-def _populate_spaceIdsRowHtml(spaceIds):
-    htmlTagResult = []
-    spaceIdRowHtmlTags = ""
-    spaceIdRowHtmlTagsShutdown = ""
-    index1 = 1
-    index2 = 1
-    for spaceId in spaceIds:
-        rec = searchProcessor(spaceId)
 
-        for i in rec:
-            if i[1] == "SHUTDOWN":
-                spaceIdRowHtmlTagsShutdown = spaceIdRowHtmlTagsShutdown + spaceIdRowHtmlShutdown.format(index2, spaceId, getClient(spaceId), "red", i[1], i[2])
-                index2 = index2 + 1
-            else:
-                spaceIdRowHtmlTags = spaceIdRowHtmlTags + spaceIdRowHtml.format(index1, spaceId, getClient(spaceId), "limegreen", i[1], i[2])
-                index1 = index1 + 1
 
-    htmlTagResult.append(spaceIdRowHtmlTags)
-    htmlTagResult.append(spaceIdRowHtmlTagsShutdown)
 
-    return htmlTagResult
 
 
 
@@ -117,489 +98,90 @@ def _populate_spaceIdsRowHtml(spaceIds):
 
 
 
-
-
-
-
-headData1 = """
-  <body>
-    Hi All,<br> <br>
-     Processor Statuses at {} are as following. <br><br>
-     Active Processors-
-    <table style="width:100%">
-      <thead>
-        <tr style="border: 1px solid #1b1e24;">
-          <th bgcolor="LightBlue" style="vertical-align : middle;text-align:center;">S. No.</th>
-          <th bgcolor="LightBlue" style="vertical-align : middle;text-align:center;">Space Id</th>
-          <th bgcolor="LightBlue" style="vertical-align : middle;text-align:center;">Client Name</th>
-          <th bgcolor="LightBlue" style="vertical-align : middle;text-align:center;">Status</th>
-          <th bgcolor="LightBlue" colspan="5" style="vertical-align : middle;text-align:center;">Root Directory</th>
-        </tr>          
-      </thead>
-      <tbody>
-"""
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-headData2 = """
-
-    Shutdown Processors-
-    <br>
-    <table style="width:100%">
-      <thead>
-        <tr style="border: 1px solid #1b1e24;">
-          <th bgcolor="LightBlue" style="vertical-align : middle;text-align:center;">S. No.</th>
-          <th bgcolor="LightBlue" style="vertical-align : middle;text-align:center;">Space Id</th>
-          <th bgcolor="LightBlue" style="vertical-align : middle;text-align:center;">Client Name</th>
-          <th bgcolor="LightBlue" style="vertical-align : middle;text-align:center;">Status</th>
-          <th bgcolor="LightBlue" colspan="5" style="vertical-align : middle;text-align:center;">Root Directory</th>
-        </tr>          
-      </thead>
-      <tbody>
-
-"""
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-client = ""
-
-def getClient(spaceId):
-    if spaceId == 8889:
-        client = "UNET"
-    elif spaceId == 8935:
-        client = "LET GEN"
-    elif spaceId == 8936:
-        client = "NextGen"
-    elif spaceId == 8937:
-        client = "1click"
-    elif spaceId == 8938:
-        client = "CCSManual"
-    elif spaceId == 10074:
-        client = "UNET PRA"
-    elif spaceId == 10075:
-        client = "COSMOS PRA"
-    elif spaceId == 10103:
-        client = "COSMOS"
-    elif spaceId == 10303:
-        client = "UHC WEST"
-    elif spaceId == 10403:
-        client = "CSP PRA"
-    elif spaceId == 10503:
-        client = "ODAR"
-    elif spaceId == 10603:
-        client = "MR APPEALS"
-    elif spaceId == 10703:
-        client = "ETS APPEAL"
-    elif spaceId == 10803:
-        client = "USP PRA"
-    elif spaceId == 10903:
-        client = "USP CLAIMS"
-    elif spaceId == 11103:
-        client = "CSP Claims"
-    elif spaceId == 11203:
-        client = "OCM"
-    elif spaceId == 11303:
-        client = "IHR"
-    elif spaceId == 11403:
-        client = "CC"
-    elif spaceId == 11503:
-        client = "CAP"
-    elif spaceId == 11603:
-        client = "TEXAS GOLD CARD"
-    elif spaceId == 11803:
-        client= "HOUSE CALLS"
-    else:
-        client = "Invalid SpaceId"
-
-    return client
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-SPACE_IDS = [8889, 8935, 8936, 8937, 8938, 10074, 10075, 10103, 10303, 10403, 10503, 10603, 10703, 10803, 10903,
-                11103,11203, 11503, 11803, 20103]
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-from datetime import date, datetime, timedelta
-
-# previous day's date is the hcr report date
-def get_hcr_report_date():
-    return (datetime.now() - timedelta(days=1)).strftime("%m/%d/%y")
-
-# current day's 00:00
-def get_current_midnight():
-    return datetime.combine(date.today(), datetime.min.time())
-
-# current time 2 hrs before
-# def get_current_time():
-#     return datetime.utcnow() - timedelta(hours=2)
-
-# previous day's 00:00
-def get_previous_midnight():
-    return get_current_midnight() - timedelta(days=1)
-
-def get_48hrs_midnight_10075sfly():
-    return get_current_midnight() - timedelta(days=2)
-
-
-# def get_previous_midnight():
-#     if date.today().strftime("%A") == 'Monday':
-#         prevMidNight = get_current_midnight() - timedelta(days=3)
-#     else:
-#         prevMidNight = get_current_midnight() - timedelta(days=1)
-#     return prevMidNight
-
-
-# previous last 7 day's 00:00
-def get_previous_midnight_7days():
-    return get_previous_midnight() - timedelta(days=7)
-
-# query date created for 1 day data
-def get_date_created():
-    dateCreated = {"$gte": get_previous_midnight(), "$lt": get_current_midnight()}
-    return dateCreated
-
-
-# query date created for 10075 sfly data
-def get_date_created_10075sfly():
-    dateCreated = {"$gte": get_48hrs_midnight_10075sfly(), "$lt": get_previous_midnight()}
-    return dateCreated
-
-
-# query date created for last 7 day's data
-def get_date_created_7days():
-    dateCreated7 = {"$gte": get_previous_midnight_7days(), "$lt": get_previous_midnight()}
-    return dateCreated7
-
-
-
-# 6hr window new timings
-
-# current day's 00:00
-def get_current_midnight_6hrwin():
-    return datetime.combine(date.today(), datetime.min.time())
-
-# start time of the window
-# def get_start_time_6hrwin():
-#     return datetime.utcnow()-timedelta(hours=12)
-
-# end time of the window
-def get_end_time_6hrwin():
-    return datetime.utcnow()-timedelta(hours=2)
-
-def get_24hrs_end_time_6hrwin_10075sfly():
-    return datetime.utcnow()-timedelta(days=1) - timedelta(hours=2)
-
-# query date created for the window
-def get_date_created_6hrwin():
-    dateCreated = {"$gte": get_current_midnight_6hrwin(), "$lt":get_end_time_6hrwin()}
-    return dateCreated
-
-def get_date_created_6hrwin_10075sfly():
-    dateCreated = {"$gte": get_previous_midnight(), "$lt":get_24hrs_end_time_6hrwin_10075sfly()}
-    return dateCreated
-
-# previous day's 00:00
-# def get_previous_midnight_6hrwin():
-#     prevMidNight = get_current_midnight_6hrwin() - timedelta(days=1)
-#     return prevMidNight
-
-# previous last 7 day's 00:00
-def get_previous_midnight_7days_6hrwin():
-    return get_current_midnight_6hrwin() - timedelta(days=7)
-
-# query date created for last 7 days
-def get_date_created_7days_6hrwin():
-    dateCreated7 = {"$gte": get_previous_midnight_7days_6hrwin(), "$lt": get_current_midnight_6hrwin()}
-    return dateCreated7
-
-# date for 6hr window
-def get_hcr_report_date_6hrwin():
-    return (get_current_midnight_6hrwin()).strftime("%m/%d/%y")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-from src.config.config import mongo_db
-
-false = False
-true = True
-
-# Db Connection
-db = mongo_db()
-processorTransaction = db['processorTransaction']
-processorFileTask = db['processorFileTask']
-document = db['document']
-processor = db['processor']
-hook = db['hook']
-
-# Email Values
-# 'ppl_support@ds.uhc.com' Support DL for our team
-SERVER = 'ctc-smtp-relay-k8s.optum.com'
-SENDER_EMAIL = 'ppl_support@ds.uhc.com'
-RECEIVER_EMAIL = ['ppl_support@ds.uhc.com']
-RECEIVER_EMAIL_LANE = ['ppl_support@ds.uhc.com', 'john_l_mooney@uhc.com']
-ADT_RECEIVER_EMAIL = ['terri.jacque@uhc.com', 'necole.siegrist@uhc.com', 'ppl_support@ds.uhc.com']
-
-
-def documentQuery(query):
-    try:
-        return document.count_documents(query)
-    except Exception as e:
-        print(f"Error querying document: {e}")
-        return -1
-
-def processorTransactionQuery(query):
-    try:
-        return processorTransaction.count_documents(query)
-    except Exception as e:
-        print(f"Error querying processorTransaction: {e}")
-        return -1
-
-def processorFileTaskQuery(query):
-    try:
-        return processorFileTask.count_documents(query)
-    except Exception as e:
-        print(f"Error querying processorFileTask: {e}")
-        return -1
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-import unittest
-from unittest.mock import patch, MagicMock
-from datetime import datetime, timedelta
-import pytz
-from pymongo import errors as pymongo_errors
-from io import StringIO
-import sys
-import os
-
-# Adjust the path to include the project root directory
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
-from src.mongoCleanup.cleanupScript import cleanup_collections
-from src.mongoCleanup.config import MONGO_URI, DATABASE_NAME, COLLECTIONS
-
-
-class TestCleanupCollections(unittest.TestCase):
-
-    @patch("src.mongoCleanup.cleanupScript.MongoClient")
-    def test_cleanup_success(self, mock_mongo_client):
-        # Setup
-        mock_client = MagicMock()
-        mock_db = MagicMock()
-        mock_collection = MagicMock()
-        mock_result = MagicMock()
-
-        mock_mongo_client.return_value = mock_client
-        mock_client.__getitem__.return_value = mock_db
-        mock_db.__getitem__.return_value = mock_collection
-        mock_collection.delete_many.return_value = mock_result
-        mock_result.deleted_count = 5
-
-        # Capture the output and current time just before running the function
-        with patch("sys.stdout", new=StringIO()) as fake_out:
-            current_now = datetime.now(pytz.UTC)
-            cleanup_collections()
-            output = fake_out.getvalue().strip()
-
-        # Assert
-        for collection_name, duration_days in COLLECTIONS.items():
-            cutoff_date = current_now - timedelta(days=duration_days)
-            query = {"dateCreated": {"$lt": cutoff_date}}
-            mock_collection.delete_many.assert_any_call(query)
-            self.assertIn(
-                f"Deleted {mock_result.deleted_count} documents from {collection_name}",
-                output,
+#!/usr/bin/env groovy
+import com.optum.jenkins.pipeline.library.utils.Constants
+
+@Library("com.optum.jenkins.pipeline.library@v0.3.37") _
+
+
+pipeline {
+  agent { label 'docker-maven-slave' }
+  environment {
+    GIT_CREDENTIALS_ID = 'a1ca614e-2477-48a4-b0f4-24de92ef44a6'
+    DOCKER_CREDENTIALS_ID = 'fds_paperless-docker-id'
+    DOCKER_HOSTNAME = 'docker.repo1.uhc.com'
+    DOCKER_GC_HOSTNAME = 'optum-docker-auth-prod.repo1.uhc.com'
+    DOCKER_NAMESPACE = 'fds-paperless'
+    DOCKER_REPO = 'ppl-prun-utils'
+    DOCKER_DEV_TAG= 'latest'
+    DOCKER_TEST_TAG= 'stage'
+    HCC_K8S_CREDENTIALS_ID='prun-hcc-k8s-id'
+    JAVA_VERSION = "11.0"
+    JAVA_HOME = "/tools/java/jdk11.0"
+    DOCKER_IMG = "python/dev:latest-dev"
+  }
+
+  stages {
+    stage('Build/Deploy Dev Docker Image') {
+      steps {
+        echo 'Docker Build Dev'
+        glDockerImagePull([
+          image: "optum-docker-auth-prod.repo1.uhc.com/chainguard/python/dev:latest-dev",
+          credentialsId: "${env.DOCKER_CREDENTIALS_ID}",
+        ])
+         glDockerImageBuild credentialsId: "${DOCKER_CREDENTIALS_ID}", containerRegistry:"$DOCKER_GC_HOSTNAME", image: "${env.DOCKER_HOSTNAME}/${env.DOCKER_NAMESPACE}/${env.DOCKER_REPO}:${env.DOCKER_DEV_TAG}"
+         glDockerImagePush credentialsId: "${DOCKER_CREDENTIALS_ID}", image: "${env.DOCKER_HOSTNAME}/${env.DOCKER_NAMESPACE}/${env.DOCKER_REPO}:${env.DOCKER_DEV_TAG}"
+      }
+    }
+
+	stage ('Deploy to HCC K8S') {
+      agent { label 'docker-maven-slave' }
+      steps {
+        script {
+          withCredentials([
+                  string(credentialsId: 'VAULT_NON_PROD_ROLE_ID', variable: 'vault_role_id'),
+                  string(credentialsId: 'VAULT_NON_PROD_SECRET_ID', variable: 'vault_secret_id'),
+          ]) {
+            sh "sed -i 's/@vault_role_id/$vault_role_id/g' deployment/deployment.yml"
+            sh "sed -i 's/@vault_secret_id/$vault_secret_id/g' deployment/deployment.yml"
+            glKubernetesApply(
+                    credentials: "${env.HCC_K8S_CREDENTIALS_ID}",
+                    clusterPort:443,
+                    cluster: "hcc-ctc-nonprd-usr001-0.optum.com",
+                    namespace: "provider-paperless-stage",
+                    deleteIfExists:"true",
+                    yamls: [
+                            "./deployment/deployment.yml",
+                            //   "./deployment/cron-job.yml"
+                    ],
+                    env: "stage",
+                    isProduction: false
             )
-
-    @patch("src.mongoCleanup.cleanupScript.MongoClient")
-    def test_operation_failure(self, mock_mongo_client):
-        # Setup
-        mock_client = MagicMock()
-        mock_db = MagicMock()
-        mock_collection = MagicMock()
-
-        mock_mongo_client.return_value = mock_client
-        mock_client.__getitem__.return_value = mock_db
-        mock_db.__getitem__.return_value = mock_collection
-        mock_collection.delete_many.side_effect = pymongo_errors.OperationFailure(
-            "Operation failed"
-        )
-
-        # Capture the output
-        with patch("sys.stdout", new=StringIO()) as fake_out:
-            cleanup_collections()
-            output = fake_out.getvalue().strip()
-
-        # Assert
-        self.assertIn("Operation failed: Operation failed", output)
-
-    @patch("src.mongoCleanup.cleanupScript.MongoClient")
-    def test_unexpected_error(self, mock_mongo_client):
-        # Setup
-        mock_client = MagicMock()
-        mock_db = MagicMock()
-        mock_collection = MagicMock()
-
-        mock_mongo_client.return_value = mock_client
-        mock_client.__getitem__.return_value = mock_db
-        mock_db.__getitem__.return_value = mock_collection
-        mock_collection.delete_many.side_effect = Exception("Unexpected error")
-
-        # Capture the output
-        with patch("sys.stdout", new=StringIO()) as fake_out:
-            cleanup_collections()
-            output = fake_out.getvalue().strip()
-
-        # Assert
-        self.assertIn("Unexpected error during cleanup: Unexpected error", output)
+          }
+        }
+      }
+    }
+  }
 
 
-if __name__ == "__main__":
-    unittest.main()
+  post {
+    always {
+      echo 'This will always run'
+      emailext body: "Build URL: ${BUILD_URL}",
+        subject: "$currentBuild.currentResult-$JOB_NAME",
+        to: 'jenny.j.wang@optum.com'
+    }
+    success {
+      echo 'This will run only if successful'
+    }
+    failure {
+      echo 'This will run only if failed'
+    }
+    unstable {
+      echo 'This will run only if the run was marked as unstable'
+    }
+  }
+}
 
 
 
@@ -632,65 +214,293 @@ if __name__ == "__main__":
 
 
 
+from flask import Flask, request, redirect, jsonify
+# import schedule
+from src.hcr.sendEmail import send_message
+from src.hcr_24hr.sendEmail import send_message_lane
+from src.bdpass.runner import run_bdpass
+from src.hookReport.HookTimeWindow import send_hook_report
+from src.processorReport.ProcessorStatus import send_processor_status
+from src.mongoCleanup.cleanupScript import cleanup_collections as cleanupScript
+from src.nasCleanup.nasCleanupScript_SMB import cleanup_nas
+from apscheduler.schedulers.background import BackgroundScheduler
+from src.ADTReport.ProcessorStatus import send_failed_status
+
+import pytz
+from src.bdpass.vaultconnection import vault_service
+from pathlib import Path
+
+app = Flask(__name__)
+
+vault_service.update_app_config()
+
+scheduler = BackgroundScheduler()
+# hcr report 1
+scheduler.add_job(send_message, 'cron', minute=0, hour=8, day_of_week='mon-sun', id='hcr_report_1')
+
+# offshore timings hook and processor reports
+scheduler.add_job(send_hook_report, 'cron', minute=50, hour=4, day_of_week='mon-fri', id='offshore_hook_report')
+scheduler.add_job(send_processor_status, 'cron', minute=55, hour=4, day_of_week='mon-fri', id='offshore_processor_status')
+
+#for monthly bounce email check
+scheduler.add_job(send_failed_status, 'cron', minute=5, hour=0, day=1, id='trackitreport_monthly_failure_status')
+
+# hcr report 2
+scheduler.add_job(send_message, 'cron', minute=0, hour=14, day_of_week='mon-sun', id='hcr_report_2')
+
+# # onshore timings hook and processor reports
+# scheduler.add_job(send_hook_report, 'cron', minute=50, hour=11, day_of_week='mon-fri', id='onshore_hook_report')
+# scheduler.add_job(send_processor_status, 'cron', minute=55, hour=11, day_of_week='mon-fri', id='onshore_processor_status')
+
+# #hcr report 3
+# scheduler.add_job(send_message, 'cron', minute=0, hour=20, day_of_week='mon-sun', id='hcr_report_3')
+
+#bdpass report
+scheduler.add_job(run_bdpass, 'cron', minute=0, hour=13, day_of_week='mon-sun', id='bdpass_report_generation')
+
+#hcr report 4 & also sent to lane
+scheduler.add_job(send_message_lane, 'cron', minute=0, hour=2, day_of_week='mon-sun', id='send_message_lane')
+
+
+# mongoCleanup script
+scheduler.add_job(cleanupScript, 'cron', minute=0, hour=1, day_of_week='mon-sun', id='mongo_cleanup')
+scheduler.add_job(cleanup_nas, 'cron', minute=0, hour=10, day_of_week='mon-sun', id='nas_cleanup')
+
+scheduler.start()
 
 
 
-from datetime import datetime, timedelta
-import os
-from mysql.connector import errorcode
-from pymongo import MongoClient
-import mysql.connector
-from datetime import date
-from datetime import datetime
+
+@app.route('/test', methods=['GET'])
+def test_route():
+    return "test"
+
+# Press the green button in the gutter to run the script.
+if __name__ == '__main__':
+    print("Starting main.py")
+
+    app.run(host='0.0.0.0', port=8080, use_reloader=False)
 
 
-def mongo_db():
-    url = os.getenv("MONGO_URI_PRD")
-    client = MongoClient(url)
-    return client['rulesEngineStore']
 
 
-# currentMidNight = datetime.combine(date.today(), datetime.min.time())
-# prevMidNight = currentMidNight - timedelta(days=1)
-# prevMidNight7 = currentMidNight - timedelta(days=7)
-#
-# endDate = datetime.combine(date.today(), datetime.min.time())
-#
-# print(prevMidNight.isoformat())
-# print(endDate.isoformat())
-#
-# dateCreated = {"$gte": prevMidNight, "$lt": currentMidNight}
-# dateCreated7 = {"$gte": prevMidNight7, "$lt": currentMidNight}
-#
-# query = {"configSpaceId": {"$in": [10703]},
-#          "fileName": {'$regex': '^.*\.zip', '$options': 'i'},
-#          "dateCreated": dateCreated,
-#          "status": {"$in": ["COMPLETE", "COMPLETE_WITH_ERRORS"]}}
-#
-# db = mongo_db()
-# processorTransaction = db['processorTransaction']
-#
-# print("query ==>", str(query))
-#
-# cursor = processorTransaction.find(query)
-# for doc in cursor:
-#     print(doc)
-#
-# count = processorTransaction.count_documents(query)
-# print(count)
 
-freqDays = 19
-freqDays1 = freqDays - 1
-currentMidNight = datetime.combine(date.today(), datetime.min.time())
-prev = currentMidNight - timedelta(days=freqDays)
-next = currentMidNight - timedelta(days=freqDays1)
-print(prev)
-print(next)
 
-date_yesterday = datetime.today() - timedelta(days=1)
-str_month_year = date_yesterday.strftime('%m-%Y')
-str_date = date_yesterday.strftime('%d-%m-%Y')
 
-remotepath = "/app1/bdpass/reports/" + str_month_year + "/" + str_date + "/"
-print(remotepath)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+HELP.md
+target/
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**
+!**/src/test/**
+!.gitignore
+
+#log folder
+HOME_IS_UNDEFINED/
+#common
+derby.log
+
+##Maven###
+*mvn*
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+
+### VS Code ###
+.vscode/
+# Compiled class file
+*.class
+
+# Log file
+*.log
+
+# BlueJ files
+*.ctxt
+
+# Mobile Tools for Java (J2ME)
+.mtj.tmp/
+
+# Package Files #
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
+hs_err_pid*
+# Dependendies Directories
+node_modules
+
+# MacOS
+.DS_Store
+
+# Log files
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# NPM
+package-lock.json
+
+# Jest
+/.jest/cache
+coverage
+
+# Build Directories
+build
+
+# Local Env
+.env
+
+# History
+.history
+
+#python
+__pycache__
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+.Python build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+*.manifest
+*.spec
+
+# Log files
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+.pytest_cache/
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# Translations
+*.mo
+*.pot
+
+# PyBuilder
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
+
+# pyflow
+__pypackages__/
+
+# Environment
+.venv
+env/
+venv/
+ENV/
+
+# If you are using PyCharm #
+.idea/**/workspace.xml
+.idea/**/tasks.xml
+.idea/dictionaries
+.idea/**/dataSources/
+.idea/**/dataSources.ids
+.idea/**/dataSources.xml
+.idea/**/dataSources.local.xml
+.idea/**/sqlDataSources.xml
+.idea/**/dynamic.xml
+.idea/**/uiDesigner.xml
+.idea/**/gradle.xml
+.idea/**/libraries
+*.iws /out/
+
+# Sublime Text
+*.tmlanguage.cache
+*.tmPreferences.cache
+*.stTheme.cache
+*.sublime-workspace
+*.sublime-project
+
+# sftp configuration file
+sftp-config.json
+
+# Package control specific files Package
+Control.last-run
+Control.ca-list
+Control.ca-bundle
+Control.system-ca-bundle
+GitHub.sublime-settings
+
+# Visual Studio Code #
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
 
