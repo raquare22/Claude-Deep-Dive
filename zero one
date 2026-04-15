@@ -1,0 +1,596 @@
+#!/bin/bash
+set -e
+
+COMMON_YML="pipeline.yml"
+PROFILE_YML="helm/assets/hcck8s.yml"
+
+# Function to resolve cluster host to IP
+resolve_cluster_ip() {
+  local cluster_host="$1"
+  getent hosts "$cluster_host" | awk '{ print $1 }' || {
+    echo "[ERROR] Failed to resolve $cluster_host"
+    echo ""
+  }
+}
+
+# Read environment variables
+ENVIRONMENT="${ENVIRONMENT:-}"
+# DATACENTERS="${DATACENTERS:-}"
+
+if [[ -z "$ENVIRONMENT" ]]; then
+  echo "ENVIRONMENT variable not set"
+  exit 1
+fi
+
+# Load YAML files using yq
+common=$(yq eval '.' "$COMMON_YML")
+profile=$(echo "$common" | yq eval '.k8s.profile' -)
+hcck8s=$(yq eval '.' "$PROFILE_YML")
+
+# Get datacenters list
+datacenters_raw=$(echo "$common" | yq eval ".k8s.environments.$ENVIRONMENT.deploy" -)
+IFS=',' read -ra datacenters <<< "$datacenters_raw"
+datacenters=("${datacenters[@]// /}")
+
+# Optional: filter datacenters if DATACENTERS is set
+if [[ -n "$DATACENTERS" ]]; then
+  IFS=',' read -ra filter_set <<< "$DATACENTERS"
+  filtered=()
+  for dc in "${datacenters[@]}"; do
+    for f in "${filter_set[@]}"; do
+      if [[ "$dc" == "$f" ]]; then
+        filtered+=("$dc")
+      fi
+    done
+  done
+  datacenters=("${filtered[@]}")
+fi
+
+result="[]"
+
+for datacenter in "${datacenters[@]}"; do
+  cluster=$(echo "$hcck8s" | yq eval ".hcck8sProfile.$profile.$ENVIRONMENT.$datacenter.cluster" -)
+  namespace=$(echo "$hcck8s" | yq eval ".hcck8sProfile.$profile.$ENVIRONMENT.$datacenter.namespace" -)
+
+  if [[ -z "$cluster" || -z "$namespace" || "$cluster" == "null" || "$namespace" == "null" ]]; then
+    echo "[WARN] Skipping $datacenter - missing cluster or namespace."
+    continue
+  fi
+
+  ip=$(resolve_cluster_ip "$cluster")
+  if [[ -z "$ip" ]]; then
+    echo "[WARN] Skipping $datacenter - unable to resolve $cluster."
+    continue
+  fi
+
+  app_name=$(echo "$common" | yq eval '.pipeline.application.name' -)
+  api_server="https://${ip}:443"
+
+  entry=$(jq -n \
+    --arg datacenter "$datacenter" \
+    --arg app_name "$app_name" \
+    --arg cluster "$cluster" \
+    --arg namespace "$namespace" \
+    --arg api_server "$api_server" \
+    '{
+      datacenter: $datacenter,
+      app_name: $app_name,
+      cluster: $cluster,
+      namespace: $namespace,
+      api_server: $api_server
+    }')
+  result=$(echo "$result" | jq ". += [$entry]")
+done
+
+echo "$result" > deploy_data.json
+
+echo -e "\n[INFO] Created deploy_data.json with the following deployments:\n"
+for row in $(jq -c '.[]' deploy_data.json); do
+  datacenter=$(echo "$row" | jq -r '.datacenter')
+  app_name=$(echo "$row" | jq -r '.app_name')
+  cluster=$(echo "$row" | jq -r '.cluster')
+  namespace=$(echo "$row" | jq -r '.namespace')
+  api_server=$(echo "$row" | jq -r '.api_server')
+  echo "  • Datacenter   : $datacenter"
+  echo "    App Name  : $app_name"
+  echo "    Cluster   : $cluster"
+  echo "    Namespace : $namespace"
+  echo "    API Server: $api_server"
+  echo ""
+done
+
+echo "[INFO] Total datacenters ready for deployment: $(jq '. | length' deploy_data.json)"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#!/bin/bash
+set -e
+
+ls -al scripts/
+chmod +x "$0"
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+  key="$1"
+  case $key in
+    --complianceApiUrl) COMPLIANCE_API_URL="$2"; shift; shift ;;
+    --reportId) REPORT_ID="$2"; shift; shift ;;
+    --outputPath) OUTPUT_PATH="$2"; shift; shift ;;
+    *) echo "Unknown option $1"; exit 1 ;;
+  esac
+done
+
+: "${COMPLIANCE_API_URL:?Missing --complianceApiUrl}"
+: "${REPORT_ID:?Missing --reportId}"
+: "${OUTPUT_PATH:?Missing --outputPath}"
+
+curl -f -o "$OUTPUT_PATH" "$COMPLIANCE_API_URL/api/report/$REPORT_ID/spreadsheet.xls"
+if [ $? -eq 0 ]; then
+  echo "CM3 report archived at $OUTPUT_PATH"
+else
+  echo "Failed to download CM3 report."
+  exit 1
+fi
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#!/bin/bash
+set -e
+
+PRECHECK=false
+
+while [[ $# -gt 0 ]]; do
+  key="$1"
+  case $key in
+    --complianceApiUrl) COMPLIANCE_API_URL="$2"; shift; shift ;;
+    --rallyApiUrl) RALLY_API_URL="$2"; shift; shift ;;
+    --rallyCredentialId) RALLY_CREDENTIAL_ID="$2"; shift; shift ;;
+    --rallyWorkspaceId) RALLY_WORKSPACE_ID="$2"; shift; shift ;;
+    --rallyMilestoneFormattedId) RALLY_MILESTONE_FORMATTED_ID="$2"; shift; shift ;;
+    --userStoryApprovers) USER_STORY_APPROVERS="$2"; shift; shift ;;
+    --securityScansParameters) SECURITY_SCANS_PARAMETERS="$2"; shift; shift ;;
+    --additionalReportRecipients) ADDITIONAL_REPORT_RECIPIENTS="$2"; shift; shift ;;
+    --cm3BusinessApprovers) CM3_BUSINESS_APPROVERS="$2"; shift; shift ;;
+    --cm3BusinessApproversThreshold) CM3_BUSINESS_APPROVERS_THRESHOLD="$2"; shift; shift ;;
+    --cm3ItApprovers) CM3_IT_APPROVERS="$2"; shift; shift ;;
+    --cm3ItApproversThreshold) CM3_IT_APPROVERS_THRESHOLD="$2"; shift; shift ;;
+    --preCheckTest) PRECHECK="$2"; shift; shift ;;
+    --askId) ASK_ID="$2"; shift; shift ;;
+    *) echo "Unknown option $1"; exit 1 ;;
+  esac
+done
+
+: "${COMPLIANCE_API_URL:?Missing --complianceApiUrl}"
+: "${RALLY_API_URL:?Missing --rallyApiUrl}"
+: "${RALLY_CREDENTIAL_ID:?Missing --rallyCredentialId}"
+: "${RALLY_WORKSPACE_ID:?Missing --rallyWorkspaceId}"
+: "${RALLY_MILESTONE_FORMATTED_ID:?Missing --rallyMilestoneFormattedId}"
+: "${USER_STORY_APPROVERS:?Missing --userStoryApprovers}"
+: "${SECURITY_SCANS_PARAMETERS:?Missing --securityScansParameters}"
+: "${ADDITIONAL_REPORT_RECIPIENTS:?Missing --additionalReportRecipients}"
+: "${ASK_ID:?Missing --askId}"
+
+if [ -z "$SECURITY_SCANS_PARAMETERS" ]; then
+  echo "Error: SECURITY_SCANS_PARAMETERS is empty or not set."
+  exit 1
+fi
+
+
+# Debug: print and validate JSON
+echo "COMPLIANCE_API_URL=$COMPLIANCE_API_URL"
+echo "RALLY_API_URL=$RALLY_API_URL"
+echo "RALLY_CREDENTIAL_ID=$RALLY_CREDENTIAL_ID"
+echo "RALLY_WORKSPACE_ID=$RALLY_WORKSPACE_ID"
+echo "RALLY_MILESTONE_FORMATTED_ID=$RALLY_MILESTONE_FORMATTED_ID"
+echo "USER_STORY_APPROVERS=$USER_STORY_APPROVERS"
+echo "SECURITY_SCANS_PARAMETERS=$SECURITY_SCANS"
+echo "SECURITY_SCANS_PARAMETERS=$SECURITY_SCANS_PARAMETERS"
+echo "ADDITIONAL_REPORT_RECIPIENTS=$ADDITIONAL_REPORT_RECIPIENTS"
+echo "CM3_BUSINESS_APPROVERS=$CM3_BUSINESS_APPROVERS"
+echo "CM3_BUSINESS_APPROVERS_THRESHOLD=$CM3_BUSINESS_APPROVERS_THRESHOLD"
+echo "CM3_IT_APPROVERS=$CM3_IT_APPROVERS"
+echo "CM3_IT_APPROVERS_THRESHOLD=$CM3_IT_APPROVERS_THRESHOLD"
+echo "ASK_ID=$ASK_ID"
+
+#if ! echo "$SECURITY_SCANS_PARAMETERS" | jq -e . > /dev/null; then
+#          echo "Error: SECURITY_SCANS_PARAMETERS is not valid JSON."
+#          exit 1
+#fi
+
+if [[ $PRECHECK == true ]]; then
+  payload=$(jq -n \
+    --arg rallyCredentialId "$RALLY_CREDENTIAL_ID" \
+    --arg rallyWorkspaceId "$RALLY_WORKSPACE_ID" \
+    --arg rallyMilestoneFormattedId "$RALLY_MILESTONE_FORMATTED_ID" \
+    --arg userStoryApprovers "$USER_STORY_APPROVERS" \
+    --arg additionalReportRecipients "$ADDITIONAL_REPORT_RECIPIENTS" \
+    --arg cm3BusinessApprovers "$CM3_BUSINESS_APPROVERS" \
+    --arg cm3BusinessApproversThreshold "${CM3_BUSINESS_APPROVERS_THRESHOLD:-1}" \
+    --arg cm3ItApprovers "$CM3_IT_APPROVERS" \
+    --arg cm3ItApproversThreshold "${CM3_IT_APPROVERS_THRESHOLD:-1}" \
+    --arg askId "$ASK_ID" \
+    --argjson cm2TestFailureThresholds '{}' \
+    --argjson securityScansParameters $SECURITY_SCANS_PARAMETERS \
+    '{
+      "rallyCredentialId": $rallyCredentialId,
+      "rallyWorkspaceId": $rallyWorkspaceId,
+      "rallyMilestoneFormattedId": $rallyMilestoneFormattedId,
+      "userStoryApprovers": $userStoryApprovers,
+      "cm3BusinessApprovers": $cm3BusinessApprovers,
+      "cm3BusinessApproversThreshold": ($cm3BusinessApproversThreshold | tonumber),
+      "cm3ItApprovers": $cm3ItApprovers,
+      "cm3ItApproversThreshold": ($cm3ItApproversThreshold | tonumber),
+      "cm2TestFailureThresholds": $cm2TestFailureThresholds,
+      "projectReportParameters": {
+        "caAgileId": "616574105167",
+        "askId": [$askId],
+        "projectKey": "com.optum.automatedcompliance"
+      },
+      "additionalReportRecipients": [$additionalReportRecipients],
+      "preCheckTest": true,
+      "rallyShowApplications": false,
+      "securityScansParameters": $securityScansParameters
+    }')
+else
+  payload=$(jq -n \
+    --arg rallyCredentialId "$RALLY_CREDENTIAL_ID" \
+    --arg rallyWorkspaceId "$RALLY_WORKSPACE_ID" \
+    --arg rallyMilestoneFormattedId "$RALLY_MILESTONE_FORMATTED_ID" \
+    --arg userStoryApprovers "$USER_STORY_APPROVERS" \
+    --arg cm3BusinessApprovers "$CM3_BUSINESS_APPROVERS" \
+    --arg cm3BusinessApproversThreshold "${CM3_BUSINESS_APPROVERS_THRESHOLD:-1}" \
+    --arg cm3ItApprovers "$CM3_IT_APPROVERS" \
+    --arg cm3ItApproversThreshold "${CM3_IT_APPROVERS_THRESHOLD:-1}" \
+    --argjson securityScansParameters "$SECURITY_SCANS_PARAMETERS" \
+    --arg askId "$ASK_ID" \
+    --arg emailReminder "${EMAIL_REMINDER:-true}" \
+    --arg emailReminderInterval "${EMAIL_REMINDER_INTERVAL:-24}" \
+    --arg additionalReportRecipients "$ADDITIONAL_REPORT_RECIPIENTS" \
+    '{
+      "rallyCredentialId": $rallyCredentialId,
+      "rallyWorkspaceId": $rallyWorkspaceId,
+      "rallyMilestoneFormattedId": $rallyMilestoneFormattedId,
+      "userStoryApprovers": $userStoryApprovers,
+      "securityScansParameters": $securityScansParameters,
+      "cm3BusinessApprovers": $cm3BusinessApprovers,
+      "cm3BusinessApproversThreshold": ($cm3BusinessApproversThreshold | tonumber),
+      "cm3ItApprovers": $cm3ItApprovers,
+      "cm3ItApproversThreshold": ($cm3ItApproversThreshold | tonumber),
+      "projectReportParameters": {
+        "caAgileId": "616574105167",
+        "askId": [$askId],
+        "projectKey": "com.optum.automatedcompliance"
+      },
+      "emailReminder": ($emailReminder | test("true"; "i")),
+      "emailReminderInterval": ($emailReminderInterval | tonumber),
+      "additionalReportRecipients": [$additionalReportRecipients]
+    }')
+fi
+
+echo "Sending payload to $COMPLIANCE_API_URL/api/report:"
+echo "$payload"
+
+response=$(curl -s -X POST "$COMPLIANCE_API_URL/api/report" \
+  -H "Content-Type: application/json" \
+  -d "$payload")
+
+report_id="$response"
+
+if [ -z "$report_id" ]; then
+  echo "Failed to generate report: $response"
+  exit 1
+fi
+
+echo "$report_id"
+echo "$report_id" > report_id.txt
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#!/bin/bash
+set -e
+
+ls -al scripts/
+chmod +x "$0"
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+  key="$1"
+  case $key in
+    --complianceApiUrl) COMPLIANCE_API_URL="$2"; shift; shift ;;
+    --reportId) REPORT_ID="$2"; shift; shift ;;
+    *) echo "Unknown option $1"; exit 1 ;;
+  esac
+done
+
+: "${COMPLIANCE_API_URL:?Missing --complianceApiUrl}"
+: "${REPORT_ID:?Missing --reportId}"
+
+MAX_WAIT_MINUTES=${MAX_WAIT_MINUTES:-60}
+POLL_INTERVAL=20
+
+end_time=$(( $(date +%s) + MAX_WAIT_MINUTES * 60 ))
+
+while [ $(date +%s) -lt $end_time ]; do
+  echo "Calling: $COMPLIANCE_API_URL/api/report/$REPORT_ID"
+  response=$(curl -v -s -w "\n%{http_code}" "$COMPLIANCE_API_URL/api/report/$REPORT_ID" || true)
+  body=$(echo "$response" | head -n -1)
+  code=$(echo "$response" | tail -n1)
+
+  # Debug output
+    echo "HTTP code: $code"
+    echo "Response body: $body"
+
+  case "$code" in
+    202|200|203)
+      echo "CM1CM2 report ready or precheck complete."
+      exit 0
+      ;;
+    406|400)
+      echo "Error in CM1CM2 report: $body"
+      exit 2
+      ;;
+    404|102)
+      echo "Report not ready (HTTP $code), retrying in $POLL_INTERVAL seconds..."
+      sleep $POLL_INTERVAL
+      ;;
+    *)
+      echo "Unexpected response: $code $body"
+      sleep $POLL_INTERVAL
+      ;;
+  esac
+done
+
+echo "Timed out waiting for CM1CM2 report."
+exit 1
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#!/bin/bash
+set -e
+
+ls -al scripts/
+chmod +x "$0"
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+  key="$1"
+  case $key in
+    --complianceApiUrl) COMPLIANCE_API_URL="$2"; shift; shift ;;
+    --reportId) REPORT_ID="$2"; shift; shift ;;
+    --time) TIME="$2"; shift; shift ;;
+    --unit) UNIT="$2"; shift; shift ;;
+    *) echo "Unknown option $1"; exit 1 ;;
+  esac
+done
+
+: "${COMPLIANCE_API_URL:?Missing --complianceApiUrl}"
+: "${REPORT_ID:?Missing --reportId}"
+
+TIME=${TIME:-1}
+UNIT=${UNIT:-DAYS}
+
+case "$UNIT" in
+  SECONDS) max_wait=$((TIME));;
+  MINUTES) max_wait=$((TIME * 60));;
+  HOURS)   max_wait=$((TIME * 3600));;
+  DAYS)    max_wait=$((TIME * 86400));;
+  *) echo "Invalid unit: $UNIT"; exit 1;;
+esac
+
+POLL_INTERVAL=100
+end_time=$(( $(date +%s) + max_wait ))
+
+while [ $(date +%s) -lt $end_time ]; do
+  response=$(curl -s -w "\n%{http_code}" "$COMPLIANCE_API_URL/api/report/$REPORT_ID/approvalstatus")
+  body=$(echo "$response" | head -n -1)
+  code=$(echo "$response" | tail -n1)
+
+  case "$code" in
+    200)
+      echo "CM3 approvals complete."
+      exit 0
+      ;;
+    406|400|424)
+      echo "Error in CM3 approval: $body"
+      exit 2
+      ;;
+    202)
+      echo "Approval not ready, retrying in $POLL_INTERVAL seconds..."
+      sleep $POLL_INTERVAL
+      ;;
+    *)
+      echo "Unexpected response: $code $body"
+      sleep $POLL_INTERVAL
+      ;;
+  esac
+done
+
+echo "Timed out waiting for CM3 approval."
+exit 1
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#!/bin/bash
+
+#KIND=deployment
+#NAME=fds-paperless-activiti-stage
+#RELEASE=fds-paperless-activiti
+#kubectl annotate $KIND $NAME meta.helm.sh/release-name=$RELEASE
+#kubectl annotate $KIND $NAME meta.helm.sh/release-namespace=$NAMESPACE
+#kubectl label $KIND $NAME app.kubernetes.io/managed-by=Helm
+
+
+### Update resources for non-pra namespace
+
+# NAMESPACE=paperless-delivery-options-stage
+
+# ENV=stage
+
+# APPS="paperless-letters-connector"
+
+NAMESPACE=provider-email-notifications
+
+ENV=stage
+
+
+APPS="fds-pen-batch,fds-paperless-pen-api"
+# APPS="fds-paperless-activiti-pra,fds-paperless-message-service-pra,ppl-paperless-processor-listener-pra,ppl-prun-filestore-pra,ppl-prun-services-pra"
+
+for app in $(echo "$APPS" | tr ',' ' '); do
+  echo "App: $app"
+  # deployment
+  kubectl annotate deployment $app-$ENV meta.helm.sh/release-name=$app
+  kubectl annotate deployment $app-$ENV meta.helm.sh/release-namespace=$NAMESPACE-$ENV
+  kubectl label deployment $app-$ENV app.kubernetes.io/managed-by=Helm
+
+  # service
+  kubectl annotate service $app-$ENV-service meta.helm.sh/release-name=$app
+  kubectl annotate service $app-$ENV-service meta.helm.sh/release-namespace=$NAMESPACE-$ENV
+  kubectl label service $app-$ENV-service app.kubernetes.io/managed-by=Helm
+
+  # ingress
+  kubectl annotate ingress $app-$ENV-ingress meta.helm.sh/release-name=$app
+  kubectl annotate ingress $app-$ENV-ingress meta.helm.sh/release-namespace=$NAMESPACE-$ENV
+  kubectl label ingress $app-$ENV-ingress app.kubernetes.io/managed-by=Helm
+
+done
+
+
+
+
+
+
+
+
