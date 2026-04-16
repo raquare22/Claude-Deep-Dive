@@ -1,3 +1,507 @@
-{"instant":{"epochSecond":1776314619,"nanoOfSecond":356595472},"thread":"main","level":"ERROR","loggerName":"org.springframework.boot.SpringApplication","message":"Application run failed","thrown":{"commonElementCount":0,"localizedMessage":"PreparedStatementCallback; SQL [INSERT INTO BATCH_JOB_INSTANCE(JOB_INSTANCE_ID, JOB_NAME, JOB_KEY, VERSION)\n\tVALUES (?, ?, ?, ?)\n]; Duplicate entry '136781' for key 'batch_job_instance.PRIMARY'","message":"PreparedStatementCallback; SQL [INSERT INTO BATCH_JOB_INSTANCE(JOB_INSTANCE_ID, JOB_NAME, JOB_KEY, VERSION)\n\tVALUES (?, ?, ?, ?)\n]; Duplicate entry '136781' for key 'batch_job_instance.PRIMARY'","name":"org.springframework.dao.DuplicateKeyException","cause":{"commonElementCount":53,"localizedMessage":"Duplicate entry '136781' for key 'batch_job_instance.PRIMARY'","message":"Duplicate entry '136781' for key 'batch_job_instance.PRIMARY'","name":"java.sql.SQLIntegrityConstraintViolationException","extendedStackTrace":"java.sql.SQLIntegrityConstraintViolationException: Duplicate entry '136781' for key 'batch_job_instance.PRIMARY'\n\tat com.mysql.cj.jdbc.exceptions.SQLError.createSQLException(SQLError.java:118) ~[mysql-connector-j-8.3.0.jar!/:8.3.0]\n\tat com.mysql.cj.jdbc.exceptions.SQLExceptionsMapping.translateException(SQLExceptionsMapping.java:122) ~[mysql-connector-j-8.3.0.jar!/:8.3.0]\n\tat com.mysql.cj.jdbc.ClientPreparedStatement.executeInternal(ClientPreparedStatement.java:912) ~[mysql-connector-j-8.3.0.jar!/:8.3.0]\n\tat com.mysql.cj.jdbc.ClientPreparedStatement.executeUpdateInternal(ClientPreparedStatement.java:1054) ~[mysql-connector-j-8.3.0.jar!/:8.3.0]\n\tat com.mysql.cj.jdbc.ClientPreparedStatement.executeUpdateInternal(ClientPreparedStatement.java:1003) ~[mysql-connector-j-8.3.0.jar!/:8.3.0]\n\tat com.mysql.cj.jdbc.ClientPreparedStatement.executeLargeUpdate(ClientPreparedStatement.java:1312) ~[mysql-connector-j-8.3.0.jar!/:8.3.0]\n\tat com.mysql.cj.jdbc.ClientPreparedStatement.executeUpdate(ClientPreparedStatement.java:988) ~[mysql-connector-j-8.3.0.jar!/:8.3.0]\n\tat com.zaxxer.hikari.pool.ProxyPreparedStatement.executeUpdate(ProxyPreparedStatement.java:61) ~[HikariCP-5.1.0.jar!/:?]\n\tat com.zaxxer.hikari.pool.HikariProxyPreparedStatement.executeUpdate(HikariProxyPreparedStatement.java) ~[HikariCP-5.1.0.jar!/:?]\n\tat org.springframework.jdbc.core.JdbcTemplate.lambda$update$2(JdbcTemplate.java:975) ~[spring-jdbc-6.1.19.jar!/:6.1.19]\n\tat org.springframework.jdbc.core.JdbcTemplate.execute(JdbcTemplate.java:658) ~[spring-jdbc-6.1.19.jar!/:6.1.19]\n"},"extendedStackTrace":"org.springframework.dao.DuplicateKeyException: PreparedStatementCallback; SQL [INSERT INTO BATCH_JOB_INSTANCE(JOB_INSTANCE_ID, JOB_NAME, JOB_KEY, VERSION)\n\tVALUES (?, ?, ?, ?)\n]; Duplicate entry '136781' for key 'batch_job_instance.PRIMARY'\n\tat org.springframework.jdbc.support.SQLExceptionSubclassTranslator.doTranslate(SQLExceptionSubclassTranslator.java:95) ~[spring-jdbc-6.1.19.jar!/:6.1.19]\n\tat org.springframework.jdbc.support.AbstractFallbackSQLExceptionTranslator.translate(AbstractFallbackSQLExceptionTranslator.java:107) ~[spring-jdbc-6.1.19.jar!/:6.1.19]\n\tat org.springframework.jdbc.core.JdbcTemplate.translateException(JdbcTemplate.java:1548) ~[spring-jdbc-6.1.19.jar!/:6.1.19]\n\tat org.springframework.jdbc.core.JdbcTemplate.execute(JdbcTemplate.java:677) ~[spring-jdbc-6.1.19.jar!/:6.1.19]\n\tat org.springframework.jdbc.core.JdbcTemplate.update(JdbcTemplate.java:970) ~[spring-jdbc-6.1.19.jar!/:6.1.19]\n\tat org.springframework.jdbc.core.JdbcTemplate.update(JdbcTemplate.java:1014) ~[spring-jdbc-6.1.19.jar!/:6.1.19]\n\tat org.springframework.jdbc.core.JdbcTemplate.update(JdbcTemplate.java:1019) ~[spring-jdbc-6.1.19.jar!/:6.1.19]\n\tat org.springframework.batch.core.repository.dao.JdbcJobInstanceDao.createJobInstance(JdbcJobInstanceDao.java:157) ~[spring-batch-core-5.1.3.jar!/:5.1.3]\n\tat org.springframework.batch.core.repository.support.SimpleJobRepository.createJobExecution(SimpleJobRepository.java:168) ~[spring-batch-core-5.1.3.jar!/:5.1.3]\n\tat java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method) ~[?:?]\n\tat java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:77) ~[?:?]\n\tat java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43) ~[?:?]\n\tat java.base/java.lang.reflect.Method.invoke(Method.java:569) ~[?:?]\n\tat org.springframework.aop.support.AopUtils.invokeJoinpointUsingReflection(AopUtils.java:355) ~[spring-aop-6.1.19.jar!/:6.1.19]\n\tat org.springframework.aop.framework.ReflectiveMethodInvocation.invokeJoinpoint(ReflectiveMethodInvocation.java:196) ~[spring-aop-6.1.19.jar!/:6.1.19]\n\tat org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:163) ~[spring-aop-6.1.19.jar!/:6.1.19]\n\tat org.springframework.transaction.interceptor.TransactionAspectSupport.invokeWithinTransaction(TransactionAspectSupport.java:379) ~[spring-tx-6.1.19.jar!/:6.1.19]\n\tat org.springframework.transaction.interceptor.TransactionInterceptor.invoke(TransactionInterceptor.java:119) ~[spring-tx-6.1.19.jar!/:6.1.19]\n\tat org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:184) ~[spring-aop-6.1.19.jar!/:6.1.19]\n\tat org.springframework.batch.core.repository.support.AbstractJobRepositoryFactoryBean.lambda$getObject$0(AbstractJobRepositoryFactoryBean.java:204) ~[spring-batch-core-5.1.3.jar!/:5.1.3]\n\tat org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:184) ~[spring-aop-6.1.19.jar!/:6.1.19]\n\tat org.springframework.aop.framework.JdkDynamicAopProxy.invoke(JdkDynamicAopProxy.java:223) ~[spring-aop-6.1.19.jar!/:6.1.19]\n\tat jdk.proxy3/jdk.proxy3.$Proxy240.createJobExecution(Unknown Source) ~[?:?]\n\tat org.springframework.batch.core.launch.support.SimpleJobLauncher.run(SimpleJobLauncher.java:145) ~[spring-batch-core-5.1.3.jar!/:5.1.3]\n\tat org.springframework.batch.core.launch.support.TaskExecutorJobLauncher.run(TaskExecutorJobLauncher.java:59) ~[spring-batch-core-5.1.3.jar!/:5.1.3]\n\tat org.springframework.boot.autoconfigure.batch.JobLauncherApplicationRunner.execute(JobLauncherApplicationRunner.java:210) ~[spring-boot-autoconfigure-3.3.11.jar!/:3.3.11]\n\tat org.springframework.boot.autoconfigure.batch.JobLauncherApplicationRunner.executeLocalJobs(JobLauncherApplicationRunner.java:194) ~[spring-boot-autoconfigure-3.3.11.jar!/:3.3.11]\n\tat org.springframework.boot.autoconfigure.batch.JobLauncherApplicationRunner.launchJobFromProperties(JobLauncherApplicationRunner.java:174) ~[spring-boot-autoconfigure-3.3.11.jar!/:3.3.11]\n\tat org.springframework.boot.autoconfigure.batch.JobLauncherApplicationRunner.run(JobLauncherApplicationRunner.java:169) ~[spring-boot-autoconfigure-3.3.11.jar!/:3.3.11]\n\tat org.springframework.boot.autoconfigure.batch.JobLauncherApplicationRunner.run(JobLauncherApplicationRunner.java:164) ~[spring-boot-autoconfigure-3.3.11.jar!/:3.3.11]\n\tat org.springframework.boot.SpringApplication.lambda$callRunner$4(SpringApplication.java:787) ~[spring-boot-3.3.11.jar!/:3.3.11]\n\tat org.springframework.util.function.ThrowingConsumer$1.acceptWithException(ThrowingConsumer.java:82) ~[spring-core-6.2.11.jar!/:6.2.11]\n\tat org.springframework.util.function.ThrowingConsumer.accept(ThrowingConsumer.java:60) ~[spring-core-6.2.11.jar!/:6.2.11]\n\tat org.springframework.util.function.ThrowingConsumer$1.accept(ThrowingConsumer.java:86) ~[spring-core-6.2.11.jar!/:6.2.11]\n\tat org.springframework.boot.SpringApplication.callRunner(SpringApplication.java:799) ~[spring-boot-3.3.11.jar!/:3.3.11]\n\tat org.springframework.boot.SpringApplication.callRunner(SpringApplication.java:787) ~[spring-boot-3.3.11.jar!/:3.3.11]\n\tat org.springframework.boot.SpringApplication.lambda$callRunners$3(SpringApplication.java:775) [spring-boot-3.3.11.jar!/:3.3.11]\n\tat java.base/java.util.stream.ForEachOps$ForEachOp$OfRef.accept(ForEachOps.java:183) ~[?:?]\n\tat java.base/java.util.stream.SortedOps$SizedRefSortingSink.end(SortedOps.java:357) ~[?:?]\n\tat java.base/java.util.stream.AbstractPipeline.copyInto(AbstractPipeline.java:510) ~[?:?]\n\tat java.base/java.util.stream.AbstractPipeline.wrapAndCopyInto(AbstractPipeline.java:499) ~[?:?]\n\tat java.base/java.util.stream.ForEachOps$ForEachOp.evaluateSequential(ForEachOps.java:150) ~[?:?]\n\tat java.base/java.util.stream.ForEachOps$ForEachOp$OfRef.evaluateSequential(ForEachOps.java:173) ~[?:?]\n\tat java.base/java.util.stream.AbstractPipeline.evaluate(AbstractPipeline.java:234) ~[?:?]\n\tat java.base/java.util.stream.ReferencePipeline.forEach(ReferencePipeline.java:596) ~[?:?]\n\tat org.springframework.boot.SpringApplication.callRunners(SpringApplication.java:775) [spring-boot-3.3.11.jar!/:3.3.11]\n\tat org.springframework.boot.SpringApplication.run(SpringApplication.java:342) [spring-boot-3.3.11.jar!/:3.3.11]\n\tat org.springframework.boot.SpringApplication.run(SpringApplication.java:1364) [spring-boot-3.3.11.jar!/:3.3.11]\n\tat org.springframework.boot.SpringApplication.run(SpringApplication.java:1353) [spring-boot-3.3.11.jar!/:3.3.11]\n\tat com.optum.pen.batch.BatchProcessingApplication.main(BatchProcessingApplication.java:13) [!/:1.0.36-SNAPSHOT]\n\tat java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method) ~[?:?]\n\tat java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:77) ~[?:?]\n\tat java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43) ~[?:?]\n\tat java.base/java.lang.reflect.Method.invoke(Method.java:569) ~[?:?]\n\tat org.springframework.boot.loader.launch.Launcher.launch(Launcher.java:102) [pen-batch.jar:1.0.36-SNAPSHOT]\n\tat org.springframework.boot.loader.launch.Launcher.launch(Launcher.java:64) [pen-batch.jar:1.0.36-SNAPSHOT]\n\tat org.springframework.boot.loader.launch.JarLauncher.main(JarLauncher.java:40) [pen-batch.jar:1.0.36-SNAPSHOT]\nCaused by: java.sql.SQLIntegrityConstraintViolationException: Duplicate entry '136781' for key 'batch_job_instance.PRIMARY'\n\tat com.mysql.cj.jdbc.exceptions.SQLError.createSQLException(SQLError.java:118) ~[mysql-connector-j-8.3.0.jar!/:8.3.0]\n\tat com.mysql.cj.jdbc.exceptions.SQLExceptionsMapping.translateException(SQLExceptionsMapping.java:122) ~[mysql-connector-j-8.3.0.jar!/:8.3.0]\n\tat com.mysql.cj.jdbc.ClientPreparedStatement.executeInternal(ClientPreparedStatement.java:912) ~[mysql-connector-j-8.3.0.jar!/:8.3.0]\n\tat com.mysql.cj.jdbc.ClientPreparedStatement.executeUpdateInternal(ClientPreparedStatement.java:1054) ~[mysql-connector-j-8.3.0.jar!/:8.3.0]\n\tat com.mysql.cj.jdbc.ClientPreparedStatement.executeUpdateInternal(ClientPreparedStatement.java:1003) ~[mysql-connector-j-8.3.0.jar!/:8.3.0]\n\tat com.mysql.cj.jdbc.ClientPreparedStatement.executeLargeUpdate(ClientPreparedStatement.java:1312) ~[mysql-connector-j-8.3.0.jar!/:8.3.0]\n\tat com.mysql.cj.jdbc.ClientPreparedStatement.executeUpdate(ClientPreparedStatement.java:988) ~[mysql-connector-j-8.3.0.jar!/:8.3.0]\n\tat com.zaxxer.hikari.pool.ProxyPreparedStatement.executeUpdate(ProxyPreparedStatement.java:61) ~[HikariCP-5.1.0.jar!/:?]\n\tat com.zaxxer.hikari.pool.HikariProxyPreparedStatement.executeUpdate(HikariProxyPreparedStatement.java) ~[HikariCP-5.1.0.jar!/:?]\n\tat org.springframework.jdbc.core.JdbcTemplate.lambda$update$2(JdbcTemplate.java:975) ~[spring-jdbc-6.1.19.jar!/:6.1.19]\n\tat org.springframework.jdbc.core.JdbcTemplate.execute(JdbcTemplate.java:658) ~[spring-jdbc-6.1.19.jar!/:6.1.19]\n\t... 53 more\n"},"endOfBatch":false,"loggerFqcn":"org.apache.commons.logging.LogAdapter$Log4jLog","threadId":1,"threadPriority":5,"service_name":"ppl-pen-batch"}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: kafka-certs
+  labels:
+    application: {{ .Values.pipeline.application.name }}
+    environment: {{ .Values.environment }}
+    tier: splunk
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 25Mi
+  storageClassName: nas-thin
 
- 
+
+
+
+
+
+
+
+
+
+
+
+
+
+hcck8sProfile:
+  prun:
+    stage:
+      elr:
+        cluster: elrnonprdusr101
+        clusterDNS: hcc-elr-nonprd-usr101-0.optum.com
+        credentialId:
+        namespace: provider-paperless-stage
+      ctc:
+        cluster: ctcnonprdusr101
+        clusterDNS: hcc-ctc-nonprd-usr101-0.optum.com
+        credentialId:
+        namespace: provider-paperless-stage
+    stage-pra:
+      elr:
+        cluster: elrnonprdusr101
+        clusterDNS: hcc-elr-nonprd-usr101-0.optum.com
+        credentialId:
+        namespace: provider-paperless-stage-pra
+      ctc:
+        cluster: ctcnonprdusr101
+        clusterDNS: hcc-ctc-nonprd-usr101-0.optum.com
+        credentialId:
+        namespace: provider-paperless-stage-pra
+    prod:
+      elr:
+        cluster: elrprdusr201
+        clusterDNS: hcc-elr-prd-usr201-0.optum.com
+        credentialId:
+        namespace: provider-paperless-prod
+      ctc:
+        cluster: ctcprdusr201
+        clusterDNS: hcc-ctc-prd-usr201-0.optum.com
+        credentialId:
+        namespace: provider-paperless-prod
+    prod-pra:
+      elr:
+        cluster: elrprdusr201
+        clusterDNS: hcc-elr-prd-usr201-0.optum.com
+        credentialId:
+        namespace: provider-paperless-prod-pra
+      ctc:
+        cluster: ctcprdusr201
+        clusterDNS: hcc-ctc-prd-usr201-0.optum.com
+        credentialId:
+        namespace: provider-paperless-prod-pra
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.name }}-{{ .Values.environment }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    application: {{ .Values.name }}
+    environment: {{ .Values.environment }}
+    tier: app
+spec:
+  replicas: {{ .Values.replicas }}
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+  # selector & template must match
+  selector:
+    matchLabels:
+      application: {{ .Values.name }}
+#          pr: ${pr}
+      environment: {{ .Values.environment }}
+  template:
+    metadata:
+      labels:
+        application: {{ .Values.name }}
+        environment: {{ .Values.environment }}
+    spec:
+      restartPolicy: Always
+      dnsPolicy: ClusterFirst
+      terminationGracePeriodSeconds: 30
+      volumes:
+        - name: logs
+          persistentVolumeClaim:
+            claimName: logs-{{ .Values.name }}-{{ .Values.environment }}
+        - name: prun-log
+          persistentVolumeClaim:
+            claimName: prun-log-pvc
+        - name: prun-pv
+          persistentVolumeClaim:
+            claimName: prun-pvc
+        - name: prun-ehcache-pv
+          persistentVolumeClaim:
+            claimName: prun-ehcache-pvc
+        - name: kafka
+          persistentVolumeClaim:
+            claimName: kafka-certs
+      imagePullSecrets:
+        - name: edge-docker-registry-secret
+      containers:
+        - name: {{ .Values.name }}-{{ .Values.environment }}
+          image: {{ .Values.dockerImage }}
+          imagePullPolicy: {{ .Values.pipeline.application.image.pullPolicy }}
+          terminationMessagePath: /dev/termination-log
+          ports:
+            {{- if .Values.containerPorts }}
+            {{- range .Values.containerPorts }}
+            - name: {{ .name }}
+              protocol: {{ .protocol }}
+              containerPort: {{ .containerPort }}
+            {{- end }}
+            {{- end }}
+          resources:
+            limits:
+              cpu: {{ .Values.resources.cpu.podLimit }}
+              memory: {{ .Values.resources.memory.podLimit }}
+            requests:
+              cpu: {{ .Values.resources.cpu.podRequest }}
+              memory: {{ .Values.resources.memory.podRequest }}
+          volumeMounts:
+            - name: logs
+              mountPath: /app/logs
+            {{- if .Values.volumes }}
+            {{- range .Values.volumes }}
+            - name: {{ .name }}
+              mountPath: {{ .mountPath }}
+            {{- end }}
+            {{- end }}
+          env:
+            - name: LOG_LEVEL
+              value: INFO
+            - name: DT_HOST
+              value: {{ .Values.dynatrace.host }}
+            - name: DT_NETWORK_ZONE
+              value: uhg.{{ .Values.datacenter }}.{{ .Values.dynatrace.zone }}
+            - name: DT_CUSTOM_PROP
+              value: Askid={{ .Values.dynatrace.askId }} Environment={{ .Values.dynatrace.environment }} Provider=uhg Location={{ .Values.datacenter }} Zone={{ .Values.dynatrace.zone }}
+            - name: DT_API_TOKEN
+              value: {{ .Values.dynatraceToken }}
+            - name: APP_NAME
+              value: {{ .Values.name }}
+            - name: splunk.url
+              value: {{ .Values.splunk.url }}
+            - name: splunk.token
+              value: {{ .Values.splunkToken }}
+            - name: log.folder.path
+              value: /prun-log/logs/{{ .Values.name }}
+            - name: log.filename
+              value: {{ .Values.name }}
+            - name: JAVA_OPTS
+              value: >
+                -Xms{{ .Values.resources.memory.jvmMin }}
+                -Xmx{{ .Values.resources.memory.jvmMax }}
+                -Dk8.datacenter={{ .Values.datacenter }}
+                -Dk8.zone={{ .Values.zone }}
+                -Dspring.profiles.active=vault,git,{{ .Values.environment }}
+                -Dvault.roleId={{ .Values.vaultRoleId }}
+                -Dvault.secretId={{ .Values.vaultSecretId }}
+                -Dencrypt.keyStore.location=classpath:stores/link-cfg-encryption-{{ .Values.encrypt.keystoreLocation }}.jks
+                -Dencrypt.keyStore.password={{ .Values.keystorePassword }}
+                -Dencrypt.keyStore.secret={{ .Values.keystorePassword }}
+                -Dencrypt.keyStore.alias=link-config-encryption-{{ .Values.encrypt.keystoreAlias }}
+                -Deureka.instance.hostname={{ .Values.name }}-{{ .Values.environment }}.hcck8s-{{ .Values.datacenter }}{{ .Values.eureka.host }}.optum.com
+          livenessProbe:
+            failureThreshold: 3
+            initialDelaySeconds: 180
+            periodSeconds: 5
+            successThreshold: 1
+            timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds }}
+            httpGet:
+              path: {{ .Values.livenessProbe.path }}
+              port: 8080
+              scheme: HTTP
+          readinessProbe:
+            failureThreshold: 3
+            initialDelaySeconds: 240
+            periodSeconds: 1
+            successThreshold: 1
+            timeoutSeconds: {{ .Values.readinessProbe.timeoutSeconds }}
+            httpGet:
+              path: {{ .Values.readinessProbe.path }}
+              port: 8080
+              scheme: HTTP
+          securityContext:
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop:
+                - KILL
+                - MKNOD
+                - SYS_CHROOT
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Values.name }}-{{ .Values.environment }}-ingress
+  namespace: {{ .Values.namespace }}
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: {{ .Values.name}}-{{ .Values.environment }}.hcck8s-{{ .Values.datacenter }}-{{ .Values.ingressSubdomain }}.optum.com
+    external-dns.alpha.kubernetes.io/ttl: "3600"
+    nginx.ingress.kubernetes.io/proxy-body-size: "55m"
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+  labels:
+    application: {{ .Values.name }}
+    environment: {{ .Values.environment }}
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: {{ .Values.name}}-{{ .Values.environment }}.hcck8s-{{ .Values.datacenter }}-{{ .Values.ingressSubdomain }}.optum.com
+      http:
+        paths:
+            - pathType: Prefix
+              path: "/"
+              backend:
+                service:
+                  name: {{ .Values.name }}-{{ .Values.environment }}-service
+                  port:
+                    number: 8080
+    - host: {{ .Values.name }}-{{ .Values.environment }}.optum.com
+      http:
+        paths:
+            - pathType: Prefix
+              path: "/"
+              backend:
+                service:
+                  name: {{ .Values.name }}-{{ .Values.environment }}-service
+                  port:
+                    number: 8080
+    - host: {{ .Values.name }}-{{ .Values.environment }}-{{ .Values.datacenter }}.optum.com
+      http:
+        paths:
+            - pathType: Prefix
+              path: "/"
+              backend:
+                service:
+                  name: {{ .Values.name }}-{{ .Values.environment }}-service
+                  port:
+                    number: 8080
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: paperless-app-network-policy
+  namespace: {{ .Values.namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      environment: {{ .Values.environment }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: 8080
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80
+  egress:
+    - ports:
+        #SPLUNK
+        - protocol: TCP
+          port: 8089
+        - protocol: TCP
+          port: 9996
+        #MYSQLDB
+        - protocol: TCP
+          port: 3306
+        #MONGODB
+        - protocol: TCP
+          port: 27017
+        #HTTPS
+        - protocol: TCP
+          port: 443
+        #HTTP
+        - protocol: TCP
+          port: 80
+        - protocol: TCP
+          port: 8080
+        #Kafka
+        - protocol: TCP
+          port: 9093
+        #Elastic
+        - protocol: TCP
+          port: 9200
+        #ORS
+        - protocol: TCP
+          port: 22443
+        #stage
+        - protocol: TCP
+          port: 50002
+        #prod
+        - protocol: TCP
+          port: 50000
+        #Mail_Server
+        - protocol: TCP
+          port: 25
+        #SMB
+        - protocol: TCP
+          port: 139
+        - protocol: TCP
+          port: 445
+        #FTP
+        - protocol: TCP
+          port: 22
+        #LDAP
+        - protocol: TCP
+          port: 389
+        #Fluentd
+        - protocol: TCP
+          port: 9093
+        # Oracle Net Services
+        - protocol: TCP
+          port: 1521
+        # Oracle Connection Mngr
+        - protocol: TCP
+          port: 1630
+        # Dynatrace
+        - protocol: TCP
+          port: 9999
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.name }}-{{ .Values.environment }}-service
+  namespace: {{ .Values.namespace }}
+  labels:
+    application: {{ .Values.name }}
+    environment: {{ .Values.environment }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: 8080-tcp
+      port: 8080
+      protocol: TCP
+      targetPort: 8080
+  selector:
+    application: {{ .Values.name }}
+    environment: {{ .Values.environment }}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+apiVersion: v2
+name: fds-paperless-activiti
+description: A Helm Chart for HCC K8S Deployments
+type: application
+
+# This is the chart version. This version number should be incremented each time you make changes
+# to the chart and its templates, including the app version.
+# Versions are expected to follow Semantic Versioning (https://semver.org/)
+version: 0.2.13
+
+# This is the version number of the application being deployed. This version number should be
+# incremented each time you make changes to the application. Versions are not expected to
+# follow Semantic Versioning. They should reflect the version the application is using.
+### This version string must match the string entered in pom.xml
+appVersion: 0.2.13
+
+
+
+
+
