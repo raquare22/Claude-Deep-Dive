@@ -1,18 +1,166 @@
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: kafka-certs
-  labels:
-    application: {{ .Values.pipeline.application.name }}
-    environment: {{ .Values.environment }}
-    tier: splunk
-spec:
-  accessModes:
-    - ReadWriteMany
-  resources:
-    requests:
-      storage: 25Mi
-  storageClassName: nas-thin
+name: "Copilot Setup Steps"
+
+# Automatically run the setup steps when they are changed to allow for easy validation, and allow manual testing through the repository's "Actions" tab
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/copilot-setup-steps.yml
+  pull_request:
+    paths:
+      - .github/workflows/copilot-setup-steps.yml
+
+jobs:
+  # The job MUST be called `copilot-setup-steps` or it will not be picked up by Copilot.
+  copilot-setup-steps:
+    runs-on: gh-copilot-runner  # This is where we can configure which runner copilot coding review will use when it runs
+
+    # Set the permissions to the lowest permissions possible needed for your steps.
+    # Copilot will be given its own token for its operations.
+    permissions:
+      # If you want to clone the repository as part of your setup steps, for example to install dependencies, you'll need the contents: read permission. If you don't clone the repository in your setup steps, Copilot will do this for you automatically after the steps complete.
+      contents: read
+
+    # You can define any steps you want, and they will run before the agent starts.
+    # If you do not check out your code, Copilot will do this for you.
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Print runner info  # Optional Debug Step: this step is used to review the runner the Copilot Coding Agent is using
+        run: |
+          echo "=========== COPILOT CODING AGENT RUNNER INFO ============"
+          echo "Runner Name: ${{ runner.name }}"
+          echo "Runner OS: ${{ runner.os }}"
+          echo "Runner Architecture: ${{ runner.arch }}"
+          echo "========================================================="
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+name: cicd-pipeline
+permissions:
+  contents: write
+  security-events: write
+  id-token: write
+  pull-requests: write
+  issues: read
+  statuses: write
+  checks: write
+  deployments: write
+  actions: read
+on:
+  push:
+    branches:
+      - master
+      - develop
+      - MI*
+      - release/*
+  workflow_dispatch:
+
+
+jobs:
+  # This job uses a reusable workflow to deploy the application to Kubernetes using the specified Helm chart
+  deployment:
+    uses: uhc-tech-provider/ppl-prun-github-actions/.github/workflows/cicd.yml@main
+    with:
+      jfrogUsername: prune@optum.com
+    secrets:
+      JFROG_TOKEN: ${{ secrets.JFROG_SECRET }}
+      KUBECONFIG: ${{ secrets.KUBECONFIG }}
+      STAGE_DT_TOKEN: ${{ secrets.STAGE_DT_TOKEN }}
+      PROD_DT_TOKEN: ${{ secrets.PROD_DT_TOKEN }}
+      STAGE_VAULT_ROLE_ID: ${{ secrets.STAGE_VAULT_ROLE_ID }}
+      STAGE_VAULT_SECRET_ID: ${{ secrets.STAGE_VAULT_SECRET_ID }}
+      STAGE_KEYSTORE_PASS: ${{ secrets.STAGE_KEYSTORE_PASS }}
+      STAGE_SPLUNK_TOKEN: ${{ secrets.STAGE_SPLUNK_TOKEN }}
+      PROD_VAULT_ROLE_ID: ${{ secrets.PROD_VAULT_ROLE_ID }}
+      PROD_VAULT_SECRET_ID: ${{ secrets.PROD_VAULT_SECRET_ID }}
+      PROD_KEYSTORE_PASS: ${{ secrets.PROD_KEYSTORE_PASS }}
+      PROD_SPLUNK_TOKEN: ${{ secrets.PROD_SPLUNK_TOKEN }}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+name: AI based Agent to Review Code in PRs
+
+on:
+  pull_request:
+    types: ["ready_for_review", "opened" , "synchronize"] # This check allows to trigger a PR when converting a draft PR to a regular PR and when a regular PR is opened and manage PR updates
+    branches: ["*"]   #you can change/limit to any branch you wish to
+
+  pull_request_target: # Needed if you raise PRs from forks
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write      # Make sure this is in 'write', as the action
+  security-events: write    # displays the review through th PR comments
+  checks: write
+  id-token: write
+
+jobs:
+  code-reviewer:
+    if: ${{ github.event.pull_request.draft == false }} # This check prevents to execute code review agent on draft PRs
+    uses: optum-eeps/Code-Review-Agent/.github/workflows/pr-code-review.yml@v2
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }} # Must add this, this auto-generates a token neccessary for the action to issue comments to the PR
+
+
+
+
+
+
+
+
+
 
 
 
@@ -73,6 +221,7 @@ hcck8sProfile:
         clusterDNS: hcc-ctc-prd-usr201-0.optum.com
         credentialId:
         namespace: provider-paperless-prod-pra
+
 
 
 
@@ -258,10 +407,6 @@ spec:
 
 
 
-
-
-
-
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -331,120 +476,6 @@ spec:
 
 
 
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: paperless-app-network-policy
-  namespace: {{ .Values.namespace }}
-spec:
-  podSelector:
-    matchLabels:
-      environment: {{ .Values.environment }}
-  policyTypes:
-    - Ingress
-    - Egress
-  ingress:
-    - ports:
-        - protocol: TCP
-          port: 8080
-        - protocol: TCP
-          port: 443
-        - protocol: TCP
-          port: 80
-  egress:
-    - ports:
-        #SPLUNK
-        - protocol: TCP
-          port: 8089
-        - protocol: TCP
-          port: 9996
-        #MYSQLDB
-        - protocol: TCP
-          port: 3306
-        #MONGODB
-        - protocol: TCP
-          port: 27017
-        #HTTPS
-        - protocol: TCP
-          port: 443
-        #HTTP
-        - protocol: TCP
-          port: 80
-        - protocol: TCP
-          port: 8080
-        #Kafka
-        - protocol: TCP
-          port: 9093
-        #Elastic
-        - protocol: TCP
-          port: 9200
-        #ORS
-        - protocol: TCP
-          port: 22443
-        #stage
-        - protocol: TCP
-          port: 50002
-        #prod
-        - protocol: TCP
-          port: 50000
-        #Mail_Server
-        - protocol: TCP
-          port: 25
-        #SMB
-        - protocol: TCP
-          port: 139
-        - protocol: TCP
-          port: 445
-        #FTP
-        - protocol: TCP
-          port: 22
-        #LDAP
-        - protocol: TCP
-          port: 389
-        #Fluentd
-        - protocol: TCP
-          port: 9093
-        # Oracle Net Services
-        - protocol: TCP
-          port: 1521
-        # Oracle Connection Mngr
-        - protocol: TCP
-          port: 1630
-        # Dynatrace
-        - protocol: TCP
-          port: 9999
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 apiVersion: v1
@@ -485,23 +516,294 @@ spec:
 
 
 
+
 apiVersion: v2
-name: fds-paperless-activiti
+name: ppl-prun-services
 description: A Helm Chart for HCC K8S Deployments
 type: application
 
 # This is the chart version. This version number should be incremented each time you make changes
 # to the chart and its templates, including the app version.
 # Versions are expected to follow Semantic Versioning (https://semver.org/)
-version: 0.2.13
+version: 0.1.14
 
 # This is the version number of the application being deployed. This version number should be
 # incremented each time you make changes to the application. Versions are not expected to
 # follow Semantic Versioning. They should reflect the version the application is using.
 ### This version string must match the string entered in pom.xml
-appVersion: 0.2.13
+appVersion: 0.1.14
 
 
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+environment: prod
+springProfile: prod
+name: ppl-prun-services
+
+replicas: 4
+resources:
+  memory:
+    jvmMin: 1200m
+    jvmMax: 1500m
+    podRequest: 6Gi
+    podLimit: 8Gi
+  cpu:
+    podRequest: 2
+    podLimit: 4
+  additionalJavaOpts: >
+    -Delastic.apm.enabled=false
+
+splunk:
+  url: "phi-dmz-hec-splunk.optum.com"
+
+encrypt:
+  keystoreLocation: prod
+  keystoreAlias: ""
+
+eureka:
+  host: ""
+
+ingressSubdomain: prd201
+
+elastic:
+  environment: ppl-prun-services-prod
+  logLevel: WARN
+  applicationPackages: com.optum
+  serviceName: UHGRG_uhgwm110_023810_ADMIN
+  globalLabels: com_uhg_appid=UHGWM110-023810
+  serverUrl: https://eapm.uhc.com:443
+
+dynatrace:
+  host: https://dtcloud2-core.optum.com/e/vtp76407
+  zone: core
+  askId: UHGWM110-023810
+  environment: prod
+
+approval:
+  prompt: true
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+environment: prod-pra
+springProfile: prod-pra
+name: ppl-prun-services-pra
+
+replicas: 4
+resources:
+  memory:
+    jvmMin: 1200m
+    jvmMax: 1500m
+    podRequest: 6Gi
+    podLimit: 8Gi
+  cpu:
+    podRequest: 2
+    podLimit: 4
+  additionalJavaOpts: >
+    -Delastic.apm.enabled=false
+
+splunk:
+  url: "phi-dmz-hec-splunk.optum.com"
+
+encrypt:
+  keystoreLocation: prod
+  keystoreAlias: prod
+
+eureka:
+  host: ""
+
+ingressSubdomain: prd201
+
+elastic:
+  environment: ppl-prun-services-pra-prod
+  logLevel: WARN
+  applicationPackages: com.optum
+  serviceName: UHGRG_uhgwm110_023810_ADMIN
+  globalLabels: com_uhg_appid=UHGWM110-023810
+  serverUrl: https://eapm.uhc.com:443
+
+dynatrace:
+  host: https://dtcloud2-core.optum.com/e/vtp76407
+  zone: core
+  askId: UHGWM110-023810
+  environment: prod
+
+approval:
+  prompt: true
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+environment: stage
+springProfile: stage
+name: ppl-prun-services
+
+replicas: 1
+resources:
+  memory:
+    jvmMin: 1200m
+    jvmMax: 1500m
+    podRequest: 6Gi
+    podLimit: 8Gi
+  cpu:
+    podRequest: 2
+    podLimit: 4
+  additionalJavaOpts: >
+    -Delastic.apm.enabled=false
+
+splunk:
+  url: npe-dmz-hec-splunk.optum.com
+
+eureka:
+  host: "np1"
+
+encrypt:
+  keystoreLocation: nonprod
+  keystoreAlias: np
+
+ingressSubdomain: np101
+
+elastic:
+  environment: ppl-prun-services-stage
+  logLevel: WARN
+  applicationPackages: com.optum
+  serviceName: UHGRG_uhgwm110_023810_ADMIN
+  globalLabels: com_uhg_appid=UHGWM110-023810
+  serverUrl: https://eapm-nonprod.uhc.com:443
+
+dynatrace:
+  host: https://dtcloud2-nonprod-core.optum.com/e/bmr50330
+  zone: core
+  askId: UHGWM110-023810
+  environment: stage
+
+
+approval:
+  prompt: true
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+environment: stage-pra
+springProfile: stage
+name: ppl-prun-services-pra
+
+replicas: 1
+resources:
+  memory:
+    jvmMin: 1200m
+    jvmMax: 1500m
+    podRequest: 6Gi
+    podLimit: 8Gi
+  cpu:
+    podRequest: 2
+    podLimit: 4
+  additionalJavaOpts: >
+    -Delastic.apm.enabled=false
+
+
+splunk:
+  url: npe-dmz-hec-splunk.optum.com
+
+
+eureka:
+  host: "np1"
+
+encrypt:
+  keystoreLocation: nonprod
+  keystoreAlias: np
+
+ingressSubdomain: np101
+
+elastic:
+  environment: ppl-prun-services-pra-stage
+  logLevel: WARN
+  applicationPackages: com.optum
+  serviceName: UHGRG_uhgwm110_023810_ADMIN
+  globalLabels: com_uhg_appid=UHGWM110-023810
+  serverUrl: https://eapm-nonprod.uhc.com:443
+
+dynatrace:
+  host: https://dtcloud2-nonprod-core.optum.com/e/bmr50330
+  zone: core
+  askId: UHGWM110-023810
+  environment: stage
+
+
+approval:
+  prompt: true
