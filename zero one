@@ -1,673 +1,552 @@
-from datetime import datetime
-import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-from src.hookReport.tableHead import head
-from src.hookReport.tableTail import tail
-from src.hookReport.spaceIdData import _populate_spaceIdsRowHtml
-from src.util.utils import SERVER, SENDER_EMAIL, RECEIVER_EMAIL
-from src.hookReport.tableHeadDataHtml import headData
+FROM centraluhg.jfrog.io/ppl-docker-vir/gi-jdk17:17.0-dt
 
+ADD /target/ppl-prun-services.jar .
 
-def _generate_message(receiverEmail) -> MIMEMultipart:
-    SUBJECT = 'Hook Time Windows'
-    spaceIds = [8889, 8935, 8936, 8937, 8938, 10074, 10075, 10103, 10303, 10403, 10503, 10603, 10703, 10803, 10903, 11103, 11203, 11303, 11403, 11503, 11603, 11803]
-    fmtMail = head + headData.format(datetime.utcnow()) + _populate_spaceIdsRowHtml(spaceIds) + tail
-    message = MIMEMultipart("alternative", None, [MIMEText(fmtMail, 'html')])
-    message['Subject'] = SUBJECT
-    message['From'] = SENDER_EMAIL
-    message['To'] = ", ".join(receiverEmail)
-    return message
+EXPOSE 8088
+
+# CMD java $BASE_JAVA_OPTS $JAVA_OPTS -jar ppl-prun-services.jar
+CMD ["/bin/sh", "-c", "$DT_HOME/enable_and_switch_dynatrace_environment.sh java $BASE_JAVA_OPTS $JAVA_OPTS -jar ppl-prun-services.jar"]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+pipeline:
+  application:
+    jfrogProjectKey: ppl
+    name: ppl-prun-services
+    image:
+      registry:
+        centralHost: centraluhg.jfrog.io
+        host: edgeinternal1uhg.optum.com
+        devPath: ppl-docker-np-loc/ppl
+        prodPath: ppl-docker-release-loc/ppl
+      pullPolicy: IfNotPresent
+      tag:
+    askId: UHGWM110-023810
+
+  adapter: maven
+  codeQuality:
+    projectKey: com.optum.UHGWM110-023810:ppl-prun-services
+    projectName: ppl-prun-services
+  tools:
+    versions:
+      java: 17
+      helm: 3.14.2
+    credentials:
+      registry: enterprise_registry_sa
+      sonar: optum-sonar-token
+      github: github_uhg_pat
+k8s:
+  #profile will be used to select the cluster config in cicd/assets/hcck8s.yaml.
+  profile: prun
+  environments:
+    stage:
+      deploy: elr, ctc
+    stage-pra:
+      deploy: elr, ctc
+    prod:
+      deploy: elr,ctc
+    prod-pra:
+      deploy: elr,ctc
+
+zone: core
+# Container port information, this is the port opened to your api
+containerPorts:
+  - name: http
+    protocol: TCP
+    containerPort: 8080
+
+# The number of deployment revisions to retain
+revisionHistoryLimit: 5
+
+# HealthCheck Liveness Probe
+livenessProbe:
+  httpGet:
+    path: "/"
+    port: 8080
+  initialDelaySeconds: 120
+  periodSeconds: 5
+  timeoutSeconds: 15
+# HealthCheck Readiness Probe
+readinessProbe:
+  httpGet:
+    path: "/"
+    port: 8080
+  initialDelaySeconds: 120
+  periodSeconds: 60
+  timeoutSeconds: 15
+  failureThreshold: 10
 
 
-def send_hook_report():
-    message = _generate_message(RECEIVER_EMAIL)
-    server = smtplib.SMTP(SERVER)
-    server.ehlo()
-    server.sendmail(SENDER_EMAIL, RECEIVER_EMAIL, message.as_string())
-    server.quit()
+# Volumes
+# volumes.name: the volume name to define the volume on the pod that your container will use
+# volumes.mountPath: the path to mount the volume to (the path your app will use)
+# volumes.claimName: the claimName is the name of the persistent volume claim setup within the namespace
+# For our apps, some default volumes have already been defined for you.
+# Also, a default logs volume will created and mounted to a pvc named "logs-appname-env"
+# and mounted to /app/logs, primarily for newrelic data
+volumes:
+  - name: prun-log
+    mountPath: /prun-log
+  - name: prun-pv
+    mountPath: /ingest
+  - name: prun-pv
+    mountPath: /prun-pv
+  - name: prun-ehcache-pv
+    mountPath: /prun-ehcache-pv
+  - name: kafka
+    mountPath: /mnt/data
 
+nodeSelector: {}
+tolerations: []
+affinity: {}
 
-# if __name__ == '__main__':
-#     print("job started via cron : ", datetime.now())
-#     send_hook_report()
-#     print("job completed at :", datetime.now())
+# Horizontal Pod Autoscaler
+#autoscaler:
+#  enabled: false
+#  replicas:
+#    min: 1
+#    max: 10
+#  targetCPUUtilizationPercentage: 80
+#  targetMemoryUtilizationPercentage: 80
 
+# Service - templates/service.yaml
+service:
+  type: ClusterIP
+  port: 8080
 
+# Deployment Stage Approval
+# Default should be prompt: false unless you want to
+# approve every stage. Place in the env values file you
+# want to enable an approval prompt to proceed to that stage.
+# - approval.prompt: true or false
+# - approval.version.required: true or false / depends on approval.prompt
+#    if you want the prompt includes a version text box, set required to true.
+# - approval.version.defaultDisplay: "current","blank" or any other text
+#    If version.required is true, then a version will be displayed
+#    that can be overwritten. The value entered for the defaultDisply property will be what
+#    is displayed to the user. If you want to display the current build version, either do not set
+#    a value or use a value of "current". If you want a blank version, enter "blank" or you can enter
+#    anything you want to be displayed.
+#    Note: Upon pressing proceed, if version.required is true, the version entered, will be evaluated
+#    against the current build version and if incorrect, the build will be aborted.
+# - approval.timeout.minutes: the amount of time in minuted until the build is automatically aborted due to
+#   the time limit being exceeded.
+approval:
+  prompt: false
+  version:
+    required: true
+    defaultDisplay: current
+  timeout:
+    minutes: 20160
 
+# Security - deployment.yaml
+# These values should not change due to HCC compliance policies
+#
+# - podSecurityContext is defined for spec.template.spec
+#podSecurityContext:
+#  runAsNonRoot: false
+#  runAsUser: 1000
+# - securityContext is defined for spec.template.spec.containers.x
+#securityContext:
+#  capabilities:
+#    drop:
+#      - KILL
+#      - MKNOD
+#      - SYS_CHROOT
+#  runAsNonRoot: true
+#  runAsUser: 1001
+#  allowPrivilegeEscalation: false
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-import re
-from src.hookReport.spaceIdRowHtml import spaceIdRowHtml
-from src.util.utils import hook
-from src.util.clientName import getClient
-
-def searchHook(id):
-    hooks = []
-    cursor = hook.find({"spaceId": id})
-    cursor_bounceEmail = hook.find({"hook.action.config.spaceId": str(id)})
-
-    for rec in cursor:
-        tempId = rec['spaceId']
-        tempName = rec['hook']['name']
-        tempStatus = rec['status']
-        if tempName != "preposthook" and tempName != "prepostrealtimehook":
-            temp = rec['hook']['action']['config']['search_window']
-            tempStartWindow = int(re.findall("\d+", temp)[0])
-            tempEndWindow = int(re.findall("\d+", temp)[1])
-        else:
-            tempStartWindow = int(rec['hook']['action']['config']['search_window']['start_date_offset']['time_window'])
-            tempEndWindow = int(rec['hook']['action']['config']['search_window']['end_date_offset']['time_window'])
-
-        hooks.append((tempId, tempName, tempStartWindow, tempEndWindow, tempStatus))
-
-    for rec in cursor_bounceEmail:
-        if rec['hook']['name'] == "BouncedEmailPostProcessingHook":
-            t = rec['hook']['action']['config']['search_window']
-            hooks.append((rec['hook']['action']['config']['spaceId'], rec['hook']['name'],int(re.findall("\d+", t)[0]) , int(re.findall("\d+", t)[1]), rec['status']))
-
-    return hooks
-
-def _populate_spaceIdsRowHtml(spaceIds):
-
-    spaceIdRowHtmlTags = ""
-
-    for spaceId in spaceIds:
-        rec = searchHook(spaceId)
-        for i in rec:
-            if i[4] != "AVAILABLE":
-                spaceIdRowHtmlTags = spaceIdRowHtmlTags + spaceIdRowHtml.format("red", spaceId, getClient(spaceId), i[1], i[2], i[3], i[4])
-            else:
-                spaceIdRowHtmlTags = spaceIdRowHtmlTags + spaceIdRowHtml.format("", spaceId, getClient(spaceId), i[1], i[2], i[3], i[4])
-
-
-    return spaceIdRowHtmlTags
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-spaceIdRowHtml = """
-        <tr style="background-color:{}">
-          <td>{}</td>
-          <td >{}</td>
-          <td >{}</td>
-          <td >{}</td>
-          <td >{}</td>
-          <td >{}</td>
-        </tr>
-"""
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-head = """
-<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <style type="text/css">
-      table, th, td {
-        border: 1px solid black;
-        border-collapse: collapse;  
-      }
-    </style>
-  </head>
-"""
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-headData = """
-  <body>
-    Hi All,<br> <br>
-     Hook time windows at {} are as following. <br><br>
-    <table style="width:100%">
-      <thead>
-        <tr style="border: 1px solid #1b1e24;">
-          <th bgcolor="LightBlue" style="vertical-align : middle;text-align:center;">Space Id</th>
-          <th bgcolor="LightBlue" style="vertical-align : middle;text-align:center;">Client Name</th>
-          <th bgcolor="LightBlue" style="vertical-align : middle;text-align:center;">Hook Name</th>
-          <th bgcolor="LightBlue" style="vertical-align : middle;text-align:center;">Start Window</th>
-          <th bgcolor="LightBlue" style="vertical-align : middle;text-align:center;">End Window</th>
-          <th bgcolor="LightBlue" style="vertical-align : middle;text-align:center;">Status</th>
-        </tr>          
-      </thead>
-      <tbody>
-"""
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-tail = """
-      </tbody>
-    </table>
-    <br>
-    <br>
-    <br>
-    Regards<br>
-    FDS Paperless Team<br>
-    *--SecureDelivery--*<br>
-  </body>
-</html>
-"""
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-import paramiko
-import os
-from base64 import decodebytes
-
-sftpURL = os.getenv('ECG_SFTP_URL')
-sftpUser = os.getenv('ECG_SFTP_USER')
-sftpPass = os.getenv('ECG_SFTP_PASS')
-ssh = paramiko.SSHClient()
-# automatically add keys without requiring human intervention
-# ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-keydata = os.getenv('ECG_SFTP_KEYDATA')
-keydata_bytes = keydata.encode()
-key = paramiko.RSAKey(data=decodebytes(keydata_bytes))
-ssh.get_host_keys().add(hostname=sftpURL, keytype='ssh-rsa', key=key)
-ssh.connect(sftpURL, username=sftpUser, password=sftpPass)
-ftp = ssh.open_sftp()
-
-
-def _print_inbound(path):
-    if (path.find("prod") > 0):
-        print("clinet: ", path)
-        files = ftp.listdir("batch/" + path)
-        for file in files:
-            if "ack" or "resp" in file:
-                print("  ", file)
-
-
-def _print_batch():
-    files = ftp.listdir("batch")
-    for path in files:
-        if path.find("archive") == -1:
-            _print_inbound(path)
-
-
-if __name__ == '__main__':
-    _print_batch()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-import paramiko
-import os
-from base64 import decodebytes
-
-sftpURL = os.getenv('ECG_SFTP_URL')
-sftpUser = os.getenv('ECG_SFTP_USER')
-sftpPass = os.getenv('ECG_SFTP_PASS')
-ssh = paramiko.SSHClient()
-# automatically add keys without requiring human intervention
-# ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-keydata = os.getenv('ECG_SFTP_KEYDATA')
-keydata_bytes = keydata.encode()
-key = paramiko.RSAKey(data=decodebytes(keydata_bytes))
-ssh.get_host_keys().add(hostname=sftpURL, keytype='ssh-rsa', key=key)
-ssh.connect(sftpURL, username=sftpUser, password=sftpPass)
-ftp = ssh.open_sftp()
-
-
-def _print_inbound(path):
-    if (path.find("prod") > 0):
-        print("clinet: ", path)
-        files = ftp.listdir("batch/" + path)
-        for file in files:
-            if "ack" or "resp" in file:
-                print("  ", file)
-
-
-def _print_batch():
-    files = ftp.listdir("batch")
-    for path in files:
-        if "archive" in path:
-            _print_inbound(path)
-
-
-if __name__ == '__main__':
-    _print_batch()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-from pymongo import MongoClient, errors as pymongo_errors
-from datetime import datetime, timedelta
-import logging as logger
-import pytz
-from dotenv import load_dotenv
-import os
-import traceback
-from src.mongoCleanup.config import DATABASE_NAME, COLLECTIONS
-
-
-load_dotenv()
-
-def cleanup_collections():
-    try:
-
-        # Connect to the MongoDB
-        MONGO_URI = os.getenv("MONGO_URI_PRD")
-        client = MongoClient(MONGO_URI)
-        if client is None:
-            logger.error(f"Mongo client is None, \n  Traceback: {traceback.format_exc()}")
-            return
-        else:
-            logger.info("Mongo client connected successfully")
-        db = client[DATABASE_NAME]
-        if db is None:
-            logger.error(f"Mongo database not initialised, \n  Traceback: {traceback.format_exc()}")
-            return
-        else:
-            logger.info("Mongo database connected successfully")
-
-        for collection_name, duration_days in COLLECTIONS.items():
-            collection = db[collection_name]
-            if collection is None:
-                logger.error(f"Mongo collection {collection_name} is None, \n  Traceback: {traceback.format_exc()}")
-                return
-            else:
-                logger.info(f"Mongo collection {collection_name} connected successfully")
-            logger.info(f"Cleaning up {collection_name} collection")
-            cutoff_date = datetime.now(pytz.UTC) - timedelta(days=duration_days)
-            query = {"dateCreated": {"$lt": cutoff_date}}
-            logger.info("Running cleanup query: " + str(query))
-            logger.info(f"Deleting documents older than {cutoff_date} from {collection_name}")
-            result = collection.delete_many(query)
-            logger.info(f"Deleted {result.deleted_count} documents from {collection_name}")
-
-    except pymongo_errors.OperationFailure as e:
-        logger.error(f"Mongo Cleanup Operation failed: Operation Failed: {e}, \n  Traceback: {traceback.format_exc()}")
-    except pymongo_errors.ConnectionFailure as e:
-        logger.error(f"Mongo Cleanup Operation failed: Connection Failed: {e}, \n  Traceback: {traceback.format_exc()}")
-    except pymongo_errors.InvalidURI as e:
-        logger.error(f"Mongo Cleanup Operation failed: Invalid URI: {e}, \n  Traceback: {traceback.format_exc()}")
-    except pymongo_errors.ConfigurationError as e:
-        logger.error(f"Mongo Cleanup Operation failed: Configuration Error: {e}, \n Traceback: {traceback.format_exc()}")
-    except pymongo_errors.NetworkTimeout as e:
-        logger.error(f"Mongo Cleanup Operation failed: Network Timed-out: {e}, \n Traceback: {traceback.format_exc()}")
-    except Exception as e:
-        logger.error(f"Mongo Cleanup Operation failed: Unexpected Error Occured: {e}, \n Traceback: {traceback.format_exc()}")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-import os
-import logging
-import sys
-from datetime import datetime, timedelta
-from pathlib import Path
-from smb.SMBConnection import SMBConnection
-
-sys.path.append(str(Path(__file__).resolve().parents[1]))
-from bdpass.vaultconnection import vault_service
-
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
-
-
-class NASCleanup:
-    def __init__(self):
-        vault_service.update_app_config()
-        self.smb_user = self._get_required_env("SMB_USERNAME")
-        self.smb_pass = self._get_required_env("SMB_PASSWORD")
-        self.nas_server = self._get_required_env("NAS_SERVER")
-        self.nas_share = self._get_required_env("NAS_SHARE")
-        self.cleanup_folder = os.getenv("NAS_CLEANUP_FOLDER", "out")
-        self.days_old = int(self._get_required_env("NAS_CLEANUP_DAYS"))
-        self.conn = None
-        self.deleted = 0
-        self.failed = 0
-        self.log_dir = os.getenv('NAS_LOG_DIR', '/tmp/nas_cleanup_logs')
-        self.timestamp = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
-        self.logfile = f"{self.log_dir}/deleted_files_{self.timestamp}.log"
-
-    def connect(self):
-        """Connect to NAS via SMB"""
-        try:
-            logger.info(f"Connecting to {self.nas_server}/{self.nas_share}")
-            # It tries two SMB connection modes. First it attempts SMB over TCP on port 445 (most common). If that fails, it retries NetBIOS/SMB on port 139. This makes the script work in more environments.
-            self.conn = SMBConnection(self.smb_user, self.smb_pass, 'cleanup', self.nas_server, 
-                                     use_ntlm_v2=True, is_direct_tcp=True)
-            if not self.conn.connect(self.nas_server, 445):
-                self.conn = SMBConnection(self.smb_user, self.smb_pass, 'cleanup', self.nas_server, 
-                                         use_ntlm_v2=True, is_direct_tcp=False)
-                if not self.conn.connect(self.nas_server, 139):
-                    raise Exception("Connection failed")
-            logger.info("Connected successfully")
-            return True
-        except Exception as e:
-            logger.error(f"Connection error: {e}")
-            return False
-
-    def cleanup_path(self, path, cutoff):
-        """Recursively delete old files"""
-        try:
-            items = self.conn.listPath(self.nas_share, path)
-            for item in items:
-                if item.filename in ['.', '..']:
-                    continue
-                    
-                item_path = f'{path}/{item.filename}'
-                if self._is_skipped_path(item_path):
-                    continue
-                
-                if item.isDirectory:
-                    self.cleanup_path(item_path, cutoff)
-                else:
-                    file_time = datetime.fromtimestamp(item.last_write_time)
-                    if file_time < cutoff:
-                        try:
-                            self.conn.deleteFiles(self.nas_share, item_path)
-                            self.deleted += 1
-                            logger.info(f"Deleted: {item_path}")
-                            self._write_log(f"Deleted: {item_path}")
-                        except Exception as e:
-                            self.failed += 1
-                            logger.error(f"Failed: {item_path} - {e}")
-                            self._write_log(f"Failed: {item_path} - {e}")
-        except Exception as e:
-            logger.error(f"Error in {path}: {e}")
-            self._write_log(f"Error in {path}: {e}")
-
-    def count_old_files(self, path, cutoff):
-        """Recursively count old files without deleting"""
-        count = 0
-        try:
-            items = self.conn.listPath(self.nas_share, path)
-            for item in items:
-                if item.filename in ['.', '..']:
-                    continue
-
-                item_path = f'{path}/{item.filename}'
-                if self._is_skipped_path(item_path):
-                    continue
-
-                if item.isDirectory:
-                    count += self.count_old_files(item_path, cutoff)
-                else:
-                    file_time = datetime.fromtimestamp(item.last_write_time)
-                    if file_time < cutoff:
-                        count += 1
-        except Exception as e:
-            logger.error(f"Error in {path}: {e}")
-            self._write_log(f"Error in {path}: {e}")
-        return count
-
-    def _is_skipped_path(self, path):
-        parts = [p for p in path.split('/') if p]
-        for part in parts:
-            if part.startswith('.'):
-                return True
-        return False
-
-    def _get_required_env(self, key):
-        value = os.getenv(key)
-        if value is None or str(value).strip() == "":
-            raise ValueError(f"Missing required environment variable: {key}")
-        return value
-
-    def _write_log(self, message):
-        try:
-            os.makedirs(self.log_dir, exist_ok=True)
-            with open(self.logfile, 'a') as log_file:
-                log_file.write(f"{datetime.now().isoformat()} - {message}\n")
-        except Exception as e:
-            logger.error(f"Log write failed: {e}")
-
-
-    def run_cleanup(self):
-        """Main cleanup process"""
-        logger.info("Starting NAS cleanup")
-        
-        if not self.connect():
-            return False
-        
-        try:
-            cutoff = datetime.now() - timedelta(days=self.days_old)
-            if os.getenv('NAS_COUNT_ONLY', 'false').lower() == 'true':
-                total = self.count_old_files(f'/{self.cleanup_folder}', cutoff)
-                logger.info(f"Files older than {self.days_old} days: {total}")
-                self._write_log(f"Count - Older than {self.days_old} days: {total}")
-                return True
-
-            logger.info(f"Deleting files older than {self.days_old} days from /{self.cleanup_folder}")
-
-            self.cleanup_path(f'/{self.cleanup_folder}', cutoff)
-
-            logger.info(f"Cleanup completed - Deleted: {self.deleted}, Failed: {self.failed}")
-            self._write_log(f"Summary - Deleted: {self.deleted}, Failed: {self.failed}")
-            return True
-        except Exception as e:
-            logger.error(f"Error: {e}")
-            return False
-        finally:
-            if self.conn:
-                self.conn.close()
-
-
-def cleanup_nas():
-    try:
-        return NASCleanup().run_cleanup()
-    except Exception as e:
-        logger.error(f"Failed: {e}")
-        return False
-
-
-if __name__ == "__main__":
-    cleanup_nas()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  <parent>
+	<groupId>org.springframework.boot</groupId>
+	<artifactId>spring-boot-starter-parent</artifactId>
+	<version>4.0.3</version>
+	<relativePath/>
+  </parent>
+
+  <properties>
+    <java.version>17</java.version> 
+    <sonar.java.coveragePlugin>jacoco</sonar.java.coveragePlugin>
+	<sonar.dynamicAnalysis>reuseReports</sonar.dynamicAnalysis>
+	<sonar.language>java</sonar.language>
+	<maven.compiler.source>${java.version}</maven.compiler.source>
+    <maven.compiler.target>${java.version}</maven.compiler.target>
+    <sonar.language>java</sonar.language> 
+  </properties>  
+  <dependencies> 
+    <dependency> 
+      <groupId>org.springframework.boot</groupId>  
+      <artifactId>spring-boot-starter-web</artifactId> 
+      <exclusions>
+                <exclusion>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-starter-logging</artifactId>
+                </exclusion>
+		  <exclusion>
+			  <groupId>org.springframework</groupId>
+			  <artifactId>spring-webmvc</artifactId>
+		  </exclusion>
+		  <exclusion>
+		    <groupId>org.yaml</groupId>
+            <artifactId>snakeyaml</artifactId>
+		  </exclusion>
+		  <exclusion>
+		    <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-autoconfigure</artifactId>
+		  </exclusion>
+		  <exclusion>
+		    <groupId>org.springframework</groupId>
+            <artifactId>spring-core</artifactId>
+		  </exclusion>
+		  <exclusion>
+		    <groupId>org.springframework</groupId>
+			<artifactId>spring-web</artifactId>
+		  </exclusion>
+		  <exclusion>
+		     <groupId>com.fasterxml.jackson.core</groupId>
+             <artifactId>jackson-core</artifactId>
+		  </exclusion>
+		  <exclusion>
+			  <groupId>org.apache.tomcat.embed</groupId>
+			  <artifactId>tomcat-embed-core</artifactId>
+		  </exclusion>
+      </exclusions>
+    </dependency>
+	  <!-- tomcat fix version -->
+	  <dependency>
+          <groupId>org.apache.tomcat.embed</groupId>
+          <artifactId>tomcat-embed-core</artifactId>
+       </dependency>
+	  
+	  <dependency>
+		  <groupId>org.springframework</groupId>
+		  <artifactId>spring-webmvc</artifactId>
+          </dependency>
+	  
+	  <dependency>
+	      <groupId>org.springframework</groupId>
+		  <artifactId>spring-web</artifactId>
+		  </dependency>
+	  
+	  <dependency>
+	     <groupId>org.springframework.boot</groupId>
+         <artifactId>spring-boot-autoconfigure</artifactId>
+         </dependency>
+	  
+	  <dependency>
+	    <groupId>org.springframework</groupId>
+        <artifactId>spring-core</artifactId>
+		  </dependency>
+    <!-- Log4j2 fix, pull latest version. -->
+		<dependency>
+			<groupId>org.apache.logging.log4j</groupId>
+			<artifactId>log4j-core</artifactId>		
+			
+		</dependency>
+		 <dependency>
+		    <groupId>org.apache.logging.log4j</groupId>
+		    <artifactId>log4j-api</artifactId>
+		  
+		</dependency>
+		<dependency>
+			<groupId>org.apache.logging.log4j</groupId>
+			<artifactId>log4j-slf4j-impl</artifactId>
+		</dependency>   
+		
+		<dependency>
+           <groupId>org.slf4j</groupId>
+           <artifactId>slf4j-api</artifactId>
+           <version>1.7.25</version>
+        </dependency> 
+    <dependency> 
+      <groupId>org.springframework.boot</groupId>  
+      <artifactId>spring-boot-starter-test</artifactId>  
+      <scope>test</scope> 
+      <exclusions>
+		     <exclusion>
+				   <groupId>org.apache.logging.log4j</groupId>
+				   <artifactId>log4j-to-slf4j</artifactId>
+			   </exclusion>
+			   <exclusion>
+				   <groupId>ch.qos.logback</groupId>
+				   <artifactId>logback-classic</artifactId>
+			   </exclusion>
+			   <exclusion>
+				   <groupId>ch.qos.logback</groupId>
+				   <artifactId>logback-classic</artifactId>
+			   </exclusion>
+			   <exclusion>
+				   <groupId>ch.qos.logback</groupId>
+				   <artifactId>logback-core</artifactId>
+			   </exclusion>
+			   
+	  </exclusions>
+    </dependency>  
+    <dependency>
+	       <groupId>com.splunk.logging</groupId>
+	       <artifactId>splunk-library-javalogging</artifactId>
+	       <exclusions>
+				<exclusion>
+					<groupId>org.apache.logging.log4j</groupId>
+					<artifactId>log4j-core</artifactId>
+				</exclusion>
+				<exclusion>
+					<groupId>org.apache.logging.log4j</groupId>
+					<artifactId>log4j-api</artifactId>
+				</exclusion>
+				<exclusion>
+					<groupId>org.apache.logging.log4j</groupId>
+					<artifactId>log4j-slf4j-impl</artifactId>
+				</exclusion>
+				<exclusion>
+				<groupId>org.apache.logging.log4j</groupId>
+   				 <artifactId>log4j</artifactId>
+   				 </exclusion>
+			   <exclusion>
+				   <groupId>com.squareup.okio</groupId>
+				   <artifactId>okio-jvm</artifactId>
+			   </exclusion>
+			   <exclusion>
+				   <groupId>org.apache.logging.log4j</groupId>
+				   <artifactId>log4j-to-slf4j</artifactId>
+			   </exclusion>
+			</exclusions>
+	       <version>1.11.1</version>
+    	</dependency>
+    <dependency> 
+      <groupId>org.apache.commons</groupId>  
+      <artifactId>commons-lang3</artifactId> 
+    </dependency>  
+    <dependency> 
+      <groupId>org.asynchttpclient</groupId>  
+      <artifactId>async-http-client</artifactId>  
+      <version>2.12.4</version> 
+      <exclusions>
+        <exclusion>
+           <groupId>io.netty</groupId>
+           <artifactId>netty-handler</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>io.netty</groupId>
+          <artifactId>netty-codec</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+	  <dependency>
+		  <groupId>io.netty</groupId>
+		  <artifactId>netty-codec-http2</artifactId>
+		  
+	  </dependency>
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-core</artifactId>
+      </dependency>
+    
+    <dependency> 
+      <groupId>jakarta.xml.bind</groupId>  
+      <artifactId>jakarta.xml.bind-api</artifactId> 
+    </dependency>
+    <dependency>
+		<groupId>org.springframework.cloud</groupId>
+		<artifactId>spring-cloud-starter-config</artifactId>
+		<version>5.0.0</version>
+		<exclusions>
+			   <exclusion>
+			     <groupId>org.bouncycastle</groupId>
+                 <artifactId>bcprov-jdk15on</artifactId>
+			   </exclusion>
+			   <exclusion>
+			     <groupId>com.fasterxml.jackson.core</groupId>
+                 <artifactId>jackson-core</artifactId>
+			   </exclusion>
+			 <exclusion>
+				 <groupId>org.springframework.security</groupId>
+                 <artifactId>spring-security-crypto</artifactId>
+			</exclusion>
+	    </exclusions>
+	</dependency>
+	
+	 <dependency>
+		<groupId>org.springframework.cloud</groupId>
+		<artifactId>spring-cloud-starter-vault-config</artifactId>
+		<version>5.0.0</version>
+		 <exclusions>
+			 <exclusion>
+				 <groupId>org.springframework</groupId>
+				 <artifactId>spring-web</artifactId>
+			 </exclusion>
+			 <exclusion>
+				 <groupId>org.springframework.security</groupId>
+                 <artifactId>spring-security-crypto</artifactId>
+			</exclusion>
+		 </exclusions>
+		</dependency>
+		
+	<dependency>
+	    <groupId>org.json</groupId>
+	    <artifactId>json</artifactId>
+	    <version>20231013</version>
+	</dependency>
+	<dependency>
+      	<groupId>junit</groupId>
+      	<artifactId>junit</artifactId>
+    </dependency>
+	  <!-- Spring Retry -->
+	  <dependency>
+		  <groupId>org.springframework.retry</groupId>
+		  <artifactId>spring-retry</artifactId>
+		  <version>2.0.12</version>
+	  </dependency>
+
+	  <dependency>
+		  <groupId>org.springframework</groupId>
+		  <artifactId>spring-aspects</artifactId>
+	  </dependency>
+
+	  <dependency>
+	    <groupId>org.apache.avro</groupId>
+		<artifactId>avro</artifactId>
+		<version>1.11.5</version>
+		<exclusions>
+		 <exclusion>
+		   <groupId>org.apache.commons</groupId>
+		   <artifactId>commons-compress</artifactId>
+		 </exclusion>
+		</exclusions>
+	  </dependency>
+	  
+	  <dependency>
+	    <groupId>com.fasterxml.jackson.core</groupId>
+        <artifactId>jackson-databind</artifactId>
+        </dependency>
+	  <dependency>
+		  <groupId>com.squareup.okio</groupId>
+		  <artifactId>okio-jvm</artifactId>
+		  <version>3.4.0</version>
+	  </dependency>
+	  
+	  <dependency>
+		  <groupId>org.springframework</groupId>
+		  <artifactId>spring-expression</artifactId>
+		  </dependency>
+	  <dependency>
+		  <groupId>org.owasp.encoder</groupId>
+		  <artifactId>encoder</artifactId>
+		  <version>1.2.3</version>
+	  </dependency>
+	  <dependency>
+		  <groupId>org.yaml</groupId>
+		  <artifactId>snakeyaml</artifactId>
+	  </dependency>
+	  
+	  <dependency>
+		  <groupId>org.springframework.boot</groupId>
+		  <artifactId>spring-boot-starter-actuator</artifactId>  
+	  </dependency>
+	  
+	  <dependency>
+         <groupId>org.springframework.boot</groupId>
+         <artifactId>spring-boot-starter-restclient</artifactId>
+      </dependency>
+	  
+  </dependencies>  
+  <build> 
+    <finalName>ppl-prun-services</finalName>
+    <plugins>
+			<plugin>
+				<groupId>org.springframework.boot</groupId>
+				<artifactId>spring-boot-maven-plugin</artifactId>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<version>2.19.1</version>
+				<configuration>
+					<argLine>@{argLine}</argLine>
+					<skipTests>false</skipTests>
+					<includes>
+						<include>**/PRUNBatchTestSuite.class</include>
+					</includes>
+					<useSystemClassLoader>false</useSystemClassLoader>
+				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.sonarsource.scanner.maven</groupId>
+				<artifactId>sonar-maven-plugin</artifactId>
+				<version>4.0.0.4121</version>
+			</plugin>
+
+			<plugin>
+				<groupId>org.jacoco</groupId>
+				<artifactId>jacoco-maven-plugin</artifactId>
+				<version>0.8.10</version>
+								<executions>
+				
+					<execution>
+						<id>prepare-agent</id>
+						<goals>
+							<goal>prepare-agent</goal>
+						</goals>
+					</execution>
+					<execution>
+						<id>report</id>
+						<goals>
+							<goal>report</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+		</plugins>
+  </build> 
+</project>
 
