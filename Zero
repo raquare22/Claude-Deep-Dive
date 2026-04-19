@@ -1,246 +1,3 @@
-name: "Copilot Setup Steps"
-
-# Automatically run the setup steps when they are changed to allow for easy validation, and allow manual testing through the repository's "Actions" tab
-on:
-  workflow_dispatch:
-  push:
-    paths:
-      - .github/workflows/copilot-setup-steps.yml
-  pull_request:
-    paths:
-      - .github/workflows/copilot-setup-steps.yml
-
-jobs:
-  # The job MUST be called `copilot-setup-steps` or it will not be picked up by Copilot.
-  copilot-setup-steps:
-    runs-on: gh-copilot-runner  # This is where we can configure which runner copilot coding review will use when it runs
-
-    # Set the permissions to the lowest permissions possible needed for your steps.
-    # Copilot will be given its own token for its operations.
-    permissions:
-      # If you want to clone the repository as part of your setup steps, for example to install dependencies, you'll need the contents: read permission. If you don't clone the repository in your setup steps, Copilot will do this for you automatically after the steps complete.
-      contents: read
-
-    # You can define any steps you want, and they will run before the agent starts.
-    # If you do not check out your code, Copilot will do this for you.
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
-
-      - name: Print runner info  # Optional Debug Step: this step is used to review the runner the Copilot Coding Agent is using
-        run: |
-          echo "=========== COPILOT CODING AGENT RUNNER INFO ============"
-          echo "Runner Name: ${{ runner.name }}"
-          echo "Runner OS: ${{ runner.os }}"
-          echo "Runner Architecture: ${{ runner.arch }}"
-          echo "========================================================="
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-name: cicd-pipeline
-permissions:
-  contents: write
-  security-events: write
-  id-token: write
-  pull-requests: write
-  issues: read
-  statuses: write
-  checks: write
-  deployments: write
-  actions: read
-on:
-  push:
-    branches:
-      - master
-      - develop
-      - MI*
-      - release/*
-  workflow_dispatch:
-
-
-jobs:
-  # This job uses a reusable workflow to deploy the application to Kubernetes using the specified Helm chart
-  deployment:
-    uses: uhc-tech-provider/ppl-prun-github-actions/.github/workflows/cicd.yml@main
-    with:
-      jfrogUsername: prune@optum.com
-    secrets:
-      JFROG_TOKEN: ${{ secrets.JFROG_SECRET }}
-      KUBECONFIG: ${{ secrets.KUBECONFIG }}
-      STAGE_DT_TOKEN: ${{ secrets.STAGE_DT_TOKEN }}
-      PROD_DT_TOKEN: ${{ secrets.PROD_DT_TOKEN }}
-      STAGE_VAULT_ROLE_ID: ${{ secrets.STAGE_VAULT_ROLE_ID }}
-      STAGE_VAULT_SECRET_ID: ${{ secrets.STAGE_VAULT_SECRET_ID }}
-      STAGE_KEYSTORE_PASS: ${{ secrets.STAGE_KEYSTORE_PASS }}
-      STAGE_SPLUNK_TOKEN: ${{ secrets.STAGE_SPLUNK_TOKEN }}
-      PROD_VAULT_ROLE_ID: ${{ secrets.PROD_VAULT_ROLE_ID }}
-      PROD_VAULT_SECRET_ID: ${{ secrets.PROD_VAULT_SECRET_ID }}
-      PROD_KEYSTORE_PASS: ${{ secrets.PROD_KEYSTORE_PASS }}
-      PROD_SPLUNK_TOKEN: ${{ secrets.PROD_SPLUNK_TOKEN }}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-name: AI based Agent to Review Code in PRs
-
-on:
-  pull_request:
-    types: ["ready_for_review", "opened" , "synchronize"] # This check allows to trigger a PR when converting a draft PR to a regular PR and when a regular PR is opened and manage PR updates
-    branches: ["*"]   #you can change/limit to any branch you wish to
-
-  pull_request_target: # Needed if you raise PRs from forks
-
-permissions:
-  actions: write
-  contents: write
-  pull-requests: write      # Make sure this is in 'write', as the action
-  security-events: write    # displays the review through th PR comments
-  checks: write
-  id-token: write
-
-jobs:
-  code-reviewer:
-    if: ${{ github.event.pull_request.draft == false }} # This check prevents to execute code review agent on draft PRs
-    uses: optum-eeps/Code-Review-Agent/.github/workflows/pr-code-review.yml@v2
-    secrets:
-      github-token: ${{ secrets.GITHUB_TOKEN }} # Must add this, this auto-generates a token neccessary for the action to issue comments to the PR
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-hcck8sProfile:
-  prun:
-    stage:
-      elr:
-        cluster: elrnonprdusr101
-        clusterDNS: hcc-elr-nonprd-usr101-0.optum.com
-        credentialId:
-        namespace: provider-paperless-stage
-      ctc:
-        cluster: ctcnonprdusr101
-        clusterDNS: hcc-ctc-nonprd-usr101-0.optum.com
-        credentialId:
-        namespace: provider-paperless-stage
-    stage-pra:
-      elr:
-        cluster: elrnonprdusr101
-        clusterDNS: hcc-elr-nonprd-usr101-0.optum.com
-        credentialId:
-        namespace: provider-paperless-stage-pra
-      ctc:
-        cluster: ctcnonprdusr101
-        clusterDNS: hcc-ctc-nonprd-usr101-0.optum.com
-        credentialId:
-        namespace: provider-paperless-stage-pra
-    prod:
-      elr:
-        cluster: elrprdusr201
-        clusterDNS: hcc-elr-prd-usr201-0.optum.com
-        credentialId:
-        namespace: provider-paperless-prod
-      ctc:
-        cluster: ctcprdusr201
-        clusterDNS: hcc-ctc-prd-usr201-0.optum.com
-        credentialId:
-        namespace: provider-paperless-prod
-    prod-pra:
-      elr:
-        cluster: elrprdusr201
-        clusterDNS: hcc-elr-prd-usr201-0.optum.com
-        credentialId:
-        namespace: provider-paperless-prod-pra
-      ctc:
-        cluster: ctcprdusr201
-        clusterDNS: hcc-ctc-prd-usr201-0.optum.com
-        credentialId:
-        namespace: provider-paperless-prod-pra
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -258,11 +15,9 @@ spec:
     rollingUpdate:
       maxSurge: 25%
       maxUnavailable: 25%
-  # selector & template must match
   selector:
     matchLabels:
       application: {{ .Values.name }}
-#          pr: ${pr}
       environment: {{ .Values.environment }}
   template:
     metadata:
@@ -273,22 +28,6 @@ spec:
       restartPolicy: Always
       dnsPolicy: ClusterFirst
       terminationGracePeriodSeconds: 30
-      volumes:
-        - name: logs
-          persistentVolumeClaim:
-            claimName: logs-{{ .Values.name }}-{{ .Values.environment }}
-        - name: prun-log
-          persistentVolumeClaim:
-            claimName: prun-log-pvc
-        - name: prun-pv
-          persistentVolumeClaim:
-            claimName: prun-pvc
-        - name: prun-ehcache-pv
-          persistentVolumeClaim:
-            claimName: prun-ehcache-pvc
-        - name: kafka
-          persistentVolumeClaim:
-            claimName: kafka-certs
       imagePullSecrets:
         - name: edge-docker-registry-secret
       containers:
@@ -311,70 +50,27 @@ spec:
             requests:
               cpu: {{ .Values.resources.cpu.podRequest }}
               memory: {{ .Values.resources.memory.podRequest }}
-          volumeMounts:
-            - name: logs
-              mountPath: /app/logs
-            {{- if .Values.volumes }}
-            {{- range .Values.volumes }}
-            - name: {{ .name }}
-              mountPath: {{ .mountPath }}
-            {{- end }}
-            {{- end }}
           env:
-            - name: LOG_LEVEL
-              value: INFO
-            - name: DT_HOST
-              value: {{ .Values.dynatrace.host }}
-            - name: DT_NETWORK_ZONE
-              value: uhg.{{ .Values.datacenter }}.{{ .Values.dynatrace.zone }}
-            - name: DT_CUSTOM_PROP
-              value: Askid={{ .Values.dynatrace.askId }} Environment={{ .Values.dynatrace.environment }} Provider=uhg Location={{ .Values.datacenter }} Zone={{ .Values.dynatrace.zone }}
-            - name: DT_API_TOKEN
-              value: {{ .Values.dynatraceToken }}
+            - name: VAULT_ROLE_ID
+              value: {{ .Values.vaultRoleId }}
+            - name: VAULT_SECRET_ID
+              value: {{ .Values.vaultSecretId }}
             - name: APP_NAME
               value: {{ .Values.name }}
-            - name: splunk.url
-              value: {{ .Values.splunk.url }}
-            - name: splunk.token
-              value: {{ .Values.splunkToken }}
-            - name: log.folder.path
-              value: /prun-log/logs/{{ .Values.name }}
-            - name: log.filename
-              value: {{ .Values.name }}
-            - name: JAVA_OPTS
-              value: >
-                -Xms{{ .Values.resources.memory.jvmMin }}
-                -Xmx{{ .Values.resources.memory.jvmMax }}
-                -Dk8.datacenter={{ .Values.datacenter }}
-                -Dk8.zone={{ .Values.zone }}
-                -Dspring.profiles.active=vault,git,{{ .Values.environment }}
-                -Dvault.roleId={{ .Values.vaultRoleId }}
-                -Dvault.secretId={{ .Values.vaultSecretId }}
-                -Dencrypt.keyStore.location=classpath:stores/link-cfg-encryption-{{ .Values.encrypt.keystoreLocation }}.jks
-                -Dencrypt.keyStore.password={{ .Values.keystorePassword }}
-                -Dencrypt.keyStore.secret={{ .Values.keystorePassword }}
-                -Dencrypt.keyStore.alias=link-config-encryption-{{ .Values.encrypt.keystoreAlias }}
-                -Deureka.instance.hostname={{ .Values.name }}-{{ .Values.environment }}.hcck8s-{{ .Values.datacenter }}{{ .Values.eureka.host }}.optum.com
+            - name: ENVIRONMENT
+              value: {{ .Values.environment }}
           livenessProbe:
-            failureThreshold: 3
-            initialDelaySeconds: 180
-            periodSeconds: 5
-            successThreshold: 1
-            timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds }}
-            httpGet:
-              path: {{ .Values.livenessProbe.path }}
-              port: 8080
-              scheme: HTTP
+            tcpSocket:
+              port: {{ .Values.livenessProbe.port }}
+            initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
+            failureThreshold: {{ .Values.livenessProbe.failureThreshold }}
           readinessProbe:
-            failureThreshold: 3
-            initialDelaySeconds: 240
-            periodSeconds: 1
-            successThreshold: 1
-            timeoutSeconds: {{ .Values.readinessProbe.timeoutSeconds }}
-            httpGet:
-              path: {{ .Values.readinessProbe.path }}
-              port: 8080
-              scheme: HTTP
+            tcpSocket:
+              port: {{ .Values.readinessProbe.port }}
+            initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
+            failureThreshold: {{ .Values.readinessProbe.failureThreshold }}
           securityContext:
             runAsUser: 1000
             allowPrivilegeEscalation: false
@@ -407,53 +103,6 @@ spec:
 
 
 
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: {{ .Values.name }}-{{ .Values.environment }}-ingress
-  namespace: {{ .Values.namespace }}
-  annotations:
-    external-dns.alpha.kubernetes.io/hostname: {{ .Values.name}}-{{ .Values.environment }}.hcck8s-{{ .Values.datacenter }}-{{ .Values.ingressSubdomain }}.optum.com
-    external-dns.alpha.kubernetes.io/ttl: "3600"
-    nginx.ingress.kubernetes.io/proxy-body-size: "55m"
-    nginx.ingress.kubernetes.io/rewrite-target: /
-    nginx.ingress.kubernetes.io/ssl-redirect: "false"
-  labels:
-    application: {{ .Values.name }}
-    environment: {{ .Values.environment }}
-spec:
-  ingressClassName: nginx
-  rules:
-    - host: {{ .Values.name}}-{{ .Values.environment }}.hcck8s-{{ .Values.datacenter }}-{{ .Values.ingressSubdomain }}.optum.com
-      http:
-        paths:
-            - pathType: Prefix
-              path: "/"
-              backend:
-                service:
-                  name: {{ .Values.name }}-{{ .Values.environment }}-service
-                  port:
-                    number: 8080
-    - host: {{ .Values.name }}-{{ .Values.environment }}.optum.com
-      http:
-        paths:
-            - pathType: Prefix
-              path: "/"
-              backend:
-                service:
-                  name: {{ .Values.name }}-{{ .Values.environment }}-service
-                  port:
-                    number: 8080
-    - host: {{ .Values.name }}-{{ .Values.environment }}-{{ .Values.datacenter }}.optum.com
-      http:
-        paths:
-            - pathType: Prefix
-              path: "/"
-              backend:
-                service:
-                  name: {{ .Values.name }}-{{ .Values.environment }}-service
-                  port:
-                    number: 8080
 
 
 
@@ -465,271 +114,46 @@ spec:
 
 
 
+=== values-stage.yml
+# Stage environment values for ppl-prun-utils
+# This file is merged with pipeline.yml at deploy time
+# The reusable deploy workflow reads helm/values-stage.yml when environment=stage
 
-
-
-
-
-
-
-
-
-
-
-
-
-apiVersion: v1
-kind: Service
-metadata:
-  name: {{ .Values.name }}-{{ .Values.environment }}-service
-  namespace: {{ .Values.namespace }}
-  labels:
-    application: {{ .Values.name }}
-    environment: {{ .Values.environment }}
-spec:
-  type: ClusterIP
-  ports:
-    - name: 8080-tcp
-      port: 8080
-      protocol: TCP
-      targetPort: 8080
-  selector:
-    application: {{ .Values.name }}
-    environment: {{ .Values.environment }}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-apiVersion: v2
-name: ppl-prun-services
-description: A Helm Chart for HCC K8S Deployments
-type: application
-
-# This is the chart version. This version number should be incremented each time you make changes
-# to the chart and its templates, including the app version.
-# Versions are expected to follow Semantic Versioning (https://semver.org/)
-version: 0.1.14
-
-# This is the version number of the application being deployed. This version number should be
-# incremented each time you make changes to the application. Versions are not expected to
-# follow Semantic Versioning. They should reflect the version the application is using.
-### This version string must match the string entered in pom.xml
-appVersion: 0.1.14
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-environment: prod
-springProfile: prod
-name: ppl-prun-services
-
-replicas: 4
-resources:
-  memory:
-    jvmMin: 1200m
-    jvmMax: 1500m
-    podRequest: 6Gi
-    podLimit: 8Gi
-  cpu:
-    podRequest: 2
-    podLimit: 4
-  additionalJavaOpts: >
-    -Delastic.apm.enabled=false
-
-splunk:
-  url: "phi-dmz-hec-splunk.optum.com"
-
-encrypt:
-  keystoreLocation: prod
-  keystoreAlias: ""
-
-eureka:
-  host: ""
-
-ingressSubdomain: prd201
-
-elastic:
-  environment: ppl-prun-services-prod
-  logLevel: WARN
-  applicationPackages: com.optum
-  serviceName: UHGRG_uhgwm110_023810_ADMIN
-  globalLabels: com_uhg_appid=UHGWM110-023810
-  serverUrl: https://eapm.uhc.com:443
-
-dynatrace:
-  host: https://dtcloud2-core.optum.com/e/vtp76407
-  zone: core
-  askId: UHGWM110-023810
-  environment: prod
-
-approval:
-  prompt: true
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-environment: prod-pra
-springProfile: prod-pra
-name: ppl-prun-services-pra
-
-replicas: 4
-resources:
-  memory:
-    jvmMin: 1200m
-    jvmMax: 1500m
-    podRequest: 6Gi
-    podLimit: 8Gi
-  cpu:
-    podRequest: 2
-    podLimit: 4
-  additionalJavaOpts: >
-    -Delastic.apm.enabled=false
-
-splunk:
-  url: "phi-dmz-hec-splunk.optum.com"
-
-encrypt:
-  keystoreLocation: prod
-  keystoreAlias: prod
-
-eureka:
-  host: ""
-
-ingressSubdomain: prd201
-
-elastic:
-  environment: ppl-prun-services-pra-prod
-  logLevel: WARN
-  applicationPackages: com.optum
-  serviceName: UHGRG_uhgwm110_023810_ADMIN
-  globalLabels: com_uhg_appid=UHGWM110-023810
-  serverUrl: https://eapm.uhc.com:443
-
-dynatrace:
-  host: https://dtcloud2-core.optum.com/e/vtp76407
-  zone: core
-  askId: UHGWM110-023810
-  environment: prod
-
-approval:
-  prompt: true
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+# Identity
 environment: stage
-springProfile: stage
-name: ppl-prun-services
+name: ppl-prun-utils
 
+# Number of pod replicas for this environment
+# Keep at 1 for cron-style apps to prevent duplicate scheduled jobs
 replicas: 1
+
+# CPU and Memory limits for the pod
+# request = guaranteed minimum, limit = hard ceiling
+# Values match the existing deployment/deployment.yml
 resources:
   memory:
-    jvmMin: 1200m
-    jvmMax: 1500m
-    podRequest: 6Gi
-    podLimit: 8Gi
+    podRequest: 4Gi
+    podLimit: 6Gi
   cpu:
-    podRequest: 2
-    podLimit: 4
-  additionalJavaOpts: >
-    -Delastic.apm.enabled=false
+    podRequest: "2"
+    podLimit: "4"
 
-splunk:
-  url: npe-dmz-hec-splunk.optum.com
+# Liveness probe — "Is the app still alive?"
+# Uses tcpSocket because Flask app has no GET / route
+livenessProbe:
+  port: 8080
+  initialDelaySeconds: 30
+  periodSeconds: 30
+  failureThreshold: 3
 
-eureka:
-  host: "np1"
+# Readiness probe — "Is the app ready to receive traffic?"
+readinessProbe:
+  port: 8080
+  initialDelaySeconds: 30
+  periodSeconds: 30
+  failureThreshold: 3
 
-encrypt:
-  keystoreLocation: nonprod
-  keystoreAlias: np
-
-ingressSubdomain: np101
-
-elastic:
-  environment: ppl-prun-services-stage
-  logLevel: WARN
-  applicationPackages: com.optum
-  serviceName: UHGRG_uhgwm110_023810_ADMIN
-  globalLabels: com_uhg_appid=UHGWM110-023810
-  serverUrl: https://eapm-nonprod.uhc.com:443
-
-dynatrace:
-  host: https://dtcloud2-nonprod-core.optum.com/e/bmr50330
-  zone: core
-  askId: UHGWM110-023810
-  environment: stage
-
-
+# Legacy approval flag (real approval is GitHub approvalToDeploy environment)
 approval:
   prompt: true
 
@@ -759,51 +183,91 @@ approval:
 
 
 
-environment: stage-pra
-springProfile: stage
-name: ppl-prun-services-pra
-
-replicas: 1
-resources:
-  memory:
-    jvmMin: 1200m
-    jvmMax: 1500m
-    podRequest: 6Gi
-    podLimit: 8Gi
-  cpu:
-    podRequest: 2
-    podLimit: 4
-  additionalJavaOpts: >
-    -Delastic.apm.enabled=false
 
 
-splunk:
-  url: npe-dmz-hec-splunk.optum.com
 
 
-eureka:
-  host: "np1"
+name: cicd-pipeline
 
-encrypt:
-  keystoreLocation: nonprod
-  keystoreAlias: np
+permissions:
+  contents: write
+  security-events: write
+  id-token: write
+  pull-requests: write
+  issues: read
+  statuses: write
+  checks: write
+  deployments: write
+  actions: read
 
-ingressSubdomain: np101
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - release/*
+  workflow_dispatch:
 
-elastic:
-  environment: ppl-prun-services-pra-stage
-  logLevel: WARN
-  applicationPackages: com.optum
-  serviceName: UHGRG_uhgwm110_023810_ADMIN
-  globalLabels: com_uhg_appid=UHGWM110-023810
-  serverUrl: https://eapm-nonprod.uhc.com:443
+jobs:
+  # Job 1: Build the Python Docker image and push to JFrog
+  # We keep our own build because the reusable cicd.yml is Java/Maven only
+  build-and-push:
+    runs-on: uhg-runner
+    outputs:
+      BUILD_VERSION: ${{ steps.version.outputs.BUILD_VERSION }}
+      DOCKER_IMAGE: ${{ steps.version.outputs.DOCKER_IMAGE }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-dynatrace:
-  host: https://dtcloud2-nonprod-core.optum.com/e/bmr50330
-  zone: core
-  askId: UHGWM110-023810
-  environment: stage
+      - name: Fetch version from pyproject.toml
+        id: version
+        run: |
+          VERSION=$(grep -oP '(?<=^version = ")[^"]*' pyproject.toml)
+          echo "BUILD_VERSION=$VERSION" >> $GITHUB_ENV
+          echo "BUILD_VERSION=$VERSION" >> $GITHUB_OUTPUT
+          DOCKER_IMAGE="edgeinternal1uhg.optum.com/ppl-docker-np-loc/ppl/ppl-prun-utils:$VERSION"
+          echo "DOCKER_IMAGE=$DOCKER_IMAGE" >> $GITHUB_OUTPUT
+          echo "Build version: $VERSION"
+          echo "Docker image: $DOCKER_IMAGE"
 
+      - name: Log in to JFrog Artifactory Docker Registry
+        uses: docker/login-action@v3
+        with:
+          registry: centraluhg.jfrog.io
+          username: ${{ secrets.JFROG_USERNAME }}
+          password: ${{ secrets.JFROG_SECRET }}
 
-approval:
-  prompt: true
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: centraluhg.jfrog.io/ppl-docker-np-loc/ppl/ppl-prun-utils:${{ env.BUILD_VERSION }}
+          secrets: |
+            JFROG_USERNAME=${{ secrets.JFROG_USERNAME }}
+            JFROG_SECRET=${{ secrets.JFROG_SECRET }}
+
+  # Job 2: Deploy to stage using the reusable workflow from ppl-prun-github-actions
+  # The reusable workflow has the approvalToDeploy environment gate built in
+  # Deploys to both CTC and ELR datacenters in parallel via matrix strategy
+  deploy-stage:
+    needs: build-and-push
+    if: github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/heads/release/')
+    uses: uhc-tech-provider/ppl-prun-github-actions/.github/workflows/deploy.yml@main
+    with:
+      environment: "stage"
+      dockerImage: ${{ needs.build-and-push.outputs.DOCKER_IMAGE }}
+    secrets:
+      KUBECONFIG: ${{ secrets.KUBECONFIG }}
+      STAGE_VAULT_ROLE_ID: ${{ secrets.STAGE_VAULT_ROLE_ID }}
+      STAGE_VAULT_SECRET_ID: ${{ secrets.STAGE_VAULT_SECRET_ID }}
+      STAGE_KEYSTORE_PASS: ${{ secrets.STAGE_KEYSTORE_PASS }}
+      STAGE_SPLUNK_TOKEN: ${{ secrets.STAGE_SPLUNK_TOKEN }}
+      PROD_VAULT_ROLE_ID: ${{ secrets.PROD_VAULT_ROLE_ID }}
+      PROD_VAULT_SECRET_ID: ${{ secrets.PROD_VAULT_SECRET_ID }}
+      PROD_KEYSTORE_PASS: ${{ secrets.PROD_KEYSTORE_PASS }}
+      PROD_SPLUNK_TOKEN: ${{ secrets.PROD_SPLUNK_TOKEN }}
+      STAGE_DT_TOKEN: ${{ secrets.STAGE_DT_TOKEN }}
+      PROD_DT_TOKEN: ${{ secrets.PROD_DT_TOKEN }}
