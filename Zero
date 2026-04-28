@@ -1,169 +1,353 @@
---6
+SECURE REQUEST’S REQUIRED 
 
-cd /Users/rahulmaheshvari/Desktop/AI/Optum/ppl-prun-utils
+  
 
-helm template ppl-prun-utils ./helm \
-  --namespace provider-paperless-stage \
-  --values ./helm/values-stage.yml \
-  --set image.tag=0.1.0 \
-  --set vaultRoleId=FAKE_ROLE \
-  --set vaultSecretId=FAKE_SEC \
-  | kubectl apply --dry-run=client --validate=true -f -
+These three accesses are required- 
 
+  
 
+GCP_Access_CloudNative 
 
+GCP_FDS_PAPERLESS_admin 
 
---7
+GCP_hcck8s_console_access 
 
-# Use the kubeconfig from your machine (NOT the one in GitHub secrets)
-kubectl config use-context ctcnonprdusr101-admin-token_provider-paperless-stage 2>/dev/null \
-  || echo "If this fails, your local kubeconfig doesn't have the stage context — get the kubeconfig from your team."
+  
 
-kubectl auth whoami
-kubectl auth can-i get    deployments    -n provider-paperless-stage
-kubectl auth can-i update deployments    -n provider-paperless-stage
-kubectl auth can-i annotate deployments  -n provider-paperless-stage
-kubectl auth can-i create secrets        -n provider-paperless-stage
+These request can be raised as follows : 
 
+ 
 
+  
 
+ 
 
+  
 
---8
+NOTE : You would need an optum cloud id for this, but if u don’t have this option the first thing you need is a new cloud id. Follow this link for instructions: https://cloud.optum.com/docs/getting-started/access-azure-portal/#request-new-cloud-native-id 
 
-cd /Users/rahulmaheshvari/Desktop/AI/Optum/ppl-prun-utils
+INSTALLING KUBECTL 
 
-helm upgrade --install ppl-prun-utils ./helm \
-  --namespace provider-paperless-stage \
-  --values ./helm/values-stage.yml \
-  --set image.tag=0.1.0 \
-  --set vaultRoleId=FAKE_ROLE \
-  --set vaultSecretId=FAKE_SEC \
-  --dry-run \
-  --debug
+  
 
+Use this command to install the Kubernetes command line on mac os using homebrew: 
 
+  
 
+brew install kubectl 
 
+  
 
+kubectl get sa -n provider-email-notifications-stage-ctc 
 
+  
 
+  
 
---9
+INSTALLING GOOGLE CLOUD CLI 
 
-kubectl config use-context ctcnonprdusr101-admin-token_provider-paperless-stage
+  
 
-# 1. Snapshot current state in case something goes sideways
-kubectl get deployment ppl-prun-utils -n provider-paperless-stage -o yaml \
-  > /tmp/ppl-prun-utils-before-adoption.yml
-echo "Snapshot saved to /tmp/ppl-prun-utils-before-adoption.yml"
+Follow this link(https://cloud.google.com/sdk/docs/install) and find the tar.gz package that needs to be downloaded in the step 2 of that documentation. 
 
-# 2. Add the Helm release annotations
-kubectl annotate deployment ppl-prun-utils \
-  -n provider-paperless-stage \
-  meta.helm.sh/release-name=ppl-prun-utils \
-  meta.helm.sh/release-namespace=provider-paperless-stage \
-  --overwrite
+  
 
-# 3. Add the managed-by label
-kubectl label deployment ppl-prun-utils \
-  -n provider-paperless-stage \
-  app.kubernetes.io/managed-by=Helm \
-  --overwrite
+After downloading the required package, extract it to any location on your file system. The extracted folder will be named as “google-cloud-sdk”. 
 
-# 4. Verify
-kubectl get deployment ppl-prun-utils -n provider-paperless-stage \
-  -o jsonpath='{"annotations: "}{.metadata.annotations}{"\n\nlabels: "}{.metadata.labels}{"\n"}'
+  
 
+Open an instance of the terminal on that location where the sdk folder exists and run the following command:  
 
+./google-cloud-sdk/install.sh  
 
+  
 
+After doing this follow this link for further cloud cli setup steps: https://k8s.optum.com/documentation/management_tools/kubectl_cli/#kubectl-cloud-native-id-configuration 
 
+  
 
+FURTHER STEPS ON THIS ARE REMAINING FROM MY SIDE 
 
+  
 
+cd $HOME/Library/Preferences/ 
 
+mkdir google 
 
+cd google 
 
+mkdir Anthos 
 
---12 
+cd Anthos 
 
-kubectl config use-context ctcnonprdusr101-admin-token_provider-paperless-stage
+touch kubectl-anthos-config.yaml 
 
-# A. Pod state
-kubectl get pod -n provider-paperless-stage -l app=ppl-prun-utils
-# Expect: 1/1 Running, RESTARTS 0, AGE matches deploy time
+copy the contents of this yaml file : https://k8s.optum.com/documentation/kubectl-anthos-config.yaml 
 
-# B. Helm release state
-helm list -n provider-paperless-stage
-helm history ppl-prun-utils -n provider-paperless-stage
-# Expect: STATUS deployed, revision >= 1, current chart version 0.1.0
+nano kubectl-anthos-config.yaml 
 
-# C. Helm-managed metadata is in place
-kubectl get deployment ppl-prun-utils -n provider-paperless-stage \
-  -o jsonpath='{.metadata.labels.app\.kubernetes\.io/managed-by}{"\n"}'
-# Expect: Helm
+Now paste the copied content inside this file and save. 
 
-# D. Env vars made it into the pod
-kubectl exec -n provider-paperless-stage deploy/ppl-prun-utils -- printenv | grep -E '^VAULT_' | sed 's/=.*/=***REDACTED***/'
-# Expect: VAULT_ROLE_ID=***REDACTED***  VAULT_SECRET_ID=***REDACTED***
-# (Don't print actual values — they shouldn't show up in your terminal scrollback)
+Ctrl+o then ctrl+x 
 
-# E. App-level health: Vault login succeeded
-kubectl logs -n provider-paperless-stage deploy/ppl-prun-utils --tail=200 | grep -iE 'vault|scheduler|starting'
-# Expect lines like:
-#   Instantiating Vault Service
-#   Vault Service Instantiated Successfully
-#   Starting main.py
+gcloud anthos auth login --cluster ctcprdusr001 
 
-# F. Scheduler registered jobs
-kubectl logs -n provider-paperless-stage deploy/ppl-prun-utils --tail=500 | grep -iE 'scheduler|job_id|added job'
-# Expect APScheduler logs showing the 9 jobs registered
+  
 
-# G. Liveness/readiness still TCP-probing :8080
-kubectl describe pod -n provider-paperless-stage -l app=ppl-prun-utils | grep -E 'Liveness|Readiness'
-# Expect: Liveness:  tcp-socket :8080 ...   Readiness: tcp-socket :8080 ...
+  
 
+  
 
+  
 
+  
 
+kubectl get sa -n provider-email-notifications-stage-ctc 
 
+before setting up context u need to use -n wioth every command 
 
+  
 
+  
 
+  
 
+  
 
+  
 
+  
 
+  
 
+  
 
+  
 
+  
 
+  
 
+  
 
---13
-# 1. See current revision
-helm history ppl-prun-utils -n provider-paperless-stage
+  
 
-# 2. Pretend a new bad revision was deployed by re-running with no actual change
-#    (this just bumps the revision counter — useful only for the drill)
-helm upgrade ppl-prun-utils ./helm \
-  --namespace provider-paperless-stage \
-  --values ./helm/values-stage.yml \
-  --set image.tag=0.1.0 \
-  --set vaultRoleId="$STAGE_VAULT_ROLE_ID" \
-  --set vaultSecretId="$STAGE_VAULT_SECRET_ID" \
-  --reuse-values
+  
 
-# 3. Check history — should now show 2 revisions
-helm history ppl-prun-utils -n provider-paperless-stage
+  
 
-# 4. Roll back to previous revision
-helm rollback ppl-prun-utils 1 -n provider-paperless-stage --wait
+  
 
-# 5. Confirm rollback succeeded
-helm history ppl-prun-utils -n provider-paperless-stage
-# Expect a new revision marked "Rollback to 1"
+  
 
-# 6. Pod still healthy
-kubectl get pod -n provider-paperless-stage -l app=ppl-prun-utils
+  
+
+LOGGING INTO GCP CONSOLE 
+
+  
+
+https://k8s.optum.com/documentation/management_tools/gcp_console/ 
+
+  
+
+Microsoft authenticator setup is required for logging in the GCP console. 
+
+  
+
+NOTE : Remove your current default web browser and make some other browser your default web browser because if you try to login the gcp console online it will use your main email id as the username rather than the optum cloud id, and will display this error : 
+
+  
+
+  
+
+  
+
+DOCKER REPO  
+
+ 
+
+  
+
+So after changing your web browser try to login in the new default browser with the optum cloud id. 
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+INSTALLING TECHCTL AND HCPCTL 
+
+  
+
+brew tap prm/homebrew https://github.optum.com/prm/homebrew.git 
+
+  
+
+brew install hcpctl 
+
+hcpctl context create --uri https://prm.optum.com prm-prod 
+
+hcpctl env 
+
+hcpctl login -m username 
+
+  
+
+brew install techctl 
+
+techctl context create --uri https://prm.optum.com prm-prod 
+
+techctl login -m username 
+
+techctl env 
+
+curl -sSL https://github.optum.com/raw/rjury/hcck8s_prm_demo/master/setup-kubeconfig.sh | bash -s -- fds-paperless/naas-v1/provider-email-notifications-stage-ctc 
+
+ 
+
+After running the curl command above this will be the output on the screen and copy the highlighted command in the screenshot to set your context and then execute it. 
+
+  
+
+Commands  
+
+  
+
+Kubectl get pods 
+
+Kubectl get sa 
+
+Hcpctl ls 
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+UHC DOCKER REPO : https://repo1.uhc.com/ui/ 
+
+Search fds-paperless 
+
+  
+
+  
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+Now that the HCC K8S team migrated our stage namespaces to the nonprod cluster ctcnonprdusr001, I have updated the CICD for the new namespaces. I have also shutdown the pods in the old namespaces.  
+
+  
+
+Here are the details to access the new namespaces on your local machines and in Lens. The documentation is linked below for more details if needed.  
+
+https://k8s.optum.com/documentation/getting-started/ 
+
+  
+
+Login to https://myworkaccount.microsoft.com/ using your cloud native id (i.e. jwang49@optumcloud.com) in your default browser 
+In your terminal: 
+cd $HOME/Library/Preferences/google/anthos/ 
+Copy this file to the above location: 
+i.      https://k8s.optum.com/documentation/kubectl-anthos-config.yaml 
+
+If you already have a file kubectl-anthos-config.yaml, you will need to delete it and copy the latest version from the above link 
+Login to google cloud in your terminal using your cloud native id (i.e. jwang49@optumcloud.com) : 
+gcloud anthos auth login --cluster ctcnonprdusr001 
+Run this command: 
+kubectl config use-context <cluster_name>-<cloud_native_id> 
+i.e. kubectl config use-context ctcnonprdusr001-jwang49@optumcloud.com 
+Switch to the new namespace: 
+hcpctl login 
+For PRUN stage: 
+                        i.   curl -sSL https://github.optum.com/raw/rjury/hcck8s_prm_demo/master/setup-kubeconfig.sh | bash -s -- fds-paperless/naas-v1/ctcnonprdusr001-provider-paperless-stage 
+
+                       ii.   kubectl config use-context ctcnonprdusr001_provider-paperless-stage_provider-paperless-stage-hcc-naas-admin 
+
+For PEN stage: 
+                        i.   curl -sSL https://github.optum.com/raw/rjury/hcck8s_prm_demo/master/setup-kubeconfig.sh | bash -s -- fds-paperless/naas-v1/ctcnonprdusr001-provider-email-notifications-stage-ctc 
+
+                       ii.   kubectl config use-context ctcnonprdusr001_provider-email-notifications-stage-ctc_provider-email-notifications-stage-ctc-hcc-naas-admin 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+Test everything is working: 
+kubectl get pods 
+Now when you go to Lens, the 2 new namespaces should appear 
+ 
+ 
+ 
+There are new service endpoints. I have already updated the config store, hooks and processor scripts, and mongodb with these new endpoints. You will need to update your Stage postman collections with the new service endpoints: 
+
+  
+
+PRUN 
+
+config-server-nonprod.hcck8s-ctc-np1.optum.com 
+
+fds-paperless-activiti-nonprod.hcck8s-ctc-np1.optum.com 
+
+fds-paperless-message-service-non-prod.hcck8s-ctc-np1.optum.com 
+
+prun-filestore-nonprod.hcck8s-ctc-np1.optum.com 
+
+ppl-prun-services-nonprod.hcck8s-ctc-np1.optum.com 
+
+  
+
+PEN 
+
+fds-pen-service-nonprod.hcck8s-ctc-np1.optum.com 
+
+ 
+
+ 
