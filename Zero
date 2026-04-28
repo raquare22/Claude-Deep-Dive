@@ -1,197 +1,3 @@
-apiVersion: v2
-name: ppl-prun-utils
-description: A Helm chart for the ppl-prun-utils Python scheduler service on HCC K8s
-type: application
-
-# Chart version — bump this every time you change anything inside helm/
-# Follows SemVer (https://semver.org/)
-version: 0.1.0
-
-# App version — should track the application's version (pyproject.toml)
-appVersion: "0.1.0"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# Patterns to ignore when building Helm packages
-.DS_Store
-.git/
-.gitignore
-.idea/
-*.tmproj
-.vscode/
-*.swp
-*.bak
-*.tmp
-*.orig
-*~
-# OWNERS / CI files
-OWNERS
-.github/
-# Local rendered manifests
-*.rendered.yml
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# Default values for ppl-prun-utils.
-# Anything env-specific belongs in values-<env>.yml — this file holds
-# values that are the same in every environment.
-
-# Application identity
-name: ppl-prun-utils
-
-# Environment label — overridden by each values-<env>.yml
-environment: stage
-
-# Kubernetes namespace — overridden by each values-<env>.yml
-namespace: provider-paperless-stage
-
-# Replica count
-replicas: 1
-
-# How many old ReplicaSets Kubernetes keeps for rollback
-revisionHistoryLimit: 5
-
-# Container image — repository is constant, tag is set at deploy time
-# via `--set image.tag=$BUILD_VERSION` from the GitHub Actions workflow
-image:
-  repository: edgeinternal1uhg.optum.com/ppl-docker-np-loc/ppl/ppl-prun-utils
-  tag: ""                    # MUST be supplied at deploy time
-  pullPolicy: Always
-
-# Pre-existing pull secret in the namespace
-imagePullSecret: edge-docker-registry-secret
-
-# Container port the Flask app exposes (matches main.py)
-containerPort: 8080
-
-# Compute resources — must match HCC capacity planning
-resources:
-  limits:
-    cpu: "4"
-    memory: 6Gi
-  requests:
-    cpu: "2"
-    memory: 4Gi
-
-# TCP-based health probes (Flask :8080 — same as today's deployment.yml)
-probes:
-  initialDelaySeconds: 30
-  periodSeconds: 30
-
-# Vault credentials — MUST be supplied at deploy time via --set
-# Never put real values in this file (committed to Git)
-vaultRoleId: ""
-vaultSecretId: ""
-
-# Update strategy — preserves today's behavior exactly
-strategy:
-  type: RollingUpdate
-  rollingUpdate:
-    maxSurge: 25%
-    maxUnavailable: 25%
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-{{/*
-Common name for resources.
-Single source of truth so deployment / service / network-policy stay aligned.
-*/}}
-{{- define "pplPrunUtils.fullname" -}}
-{{- .Values.name | trunc 63 | trimSuffix "-" -}}
-{{- end -}}
-
-{{/*
-Standard labels applied to every resource.
-Follows kubernetes.io/* conventions so kubectl/Helm tooling can group them.
-*/}}
-{{- define "pplPrunUtils.labels" -}}
-app: {{ .Values.name }}
-app.kubernetes.io/name: {{ .Values.name }}
-app.kubernetes.io/instance: {{ .Release.Name }}
-app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
-app.kubernetes.io/managed-by: {{ .Release.Service }}
-helm.sh/chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
-environment: {{ .Values.environment }}
-{{- end -}}
-
-{{/*
-Selector labels — MUST be a strict subset of pod template labels and MUST be
-immutable across releases. Only `app` for now to match today's deployment.yml
-exactly. Do NOT add fields here without a planned recreate, or the upgrade
-will fail with "field is immutable".
-*/}}
-{{- define "pplPrunUtils.selectorLabels" -}}
-app: {{ .Values.name }}
-{{- end -}}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 {{/*
 Templated equivalent of deployment/deployment.yml.
 Output (after `helm template`) MUST match the current sed-substituted manifest
@@ -211,16 +17,24 @@ semantically. Verify with the parity-diff command before merging.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "pplPrunUtils.fullname" . }}
+  name: {{ .Values.name }}
   namespace: {{ .Values.namespace }}
   labels:
-    {{- include "pplPrunUtils.labels" . | nindent 4 }}
+    app: {{ .Values.name }}
+    app.kubernetes.io/name: {{ .Values.name }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    helm.sh/chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+    environment: {{ .Values.environment }}
 spec:
   replicas: {{ .Values.replicas }}
   revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
   selector:
     matchLabels:
-      {{- include "pplPrunUtils.selectorLabels" . | nindent 6 }}
+      # IMMUTABLE after first deploy — must match today's deployment.yml exactly.
+      # Adding any other key here breaks `helm upgrade` with "field is immutable".
+      app: {{ .Values.name }}
   strategy:
     type: {{ .Values.strategy.type }}
     rollingUpdate:
@@ -229,12 +43,13 @@ spec:
   template:
     metadata:
       labels:
-        {{- include "pplPrunUtils.selectorLabels" . | nindent 8 }}
+        # MUST be a superset of selector.matchLabels (here, exactly the same).
+        app: {{ .Values.name }}
     spec:
       imagePullSecrets:
         - name: {{ .Values.imagePullSecret }}
       containers:
-        - name: {{ include "pplPrunUtils.fullname" . }}
+        - name: {{ .Values.name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
@@ -263,6 +78,7 @@ spec:
               cpu: {{ .Values.resources.requests.cpu | quote }}
               memory: {{ .Values.resources.requests.memory }}
           securityContext:
+            # HARDCODED — HCC compliance, do not parameterize
             runAsUser: 1000
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: false
@@ -271,195 +87,3 @@ spec:
                 - KILL
                 - MKNOD
                 - SYS_CHROOT
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# A. Capture today's substituted manifest
-cp deployment/deployment.yml /tmp/current.yml
-sed -i.bak 's/@vault_role_id/FAKE_ROLE/g'  /tmp/current.yml
-sed -i.bak 's/@vault_secret_id/FAKE_SEC/g' /tmp/current.yml
-sed -i.bak 's,@docker_image,edgeinternal1uhg.optum.com/ppl-docker-np-loc/ppl/ppl-prun-utils:0.1.0,g' /tmp/current.yml
-
-# B. Capture what Helm renders
-helm lint ./helm
-helm template ppl-prun-utils ./helm \
-  --namespace provider-paperless-stage \
-  --values ./helm/values-stage.yml \
-  --set image.tag=0.1.0 \
-  --set vaultRoleId=FAKE_ROLE \
-  --set vaultSecretId=FAKE_SEC \
-  > /tmp/helm.yml
-
-# C. Diff
-diff /tmp/current.yml /tmp/helm.yml
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# Set context first (or rely on your kubeconfig default)
-kubectl config use-context ctcnonprdusr101-admin-token_provider-paperless-stage
-
-kubectl annotate deployment ppl-prun-utils \
-  -n provider-paperless-stage \
-  meta.helm.sh/release-name=ppl-prun-utils \
-  meta.helm.sh/release-namespace=provider-paperless-stage \
-  --overwrite
-
-kubectl label deployment ppl-prun-utils \
-  -n provider-paperless-stage \
-  app.kubernetes.io/managed-by=Helm \
-  --overwrite
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-  deployment:
-    runs-on: uhg-runner
-    needs: build-and-push
-    environment:
-      name: approvalToDeploy
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up kubectl
-        uses: azure/setup-kubectl@v3
-        with:
-          version: 'v1.28.5'         # pin — was 'latest'
-
-      - name: Set up Helm
-        uses: azure/setup-helm@v4
-        with:
-          version: 'v3.14.2'         # match the version activiti pins
-
-      - name: Validate required secrets
-        run: |
-          if [ -z "${{ secrets.KUBECONFIG }}" ]; then
-            echo "::error::KUBECONFIG secret missing or empty"; exit 1
-          fi
-          if [ -z "${{ secrets.STAGE_VAULT_ROLE_ID }}" ]; then
-            echo "::error::STAGE_VAULT_ROLE_ID secret missing"; exit 1
-          fi
-          if [ -z "${{ secrets.STAGE_VAULT_SECRET_ID }}" ]; then
-            echo "::error::STAGE_VAULT_SECRET_ID secret missing"; exit 1
-          fi
-        shell: bash
-
-      - name: Configure kubectl context
-        env:
-          KUBECONFIG_CONTENT: ${{ secrets.KUBECONFIG }}
-        run: |
-          set -euo pipefail
-          mkdir -p "$HOME/.kube"
-          printf '%s' "$KUBECONFIG_CONTENT" > "$HOME/.kube/config"
-          chmod 600 "$HOME/.kube/config"
-          export KUBECONFIG="$HOME/.kube/config"
-          kubectl config use-context ctcnonprdusr101-admin-token_provider-paperless-stage
-          kubectl auth whoami
-        shell: bash
-
-      - name: Helm lint chart
-        run: helm lint ./helm
-        shell: bash
-
-      - name: Helm dry-run (sanity render)
-        env:
-          BUILD_VERSION:        ${{ needs.build-and-push.outputs.BUILD_VERSION }}
-          STAGE_VAULT_ROLE_ID:  ${{ secrets.STAGE_VAULT_ROLE_ID }}
-          STAGE_VAULT_SECRET_ID: ${{ secrets.STAGE_VAULT_SECRET_ID }}
-          KUBECONFIG: /home/runner/.kube/config
-        run: |
-          set -euo pipefail
-          helm upgrade --install ppl-prun-utils ./helm \
-            --namespace provider-paperless-stage \
-            --values ./helm/values-stage.yml \
-            --set image.tag="$BUILD_VERSION" \
-            --set vaultRoleId="$STAGE_VAULT_ROLE_ID" \
-            --set vaultSecretId="$STAGE_VAULT_SECRET_ID" \
-            --dry-run
-        shell: bash
-
-      - name: Deploy to HCC K8s with Helm
-        env:
-          BUILD_VERSION:        ${{ needs.build-and-push.outputs.BUILD_VERSION }}
-          STAGE_VAULT_ROLE_ID:  ${{ secrets.STAGE_VAULT_ROLE_ID }}
-          STAGE_VAULT_SECRET_ID: ${{ secrets.STAGE_VAULT_SECRET_ID }}
-          KUBECONFIG: /home/runner/.kube/config
-        run: |
-          set -euo pipefail
-          helm upgrade --install ppl-prun-utils ./helm \
-            --namespace provider-paperless-stage \
-            --values ./helm/values-stage.yml \
-            --set image.tag="$BUILD_VERSION" \
-            --set vaultRoleId="$STAGE_VAULT_ROLE_ID" \
-            --set vaultSecretId="$STAGE_VAULT_SECRET_ID" \
-            --atomic \
-            --wait \
-            --timeout 5m
-          helm history ppl-prun-utils -n provider-paperless-stage
-          kubectl rollout status deployment/ppl-prun-utils \
-            -n provider-paperless-stage --timeout=300s
-        shell: bash
