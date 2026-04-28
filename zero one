@@ -1,552 +1,280 @@
-FROM centraluhg.jfrog.io/ppl-docker-vir/gi-jdk17:17.0-dt
-
-ADD /target/ppl-prun-services.jar .
-
-EXPOSE 8088
-
-# CMD java $BASE_JAVA_OPTS $JAVA_OPTS -jar ppl-prun-services.jar
-CMD ["/bin/sh", "-c", "$DT_HOME/enable_and_switch_dynatrace_environment.sh java $BASE_JAVA_OPTS $JAVA_OPTS -jar ppl-prun-services.jar"]
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-pipeline:
-  application:
-    jfrogProjectKey: ppl
-    name: ppl-prun-services
-    image:
-      registry:
-        centralHost: centraluhg.jfrog.io
-        host: edgeinternal1uhg.optum.com
-        devPath: ppl-docker-np-loc/ppl
-        prodPath: ppl-docker-release-loc/ppl
-      pullPolicy: IfNotPresent
-      tag:
-    askId: UHGWM110-023810
-
-  adapter: maven
-  codeQuality:
-    projectKey: com.optum.UHGWM110-023810:ppl-prun-services
-    projectName: ppl-prun-services
-  tools:
-    versions:
-      java: 17
-      helm: 3.14.2
-    credentials:
-      registry: enterprise_registry_sa
-      sonar: optum-sonar-token
-      github: github_uhg_pat
-k8s:
-  #profile will be used to select the cluster config in cicd/assets/hcck8s.yaml.
-  profile: prun
-  environments:
-    stage:
-      deploy: elr, ctc
-    stage-pra:
-      deploy: elr, ctc
-    prod:
-      deploy: elr,ctc
-    prod-pra:
-      deploy: elr,ctc
-
-zone: core
-# Container port information, this is the port opened to your api
-containerPorts:
-  - name: http
-    protocol: TCP
-    containerPort: 8080
-
-# The number of deployment revisions to retain
-revisionHistoryLimit: 5
-
-# HealthCheck Liveness Probe
-livenessProbe:
-  httpGet:
-    path: "/"
-    port: 8080
-  initialDelaySeconds: 120
-  periodSeconds: 5
-  timeoutSeconds: 15
-# HealthCheck Readiness Probe
-readinessProbe:
-  httpGet:
-    path: "/"
-    port: 8080
-  initialDelaySeconds: 120
-  periodSeconds: 60
-  timeoutSeconds: 15
-  failureThreshold: 10
-
-
-# Volumes
-# volumes.name: the volume name to define the volume on the pod that your container will use
-# volumes.mountPath: the path to mount the volume to (the path your app will use)
-# volumes.claimName: the claimName is the name of the persistent volume claim setup within the namespace
-# For our apps, some default volumes have already been defined for you.
-# Also, a default logs volume will created and mounted to a pvc named "logs-appname-env"
-# and mounted to /app/logs, primarily for newrelic data
-volumes:
-  - name: prun-log
-    mountPath: /prun-log
-  - name: prun-pv
-    mountPath: /ingest
-  - name: prun-pv
-    mountPath: /prun-pv
-  - name: prun-ehcache-pv
-    mountPath: /prun-ehcache-pv
-  - name: kafka
-    mountPath: /mnt/data
-
-nodeSelector: {}
-tolerations: []
-affinity: {}
-
-# Horizontal Pod Autoscaler
-#autoscaler:
-#  enabled: false
-#  replicas:
-#    min: 1
-#    max: 10
-#  targetCPUUtilizationPercentage: 80
-#  targetMemoryUtilizationPercentage: 80
-
-# Service - templates/service.yaml
-service:
-  type: ClusterIP
-  port: 8080
-
-# Deployment Stage Approval
-# Default should be prompt: false unless you want to
-# approve every stage. Place in the env values file you
-# want to enable an approval prompt to proceed to that stage.
-# - approval.prompt: true or false
-# - approval.version.required: true or false / depends on approval.prompt
-#    if you want the prompt includes a version text box, set required to true.
-# - approval.version.defaultDisplay: "current","blank" or any other text
-#    If version.required is true, then a version will be displayed
-#    that can be overwritten. The value entered for the defaultDisply property will be what
-#    is displayed to the user. If you want to display the current build version, either do not set
-#    a value or use a value of "current". If you want a blank version, enter "blank" or you can enter
-#    anything you want to be displayed.
-#    Note: Upon pressing proceed, if version.required is true, the version entered, will be evaluated
-#    against the current build version and if incorrect, the build will be aborted.
-# - approval.timeout.minutes: the amount of time in minuted until the build is automatically aborted due to
-#   the time limit being exceeded.
-approval:
-  prompt: false
-  version:
-    required: true
-    defaultDisplay: current
-  timeout:
-    minutes: 20160
-
-# Security - deployment.yaml
-# These values should not change due to HCC compliance policies
-#
-# - podSecurityContext is defined for spec.template.spec
-#podSecurityContext:
-#  runAsNonRoot: false
-#  runAsUser: 1000
-# - securityContext is defined for spec.template.spec.containers.x
-#securityContext:
-#  capabilities:
-#    drop:
-#      - KILL
-#      - MKNOD
-#      - SYS_CHROOT
-#  runAsNonRoot: true
-#  runAsUser: 1001
-#  allowPrivilegeEscalation: false
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-  <parent>
-	<groupId>org.springframework.boot</groupId>
-	<artifactId>spring-boot-starter-parent</artifactId>
-	<version>4.0.3</version>
-	<relativePath/>
-  </parent>
-
-  <properties>
-    <java.version>17</java.version> 
-    <sonar.java.coveragePlugin>jacoco</sonar.java.coveragePlugin>
-	<sonar.dynamicAnalysis>reuseReports</sonar.dynamicAnalysis>
-	<sonar.language>java</sonar.language>
-	<maven.compiler.source>${java.version}</maven.compiler.source>
-    <maven.compiler.target>${java.version}</maven.compiler.target>
-    <sonar.language>java</sonar.language> 
-  </properties>  
-  <dependencies> 
-    <dependency> 
-      <groupId>org.springframework.boot</groupId>  
-      <artifactId>spring-boot-starter-web</artifactId> 
-      <exclusions>
-                <exclusion>
-                    <groupId>org.springframework.boot</groupId>
-                    <artifactId>spring-boot-starter-logging</artifactId>
-                </exclusion>
-		  <exclusion>
-			  <groupId>org.springframework</groupId>
-			  <artifactId>spring-webmvc</artifactId>
-		  </exclusion>
-		  <exclusion>
-		    <groupId>org.yaml</groupId>
-            <artifactId>snakeyaml</artifactId>
-		  </exclusion>
-		  <exclusion>
-		    <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-autoconfigure</artifactId>
-		  </exclusion>
-		  <exclusion>
-		    <groupId>org.springframework</groupId>
-            <artifactId>spring-core</artifactId>
-		  </exclusion>
-		  <exclusion>
-		    <groupId>org.springframework</groupId>
-			<artifactId>spring-web</artifactId>
-		  </exclusion>
-		  <exclusion>
-		     <groupId>com.fasterxml.jackson.core</groupId>
-             <artifactId>jackson-core</artifactId>
-		  </exclusion>
-		  <exclusion>
-			  <groupId>org.apache.tomcat.embed</groupId>
-			  <artifactId>tomcat-embed-core</artifactId>
-		  </exclusion>
-      </exclusions>
-    </dependency>
-	  <!-- tomcat fix version -->
-	  <dependency>
-          <groupId>org.apache.tomcat.embed</groupId>
-          <artifactId>tomcat-embed-core</artifactId>
-       </dependency>
-	  
-	  <dependency>
-		  <groupId>org.springframework</groupId>
-		  <artifactId>spring-webmvc</artifactId>
-          </dependency>
-	  
-	  <dependency>
-	      <groupId>org.springframework</groupId>
-		  <artifactId>spring-web</artifactId>
-		  </dependency>
-	  
-	  <dependency>
-	     <groupId>org.springframework.boot</groupId>
-         <artifactId>spring-boot-autoconfigure</artifactId>
-         </dependency>
-	  
-	  <dependency>
-	    <groupId>org.springframework</groupId>
-        <artifactId>spring-core</artifactId>
-		  </dependency>
-    <!-- Log4j2 fix, pull latest version. -->
-		<dependency>
-			<groupId>org.apache.logging.log4j</groupId>
-			<artifactId>log4j-core</artifactId>		
-			
-		</dependency>
-		 <dependency>
-		    <groupId>org.apache.logging.log4j</groupId>
-		    <artifactId>log4j-api</artifactId>
-		  
-		</dependency>
-		<dependency>
-			<groupId>org.apache.logging.log4j</groupId>
-			<artifactId>log4j-slf4j-impl</artifactId>
-		</dependency>   
-		
-		<dependency>
-           <groupId>org.slf4j</groupId>
-           <artifactId>slf4j-api</artifactId>
-           <version>1.7.25</version>
-        </dependency> 
-    <dependency> 
-      <groupId>org.springframework.boot</groupId>  
-      <artifactId>spring-boot-starter-test</artifactId>  
-      <scope>test</scope> 
-      <exclusions>
-		     <exclusion>
-				   <groupId>org.apache.logging.log4j</groupId>
-				   <artifactId>log4j-to-slf4j</artifactId>
-			   </exclusion>
-			   <exclusion>
-				   <groupId>ch.qos.logback</groupId>
-				   <artifactId>logback-classic</artifactId>
-			   </exclusion>
-			   <exclusion>
-				   <groupId>ch.qos.logback</groupId>
-				   <artifactId>logback-classic</artifactId>
-			   </exclusion>
-			   <exclusion>
-				   <groupId>ch.qos.logback</groupId>
-				   <artifactId>logback-core</artifactId>
-			   </exclusion>
-			   
-	  </exclusions>
-    </dependency>  
-    <dependency>
-	       <groupId>com.splunk.logging</groupId>
-	       <artifactId>splunk-library-javalogging</artifactId>
-	       <exclusions>
-				<exclusion>
-					<groupId>org.apache.logging.log4j</groupId>
-					<artifactId>log4j-core</artifactId>
-				</exclusion>
-				<exclusion>
-					<groupId>org.apache.logging.log4j</groupId>
-					<artifactId>log4j-api</artifactId>
-				</exclusion>
-				<exclusion>
-					<groupId>org.apache.logging.log4j</groupId>
-					<artifactId>log4j-slf4j-impl</artifactId>
-				</exclusion>
-				<exclusion>
-				<groupId>org.apache.logging.log4j</groupId>
-   				 <artifactId>log4j</artifactId>
-   				 </exclusion>
-			   <exclusion>
-				   <groupId>com.squareup.okio</groupId>
-				   <artifactId>okio-jvm</artifactId>
-			   </exclusion>
-			   <exclusion>
-				   <groupId>org.apache.logging.log4j</groupId>
-				   <artifactId>log4j-to-slf4j</artifactId>
-			   </exclusion>
-			</exclusions>
-	       <version>1.11.1</version>
-    	</dependency>
-    <dependency> 
-      <groupId>org.apache.commons</groupId>  
-      <artifactId>commons-lang3</artifactId> 
-    </dependency>  
-    <dependency> 
-      <groupId>org.asynchttpclient</groupId>  
-      <artifactId>async-http-client</artifactId>  
-      <version>2.12.4</version> 
-      <exclusions>
-        <exclusion>
-           <groupId>io.netty</groupId>
-           <artifactId>netty-handler</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>io.netty</groupId>
-          <artifactId>netty-codec</artifactId>
-        </exclusion>
-      </exclusions>
-    </dependency>
-	  <dependency>
-		  <groupId>io.netty</groupId>
-		  <artifactId>netty-codec-http2</artifactId>
-		  
-	  </dependency>
-    <dependency>
-      <groupId>com.fasterxml.jackson.core</groupId>
-      <artifactId>jackson-core</artifactId>
-      </dependency>
-    
-    <dependency> 
-      <groupId>jakarta.xml.bind</groupId>  
-      <artifactId>jakarta.xml.bind-api</artifactId> 
-    </dependency>
-    <dependency>
-		<groupId>org.springframework.cloud</groupId>
-		<artifactId>spring-cloud-starter-config</artifactId>
-		<version>5.0.0</version>
-		<exclusions>
-			   <exclusion>
-			     <groupId>org.bouncycastle</groupId>
-                 <artifactId>bcprov-jdk15on</artifactId>
-			   </exclusion>
-			   <exclusion>
-			     <groupId>com.fasterxml.jackson.core</groupId>
-                 <artifactId>jackson-core</artifactId>
-			   </exclusion>
-			 <exclusion>
-				 <groupId>org.springframework.security</groupId>
-                 <artifactId>spring-security-crypto</artifactId>
-			</exclusion>
-	    </exclusions>
-	</dependency>
-	
-	 <dependency>
-		<groupId>org.springframework.cloud</groupId>
-		<artifactId>spring-cloud-starter-vault-config</artifactId>
-		<version>5.0.0</version>
-		 <exclusions>
-			 <exclusion>
-				 <groupId>org.springframework</groupId>
-				 <artifactId>spring-web</artifactId>
-			 </exclusion>
-			 <exclusion>
-				 <groupId>org.springframework.security</groupId>
-                 <artifactId>spring-security-crypto</artifactId>
-			</exclusion>
-		 </exclusions>
-		</dependency>
-		
-	<dependency>
-	    <groupId>org.json</groupId>
-	    <artifactId>json</artifactId>
-	    <version>20231013</version>
-	</dependency>
-	<dependency>
-      	<groupId>junit</groupId>
-      	<artifactId>junit</artifactId>
-    </dependency>
-	  <!-- Spring Retry -->
-	  <dependency>
-		  <groupId>org.springframework.retry</groupId>
-		  <artifactId>spring-retry</artifactId>
-		  <version>2.0.12</version>
-	  </dependency>
-
-	  <dependency>
-		  <groupId>org.springframework</groupId>
-		  <artifactId>spring-aspects</artifactId>
-	  </dependency>
-
-	  <dependency>
-	    <groupId>org.apache.avro</groupId>
-		<artifactId>avro</artifactId>
-		<version>1.11.5</version>
-		<exclusions>
-		 <exclusion>
-		   <groupId>org.apache.commons</groupId>
-		   <artifactId>commons-compress</artifactId>
-		 </exclusion>
-		</exclusions>
-	  </dependency>
-	  
-	  <dependency>
-	    <groupId>com.fasterxml.jackson.core</groupId>
-        <artifactId>jackson-databind</artifactId>
-        </dependency>
-	  <dependency>
-		  <groupId>com.squareup.okio</groupId>
-		  <artifactId>okio-jvm</artifactId>
-		  <version>3.4.0</version>
-	  </dependency>
-	  
-	  <dependency>
-		  <groupId>org.springframework</groupId>
-		  <artifactId>spring-expression</artifactId>
-		  </dependency>
-	  <dependency>
-		  <groupId>org.owasp.encoder</groupId>
-		  <artifactId>encoder</artifactId>
-		  <version>1.2.3</version>
-	  </dependency>
-	  <dependency>
-		  <groupId>org.yaml</groupId>
-		  <artifactId>snakeyaml</artifactId>
-	  </dependency>
-	  
-	  <dependency>
-		  <groupId>org.springframework.boot</groupId>
-		  <artifactId>spring-boot-starter-actuator</artifactId>  
-	  </dependency>
-	  
-	  <dependency>
-         <groupId>org.springframework.boot</groupId>
-         <artifactId>spring-boot-starter-restclient</artifactId>
-      </dependency>
-	  
-  </dependencies>  
-  <build> 
-    <finalName>ppl-prun-services</finalName>
-    <plugins>
-			<plugin>
-				<groupId>org.springframework.boot</groupId>
-				<artifactId>spring-boot-maven-plugin</artifactId>
-			</plugin>
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-surefire-plugin</artifactId>
-				<version>2.19.1</version>
-				<configuration>
-					<argLine>@{argLine}</argLine>
-					<skipTests>false</skipTests>
-					<includes>
-						<include>**/PRUNBatchTestSuite.class</include>
-					</includes>
-					<useSystemClassLoader>false</useSystemClassLoader>
-				</configuration>
-			</plugin>
-			<plugin>
-				<groupId>org.sonarsource.scanner.maven</groupId>
-				<artifactId>sonar-maven-plugin</artifactId>
-				<version>4.0.0.4121</version>
-			</plugin>
-
-			<plugin>
-				<groupId>org.jacoco</groupId>
-				<artifactId>jacoco-maven-plugin</artifactId>
-				<version>0.8.10</version>
-								<executions>
-				
-					<execution>
-						<id>prepare-agent</id>
-						<goals>
-							<goal>prepare-agent</goal>
-						</goals>
-					</execution>
-					<execution>
-						<id>report</id>
-						<goals>
-							<goal>report</goal>
-						</goals>
-					</execution>
-				</executions>
-			</plugin>
-		</plugins>
-  </build> 
-</project>
-
+Healthcare Platform
+
+MR
+Docs
+HCC Kubernetes
+
+
+
+Introduction
+
+Documentation
+Overview
+
+Product Information
+collapse
+
+Technical Documentation
+collapse
+
+Support and FAQs
+collapse
+
+Platform Maintenance
+collapse
+
+OFE
+collapse
+
+Archive
+collapse
+See something that's wrong or unclear?
+HCC Kubernetes
+/
+Technical Documentation
+/
+Getting Started
+Published: 13 Apr, 2026
+Share
+Getting Started
+A Step-by-Step Guide to Using HCC Kubernetes Services
+Note: Starting March 9, 2026, kubectl-anthos-config is no longer accepted. All users must use OIDC authentication to access clusters or namespaces. Please follow the step 3 below. To avoid access issues, ensure you run gcloud auth login at least once every 24 hours.
+Prerequisites
+Before you begin, ensure you meet the following requirements:
+Cloud Native ID and GCP Group Membership
+Determine whether you need Contributor Role access.
+If you need to create a new namespace, request your manager or team lead to assign your MSID to the Contributor role within your team's resource group via the HCP console.
+If you only need access to HCP console for information retrieval, the View-Only role will suffice.
+Once you have either of these roles, visit HCP Kubernetes Console HCC Kubernetes Manage page to view the list of available namespaces. By clicking on a specific namespace link in HCC Namespace column, you can locate the GCP group under the "Console AD Group" field.
+Namespace Access
+If you require access to a specific namespace, add your Cloud Native ID to the corresponding GCP group.
+Cloud Native ID
+If you don’t have an active Cloud Native ID, follow the process outlined in "How to Create a Cloud Native ID" to create or activate one in Platform Azure (formatted as yourid@optumcloud.com), then join the necessary GCP group(s).
+Service Account for CI/CD & GitHub Actions
+The steps outlined above apply to individual IDs. If you need a service account for CI/CD or GitHub Actions, follow the instructions in "How to Create a Service Account."
+Step 1: Create a HCC Kubernetes Namespace via HCP Console
+Skip this step if your team already has a namespace.
+Navigate to the Create Namespace Catalog in HCP Console Create Kubernetes Namespace
+Alternatively, navigate from HCC Kubernetes Main Page and select Create Kubernetes Namespace.
+Select a Resource Group Account:
+Click Select a resource group and choose one to use.
+Start the Process:
+Click Start Now.
+Provide Details:
+PRM Resource Name: Example: <project/application_name>_<cluster_abbr(ctc/elr)>_<env_abbr(dev/test/stg/prd)>.
+Toggle the checkbox to agree to the terms of service and platform limits.
+Click Continue.
+Configure Namespace Ownership:
+Select the Cloud Native ID (namespace owner).
+Toggle to Create new GCP group or choosing an existing using Select GCP group.
+Click Continue.
+Define Namespace Properties:
+Kubernetes Namespace Name: Example: <project/application_name>_<cluster_abbr(ctc/elr)>_<env_abbr(dev/test/stg/prd)>.
+Select Cluster: Based on application architecture.
+For production, select peer cluster a geo-dispersed peer cluster will be presented. If a namespace with the same name exists in the peer cluster, map it by checking the box. Refer to application resiliency for more details.
+Application Priority: Select P1/P2/P3 or lower. (updatable later)
+ResourceQuota: Specify CPU (Cores) and Memory (Gi). This is to set an aggregate resource limit for this namespace.
+Toggle Enable Logging (recommended).
+Click Submit.
+Step 2: Install Supporting Programs
+Use Optum AppStore to ensure proper configuration (environment variables, certificates, etc.).
+Windows Users
+Submit a single request via AppStore for Google Cloud CLI 561.0.0.
+This will:
+Uninstall any older version of Google Cloud CLI
+Install Python, gcloud, and kubectl
+Configure required environment variables and CA certificates
+Mac Users
+Submit two separate requests via AppStore:
+Python 3.14.2 (MAC) or later
+Google Cloud CLI 561.0.0 (MAC)
+Before submitting the Google Cloud CLI request, if gcloud was previously installed via Homebrew, run:
+copy code snippet button
+brew uninstall --cask gcloud-cli
+The gcloud request will:
+Remove any older version
+Install gcloud, kubectl
+Set up required environment variables and CA certificates
+⚠️ Important Notes:
+Do not run gcloud components update — it breaks the Optum customized installation.
+For update, request newer Google cloud CLI version via AppStore.
+Verify by running gcloud components list, a table should be listed.
+Step 3: Download Cluster CA Certificates
+Cluster CA Certificates are crucial to gain access to the cluster.
+VDI users and those Windows users who don't have Developer_Elevated_Administrative membership:
+Use this instruction link.
+Choose the option "Automatically select the certificate store based on the type of certificate" and accept the import warnings for these self-signed certificates.
+Windows users:
+Download this PowerShell script windows_install_k8scerts.ps1
+Locate that file and right click on it. Run it by clicking "show more options" and then "Run with Elevated Privileges (Audited)".
+Explanation:
+The above script creates a directory C:\Users\yourmsid\certs\k8s.
+Downloads the certificates to this directory.
+Imports those to Cert:\CurrentUser\Root, you will be prompted confirm import. Please accept that warning.
+Output possible gcloud anthos auth commands for later use.
+Mac users:
+Run the following in a terminal.
+copy code snippet button
+TARGET_DIR="$HOME/certs/k8s"
+mkdir -p "$TARGET_DIR"
+cd "$TARGET_DIR"
+for curfile in $(curl -s https://k8s.optum.com/certs/ | grep -o 'href="[^"]*crt"' | cut -d'"' -f2); do
+  curl -O https://k8s.optum.com/certs/$curfile
+done
+ls -l "$TARGET_DIR" 
+Explanation: The above commands create a folder, download cert files and overwrite if they exist. List the contents of the directory at end.
+Step 4: Access Your Kubernetes Namespace
+4.1. Current supported clusters
+cluster alias to Cluster API Hostname Mapping Table
+copy code snippet button
+Cluster Name       Cluster_API_Hostname
+
+ctcnonprdusr001    hcc-ctc-nonprd-usr001-0.optum.com
+ctcnonprdusr101    hcc-ctc-nonprd-usr101-0.optum.com
+ctcnonprdusr201    hcc-ctc-nonprd-usr201-0.optum.com
+ctcprdusr001       hcc-ctc-prd-usr001-0.optum.com
+ctcprdusr101       hcc-ctc-prd-usr101-0.optum.com
+ctcprdusr201       hcc-ctc-prd-usr201-0.optum.com
+ctcdmzprdusr001    hcc-ctc-dmz-prd-usr001-0.optum.com
+elrnonprdusr001    hcc-elr-nonprd-usr001-0.optum.com
+elrnonprdusr101    hcc-elr-nonprd-usr101-0.optum.com
+elrnonprdusr201    hcc-elr-nonprd-usr201-0.optum.com
+elrprdusr001       hcc-elr-prd-usr001-0.optum.com
+elrprdusr101       hcc-elr-prd-usr101-0.optum.com
+elrprdusr201       hcc-elr-prd-usr201-0.optum.com
+elrdmzprdusr001    hcc-elr-dmz-prd-usr001-0.optum.com
+
+4.2. Log in to the Cluster
+Note: this step is now required to be run every 24 hours.
+Visit the HCP Console HCC Kubernetes Manage link.
+This page lists all the namespaces in various clusters your MSID can view or contribute in HCP Console.
+Identify the cluster name and map to the corresponding CLUSTER_API_HOSTNAME.
+Request Cloud Native ID access to the "Console AD Group" found in the namespace details if you haven't done so based on instructions in Prerequisites section.
+Use the command in the example section below to login to the corresponding cluster:
+copy code snippet button
+gcloud anthos auth login --server https://Cluster_API_Hostname --login-config-cert=Path_to_Cert_File
+When you run following commands, a warning will popup in your browser and you can accept that and click proceed. It allows you to trust these local clusters' certificates.
+Example:
+Windows users: Please use a Command Prompt (CMD) window—not PowerShell—to run the following commands, as they rely on a DOS-specific environment variable.
+copy code snippet button
+gcloud anthos auth login --server=https://hcc-ctc-nonprd-usr001-0.optum.com --login-config-cert="%userprofile%\certs\k8s\hcc-ctc-nonprd-usr001-0.optum.com.crt"
+gcloud anthos auth login --server=https://hcc-ctc-nonprd-usr101-0.optum.com --login-config-cert="%userprofile%\certs\k8s\hcc-ctc-nonprd-usr101-0.optum.com.crt"
+gcloud anthos auth login --server=https://hcc-ctc-nonprd-usr201-0.optum.com --login-config-cert="%userprofile%\certs\k8s\hcc-ctc-nonprd-usr201-0.optum.com.crt"
+gcloud anthos auth login --server=https://hcc-ctc-prd-usr001-0.optum.com --login-config-cert="%userprofile%\certs\k8s\hcc-ctc-prd-usr001-0.optum.com.crt"
+gcloud anthos auth login --server=https://hcc-ctc-prd-usr101-0.optum.com --login-config-cert="%userprofile%\certs\k8s\hcc-ctc-prd-usr101-0.optum.com.crt"
+gcloud anthos auth login --server=https://hcc-ctc-prd-usr201-0.optum.com --login-config-cert="%userprofile%\certs\k8s\hcc-ctc-prd-usr201-0.optum.com.crt"
+gcloud anthos auth login --server=https://hcc-ctc-dmz-prd-usr001-0.optum.com --login-config-cert="%userprofile%\certs\k8s\hcc-ctc-dmz-prd-usr001-0.optum.com.crt"
+gcloud anthos auth login --server=https://hcc-elr-nonprd-usr001-0.optum.com --login-config-cert="%userprofile%\certs\k8s\hcc-elr-nonprd-usr001-0.optum.com.crt"
+gcloud anthos auth login --server=https://hcc-elr-nonprd-usr101-0.optum.com --login-config-cert="%userprofile%\certs\k8s\hcc-elr-nonprd-usr101-0.optum.com.crt"
+gcloud anthos auth login --server=https://hcc-elr-nonprd-usr201-0.optum.com --login-config-cert="%userprofile%\certs\k8s\hcc-elr-nonprd-usr201-0.optum.com.crt"
+gcloud anthos auth login --server=https://hcc-elr-prd-usr001-0.optum.com --login-config-cert="%userprofile%\certs\k8s\hcc-elr-prd-usr001-0.optum.com.crt"
+gcloud anthos auth login --server=https://hcc-elr-prd-usr101-0.optum.com --login-config-cert="%userprofile%\certs\k8s\hcc-elr-prd-usr101-0.optum.com.crt"
+gcloud anthos auth login --server=https://hcc-elr-prd-usr201-0.optum.com --login-config-cert="%userprofile%\certs\k8s\hcc-elr-prd-usr201-0.optum.com.crt"
+gcloud anthos auth login --server=https://hcc-elr-dmz-prd-usr001-0.optum.com --login-config-cert="%userprofile%\certs\k8s\hcc-elr-dmz-prd-usr001-0.optum.com.crt"
+
+
+Mac users:
+copy code snippet button
+gcloud anthos auth login --server=https://hcc-ctc-nonprd-usr001-0.optum.com --login-config-cert="~/certs/k8s/hcc-ctc-nonprd-usr001-0.optum.com.crt"
+gcloud anthos auth login --server=https://hcc-ctc-nonprd-usr101-0.optum.com --login-config-cert="~/certs/k8s/hcc-ctc-nonprd-usr101-0.optum.com.crt"
+gcloud anthos auth login --server=https://hcc-ctc-nonprd-usr201-0.optum.com --login-config-cert="~/certs/k8s/hcc-ctc-nonprd-usr201-0.optum.com.crt"
+gcloud anthos auth login --server=https://hcc-ctc-prd-usr001-0.optum.com --login-config-cert="~/certs/k8s/hcc-ctc-prd-usr001-0.optum.com.crt"
+gcloud anthos auth login --server=https://hcc-ctc-prd-usr101-0.optum.com --login-config-cert="~/certs/k8s/hcc-ctc-prd-usr101-0.optum.com.crt"
+gcloud anthos auth login --server=https://hcc-ctc-prd-usr201-0.optum.com --login-config-cert="~/certs/k8s/hcc-ctc-prd-usr201-0.optum.com.crt"
+gcloud anthos auth login --server=https://hcc-ctc-dmz-prd-usr001-0.optum.com --login-config-cert="~/certs/k8s/hcc-ctc-dmz-prd-usr001-0.optum.com.crt"
+gcloud anthos auth login --server=https://hcc-elr-nonprd-usr001-0.optum.com --login-config-cert="~/certs/k8s/hcc-elr-nonprd-usr001-0.optum.com.crt"
+gcloud anthos auth login --server=https://hcc-elr-nonprd-usr101-0.optum.com --login-config-cert="~/certs/k8s/hcc-elr-nonprd-usr101-0.optum.com.crt"
+gcloud anthos auth login --server=https://hcc-elr-nonprd-usr201-0.optum.com --login-config-cert="~/certs/k8s/hcc-elr-nonprd-usr201-0.optum.com.crt"
+gcloud anthos auth login --server=https://hcc-elr-prd-usr001-0.optum.com --login-config-cert="~/certs/k8s/hcc-elr-prd-usr001-0.optum.com.crt"
+gcloud anthos auth login --server=https://hcc-elr-prd-usr101-0.optum.com --login-config-cert="~/certs/k8s/hcc-elr-prd-usr101-0.optum.com.crt"
+gcloud anthos auth login --server=https://hcc-elr-prd-usr201-0.optum.com --login-config-cert="~/certs/k8s/hcc-elr-prd-usr201-0.optum.com.crt"
+gcloud anthos auth login --server=https://hcc-elr-dmz-prd-usr001-0.optum.com --login-config-cert="~/certs/k8s/hcc-elr-dmz-prd-usr001-0.optum.com.crt"
+
+
+Login Prompt:
+Expecting a prompt, and use your Cloud Native ID in the format of yours@optumcloud.com, not your msid.
+Helper Scripts:
+Since it is required to do gcloud anthos auth login everyday, we prepare a helper script for your convenience.
+Please do check it out - https://k.goto.optum.com/helperscripts
+4.3 Access namespace by use-context
+List context
+copy code snippet button
+kubectl config get-contexts
+Select a context to switch to, which is under the NAME column of previous command..
+copy code snippet button
+kubectl config use-context yourselectedcontext
+# such as
+kubectl config use-context elr-nonprd-usr101-elr-nonprd-usr101-default-cli-user
+# finding the current context
+kubectl config current-context
+Note: This will only get you authorized to a cluster, not into a specific namespace.
+Use kubectx and fzf you may improve your productivity to manage kubectl config context switch. It is available in brew in Mac or you may requestChocolatey for Windows. To install these productivity tool in mac or windows: run:
+copy code snippet button
+brew install kubectx
+brew install fzf
+copy code snippet button
+choco install kubectx -y
+choco install fzf -y
+Once installed, run kubectx and you can start using arrow key or keystrokes to pick your context to switch to.
+Step 5: Validate Configuration
+Run:
+copy code snippet button
+kubectl -n yourk8s_namespace_name get sa
+where yourk8s_namespace_name needs to be replaced by the namespace name you find in HCP Kubernetes Console HCC Kubernetes Manage page.
+Expected Output:
+copy code snippet button
+NAME                        SECRETS   AGE
+yourk8s_namespace_name      1         7d5h
+❌ Troubleshooting:
+Examine the test result error message closely to make sure you are using yourid@optumcloud.com id, not msid.
+Retry the login command using yourid@optumcloud.com id again and authenticate via the browser prompt.
+Deep Dive Troubleshooting:
+follow https://k.goto.optum.com/debug , then open a brand new post in HCC Kubernetes teams channel.
+!!! Note: If this step still fails, check to see if you have added your cloud native id in https://secure.uhc.com into the GCP Group found under the "Console AD Group" field. Refer to Prerequisites section on top of this page for more details.
+For Freelens Users
+Freelens is not supported by HCC Kubernetes team. Please consult with https://openlens.goto.optum.com/CoP
+In case freelens is not working, remove your ~/.kube/config or "%userprofile%"\.kube\config and start it over from step3.
+Here is the instruction - https://k.goto.optum.com/freelens
+Next Steps
+Read through Overview and Product Information on this documentation.
+Getting Started Examples Link
+How to Contact Us
+Welcome aboard! 🚀
+On this page icon
+On this page
+Getting Started
+ 
+Prerequisites
+ 
+Step 1: Create a HCC Kubernetes Namespace via HCP Console
+ 
+Step 2: Install Supporting Programs
+  
+Windows Users
+  
+Mac Users
+ 
+Step 3: Download Cluster CA Certificates
+ 
+Step 4: Access Your Kubernetes Namespace
+  
+4.1. Current supported clusters
+  
+4.2. Log in to the Cluster
+  
+4.3 Access namespace by use-context
+ 
+Step 5: Validate Configuration
+ 
+For Freelens Users
+ 
+Next Steps
+Useful Links
+
+HCC Kubernetes Hive Tag
+Office hours
+Platform Docs
+Support
+
+Support options
+© 2026 UnitedHealth Group
