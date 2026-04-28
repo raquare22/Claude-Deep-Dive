@@ -87,3 +87,212 @@ spec:
                 - KILL
                 - MKNOD
                 - SYS_CHROOT
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Patterns to ignore when building Helm packages
+.DS_Store
+.git/
+.gitignore
+.idea/
+*.tmproj
+.vscode/
+*.swp
+*.bak
+*.tmp
+*.orig
+*~
+# OWNERS / CI files
+OWNERS
+.github/
+# Local rendered manifests
+*.rendered.yml
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+name: cicd-pipeline
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - release/*
+  workflow_dispatch:
+    secrets:
+      JFROG_USERNAME:
+        description: 'JFrog username'
+        required: true
+      JFROG_SECRET:
+        description: 'JFrog secret token'
+        required: true
+      KUBECONFIG:
+        description: 'Kubeconfig for kubectl'
+        required: true
+      STAGE_VAULT_ROLE_ID:
+        description: 'Vault role ID for stage environment'
+        required: true
+      STAGE_VAULT_SECRET_ID:
+        description: 'Vault secret ID for stage environment'
+        required: true
+
+
+jobs:
+  build-and-push:
+    runs-on: uhg-runner
+    outputs:
+      BUILD_VERSION: ${{ steps.version.outputs.BUILD_VERSION }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Fetch version from pyproject.toml
+        id: version
+        run: |
+          VERSION=$(grep -oP '(?<=^version = ")[^"]*' pyproject.toml)
+          echo "BUILD_VERSION=$VERSION" >> $GITHUB_ENV
+          echo "BUILD_VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "Build version: $VERSION"
+
+      - name: Log in to JFrog Artifactory Docker Registry
+        env:
+          JFROG_USERNAME: ${{ secrets.JFROG_USERNAME }}
+          JFROG_SECRET: ${{ secrets.JFROG_SECRET }}
+        uses: docker/login-action@v3
+        with:
+          registry: centraluhg.jfrog.io
+          username: ${{ env.JFROG_USERNAME }}
+          password: ${{ env.JFROG_SECRET }}
+
+      - name: Build and push Docker image
+        id: build-push
+        uses: docker/build-push-action@v5
+        env:
+          JFROG_USERNAME: ${{ secrets.JFROG_USERNAME }}
+          JFROG_SECRET: ${{ secrets.JFROG_SECRET }}
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: centraluhg.jfrog.io/ppl-docker-np-loc/ppl/ppl-prun-utils:${{ env.BUILD_VERSION }}
+          secrets: |
+            JFROG_USERNAME=${{ env.JFROG_USERNAME }}
+            JFROG_SECRET=${{ env.JFROG_SECRET }}
+
+  deployment:
+    runs-on: uhg-runner
+    needs: build-and-push
+    environment:
+      name: approvalToDeploy
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.28.5'
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: 'v3.14.2'
+
+      - name: Validate required secrets
+        run: |
+          set -euo pipefail
+          [ -n "${{ secrets.KUBECONFIG }}" ]            || { echo "::error::KUBECONFIG secret is empty or missing";          exit 1; }
+          [ -n "${{ secrets.STAGE_VAULT_ROLE_ID }}" ]   || { echo "::error::STAGE_VAULT_ROLE_ID secret is empty or missing"; exit 1; }
+          [ -n "${{ secrets.STAGE_VAULT_SECRET_ID }}" ] || { echo "::error::STAGE_VAULT_SECRET_ID secret is empty or missing"; exit 1; }
+        shell: bash
+
+      - name: Configure kubectl context
+        env:
+          KUBECONFIG_CONTENT: ${{ secrets.KUBECONFIG }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.kube"
+          printf '%s' "$KUBECONFIG_CONTENT" > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+          export KUBECONFIG="$HOME/.kube/config"
+          kubectl config use-context ctcnonprdusr101-admin-token_provider-paperless-stage
+          kubectl auth whoami
+        shell: bash
+
+      - name: Helm lint chart
+        run: helm lint ./helm
+        shell: bash
+
+      - name: Helm dry-run (sanity render)
+        env:
+          BUILD_VERSION:         ${{ needs.build-and-push.outputs.BUILD_VERSION }}
+          STAGE_VAULT_ROLE_ID:   ${{ secrets.STAGE_VAULT_ROLE_ID }}
+          STAGE_VAULT_SECRET_ID: ${{ secrets.STAGE_VAULT_SECRET_ID }}
+          KUBECONFIG: /home/runner/.kube/config
+        run: |
+          set -euo pipefail
+          helm upgrade --install ppl-prun-utils ./helm \
+            --namespace provider-paperless-stage \
+            --values ./helm/values-stage.yml \
+            --set image.tag="$BUILD_VERSION" \
+            --set vaultRoleId="$STAGE_VAULT_ROLE_ID" \
+            --set vaultSecretId="$STAGE_VAULT_SECRET_ID" \
+            --dry-run
+        shell: bash
+
+      - name: Deploy to HCC K8s with Helm
+        env:
+          BUILD_VERSION:         ${{ needs.build-and-push.outputs.BUILD_VERSION }}
+          STAGE_VAULT_ROLE_ID:   ${{ secrets.STAGE_VAULT_ROLE_ID }}
+          STAGE_VAULT_SECRET_ID: ${{ secrets.STAGE_VAULT_SECRET_ID }}
+          KUBECONFIG: /home/runner/.kube/config
+        run: |
+          set -euo pipefail
+          helm upgrade --install ppl-prun-utils ./helm \
+            --namespace provider-paperless-stage \
+            --values ./helm/values-stage.yml \
+            --set image.tag="$BUILD_VERSION" \
+            --set vaultRoleId="$STAGE_VAULT_ROLE_ID" \
+            --set vaultSecretId="$STAGE_VAULT_SECRET_ID" \
+            --atomic \
+            --wait \
+            --timeout 5m
+          helm history ppl-prun-utils -n provider-paperless-stage
+          kubectl rollout status deployment/ppl-prun-utils \
+            -n provider-paperless-stage --timeout=300s
+        shell: bash
