@@ -1,20 +1,103 @@
-cd /Users/rahulmaheshvari/Desktop/AI/Optum/ppl-prun-utils
-
-# 5a — Capture today's manifest as the workflow currently produces it
-cp deployment/deployment.yml /tmp/current.yml
-sed -i.bak 's/@vault_role_id/FAKE_ROLE/g'   /tmp/current.yml
-sed -i.bak 's/@vault_secret_id/FAKE_SEC/g'  /tmp/current.yml
-sed -i.bak 's,@docker_image,edgeinternal1uhg.optum.com/ppl-docker-np-loc/ppl/ppl-prun-utils:0.1.0,g' /tmp/current.yml
-rm /tmp/current.yml.bak
-
-# 5b — Capture what Helm renders
-helm template ppl-prun-utils ./helm \
-  --namespace provider-paperless-stage \
-  --values ./helm/values-stage.yml \
-  --set image.tag=0.1.0 \
-  --set vaultRoleId=FAKE_ROLE \
-  --set vaultSecretId=FAKE_SEC \
-  > /tmp/helm.yml
-
-# 5c — Compare them
-diff -u /tmp/current.yml /tmp/helm.yml
+rahul_maheshvari@optum.com@LAMU0KMQ4JX73GM ppl-prun-utils % diff -u /tmp/current.yml /tmp/helm.yml
+--- /tmp/current.yml    2026-04-28 01:16:52
++++ /tmp/helm.yml       2026-04-28 01:17:06
+@@ -1,40 +1,51 @@
++---
++# Source: ppl-prun-utils/templates/deployment.yml
+ apiVersion: apps/v1
+ kind: Deployment
+ metadata:
+-  labels:
+-    app: ppl-prun-utils
+   name: ppl-prun-utils
+   namespace: provider-paperless-stage
++  labels:
++    app: ppl-prun-utils
++    app.kubernetes.io/name: ppl-prun-utils
++    app.kubernetes.io/instance: ppl-prun-utils
++    app.kubernetes.io/version: "0.1.0"
++    app.kubernetes.io/managed-by: Helm
++    helm.sh/chart: "ppl-prun-utils-0.1.0"
++    environment: stage
+ spec:
+   replicas: 1
+   revisionHistoryLimit: 5
+   selector:
+     matchLabels:
++      # IMMUTABLE after first deploy — must match today's deployment.yml exactly.
++      # Adding any other key here breaks `helm upgrade` with "field is immutable".
+       app: ppl-prun-utils
+   strategy:
++    type: RollingUpdate
+     rollingUpdate:
+       maxSurge: 25%
+       maxUnavailable: 25%
+-    type: RollingUpdate
+   template:
+     metadata:
+       labels:
++        # MUST be a superset of selector.matchLabels (here, exactly the same).
+         app: ppl-prun-utils
+     spec:
+       imagePullSecrets:
+         - name: edge-docker-registry-secret
+       containers:
+         - name: ppl-prun-utils
+-          image: edgeinternal1uhg.optum.com/ppl-docker-np-loc/ppl/ppl-prun-utils:0.1.0
++          image: "edgeinternal1uhg.optum.com/ppl-docker-np-loc/ppl/ppl-prun-utils:0.1.0"
+           imagePullPolicy: Always
+           ports:
+             - containerPort: 8080
+               protocol: TCP
+           env:
+             - name: VAULT_ROLE_ID
+-              value: FAKE_ROLE
++              value: "FAKE_ROLE"
+             - name: VAULT_SECRET_ID
+-              value: FAKE_SEC
++              value: "FAKE_SEC"
+           readinessProbe:
+             tcpSocket:
+               port: 8080
+@@ -45,32 +56,15 @@
+               port: 8080
+             initialDelaySeconds: 30
+             periodSeconds: 30
+-          # readinessProbe:
+-          #   exec:
+-          #     command:
+-          #       - /bin/sh
+-          #       - -c
+-          #       - cat
+-          #       - /tmp
+-          #   initialDelaySeconds: 60
+-          #   periodSeconds: 60
+-          # livenessProbe:
+-          #   exec:
+-          #     command:
+-          #       - /bin/sh
+-          #       - -c
+-          #       - cat
+-          #       - /tmp
+-          #   initialDelaySeconds: 60
+-          #   periodSeconds: 60
+           resources:
+             limits:
+               cpu: "4"
+               memory: 6Gi
+             requests:
+               cpu: "2"
+-              memory: "4Gi"
++              memory: 4Gi
+           securityContext:
++            # HARDCODED — HCC compliance, do not parameterize
+             runAsUser: 1000
+             allowPrivilegeEscalation: false
+             readOnlyRootFilesystem: false
+@@ -78,4 +72,4 @@
+               drop:
+                 - KILL
+                 - MKNOD
+-                - SYS_CHROOT
+\ No newline at end of file
++                - SYS_CHROOT
