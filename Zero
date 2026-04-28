@@ -1,103 +1,169 @@
-rahul_maheshvari@optum.com@LAMU0KMQ4JX73GM ppl-prun-utils % diff -u /tmp/current.yml /tmp/helm.yml
---- /tmp/current.yml    2026-04-28 01:16:52
-+++ /tmp/helm.yml       2026-04-28 01:17:06
-@@ -1,40 +1,51 @@
-+---
-+# Source: ppl-prun-utils/templates/deployment.yml
- apiVersion: apps/v1
- kind: Deployment
- metadata:
--  labels:
--    app: ppl-prun-utils
-   name: ppl-prun-utils
-   namespace: provider-paperless-stage
-+  labels:
-+    app: ppl-prun-utils
-+    app.kubernetes.io/name: ppl-prun-utils
-+    app.kubernetes.io/instance: ppl-prun-utils
-+    app.kubernetes.io/version: "0.1.0"
-+    app.kubernetes.io/managed-by: Helm
-+    helm.sh/chart: "ppl-prun-utils-0.1.0"
-+    environment: stage
- spec:
-   replicas: 1
-   revisionHistoryLimit: 5
-   selector:
-     matchLabels:
-+      # IMMUTABLE after first deploy — must match today's deployment.yml exactly.
-+      # Adding any other key here breaks `helm upgrade` with "field is immutable".
-       app: ppl-prun-utils
-   strategy:
-+    type: RollingUpdate
-     rollingUpdate:
-       maxSurge: 25%
-       maxUnavailable: 25%
--    type: RollingUpdate
-   template:
-     metadata:
-       labels:
-+        # MUST be a superset of selector.matchLabels (here, exactly the same).
-         app: ppl-prun-utils
-     spec:
-       imagePullSecrets:
-         - name: edge-docker-registry-secret
-       containers:
-         - name: ppl-prun-utils
--          image: edgeinternal1uhg.optum.com/ppl-docker-np-loc/ppl/ppl-prun-utils:0.1.0
-+          image: "edgeinternal1uhg.optum.com/ppl-docker-np-loc/ppl/ppl-prun-utils:0.1.0"
-           imagePullPolicy: Always
-           ports:
-             - containerPort: 8080
-               protocol: TCP
-           env:
-             - name: VAULT_ROLE_ID
--              value: FAKE_ROLE
-+              value: "FAKE_ROLE"
-             - name: VAULT_SECRET_ID
--              value: FAKE_SEC
-+              value: "FAKE_SEC"
-           readinessProbe:
-             tcpSocket:
-               port: 8080
-@@ -45,32 +56,15 @@
-               port: 8080
-             initialDelaySeconds: 30
-             periodSeconds: 30
--          # readinessProbe:
--          #   exec:
--          #     command:
--          #       - /bin/sh
--          #       - -c
--          #       - cat
--          #       - /tmp
--          #   initialDelaySeconds: 60
--          #   periodSeconds: 60
--          # livenessProbe:
--          #   exec:
--          #     command:
--          #       - /bin/sh
--          #       - -c
--          #       - cat
--          #       - /tmp
--          #   initialDelaySeconds: 60
--          #   periodSeconds: 60
-           resources:
-             limits:
-               cpu: "4"
-               memory: 6Gi
-             requests:
-               cpu: "2"
--              memory: "4Gi"
-+              memory: 4Gi
-           securityContext:
-+            # HARDCODED — HCC compliance, do not parameterize
-             runAsUser: 1000
-             allowPrivilegeEscalation: false
-             readOnlyRootFilesystem: false
-@@ -78,4 +72,4 @@
-               drop:
-                 - KILL
-                 - MKNOD
--                - SYS_CHROOT
-\ No newline at end of file
-+                - SYS_CHROOT
+--6
+
+cd /Users/rahulmaheshvari/Desktop/AI/Optum/ppl-prun-utils
+
+helm template ppl-prun-utils ./helm \
+  --namespace provider-paperless-stage \
+  --values ./helm/values-stage.yml \
+  --set image.tag=0.1.0 \
+  --set vaultRoleId=FAKE_ROLE \
+  --set vaultSecretId=FAKE_SEC \
+  | kubectl apply --dry-run=client --validate=true -f -
+
+
+
+
+--7
+
+# Use the kubeconfig from your machine (NOT the one in GitHub secrets)
+kubectl config use-context ctcnonprdusr101-admin-token_provider-paperless-stage 2>/dev/null \
+  || echo "If this fails, your local kubeconfig doesn't have the stage context — get the kubeconfig from your team."
+
+kubectl auth whoami
+kubectl auth can-i get    deployments    -n provider-paperless-stage
+kubectl auth can-i update deployments    -n provider-paperless-stage
+kubectl auth can-i annotate deployments  -n provider-paperless-stage
+kubectl auth can-i create secrets        -n provider-paperless-stage
+
+
+
+
+
+--8
+
+cd /Users/rahulmaheshvari/Desktop/AI/Optum/ppl-prun-utils
+
+helm upgrade --install ppl-prun-utils ./helm \
+  --namespace provider-paperless-stage \
+  --values ./helm/values-stage.yml \
+  --set image.tag=0.1.0 \
+  --set vaultRoleId=FAKE_ROLE \
+  --set vaultSecretId=FAKE_SEC \
+  --dry-run \
+  --debug
+
+
+
+
+
+
+
+
+--9
+
+kubectl config use-context ctcnonprdusr101-admin-token_provider-paperless-stage
+
+# 1. Snapshot current state in case something goes sideways
+kubectl get deployment ppl-prun-utils -n provider-paperless-stage -o yaml \
+  > /tmp/ppl-prun-utils-before-adoption.yml
+echo "Snapshot saved to /tmp/ppl-prun-utils-before-adoption.yml"
+
+# 2. Add the Helm release annotations
+kubectl annotate deployment ppl-prun-utils \
+  -n provider-paperless-stage \
+  meta.helm.sh/release-name=ppl-prun-utils \
+  meta.helm.sh/release-namespace=provider-paperless-stage \
+  --overwrite
+
+# 3. Add the managed-by label
+kubectl label deployment ppl-prun-utils \
+  -n provider-paperless-stage \
+  app.kubernetes.io/managed-by=Helm \
+  --overwrite
+
+# 4. Verify
+kubectl get deployment ppl-prun-utils -n provider-paperless-stage \
+  -o jsonpath='{"annotations: "}{.metadata.annotations}{"\n\nlabels: "}{.metadata.labels}{"\n"}'
+
+
+
+
+
+
+
+
+
+
+
+
+--12 
+
+kubectl config use-context ctcnonprdusr101-admin-token_provider-paperless-stage
+
+# A. Pod state
+kubectl get pod -n provider-paperless-stage -l app=ppl-prun-utils
+# Expect: 1/1 Running, RESTARTS 0, AGE matches deploy time
+
+# B. Helm release state
+helm list -n provider-paperless-stage
+helm history ppl-prun-utils -n provider-paperless-stage
+# Expect: STATUS deployed, revision >= 1, current chart version 0.1.0
+
+# C. Helm-managed metadata is in place
+kubectl get deployment ppl-prun-utils -n provider-paperless-stage \
+  -o jsonpath='{.metadata.labels.app\.kubernetes\.io/managed-by}{"\n"}'
+# Expect: Helm
+
+# D. Env vars made it into the pod
+kubectl exec -n provider-paperless-stage deploy/ppl-prun-utils -- printenv | grep -E '^VAULT_' | sed 's/=.*/=***REDACTED***/'
+# Expect: VAULT_ROLE_ID=***REDACTED***  VAULT_SECRET_ID=***REDACTED***
+# (Don't print actual values — they shouldn't show up in your terminal scrollback)
+
+# E. App-level health: Vault login succeeded
+kubectl logs -n provider-paperless-stage deploy/ppl-prun-utils --tail=200 | grep -iE 'vault|scheduler|starting'
+# Expect lines like:
+#   Instantiating Vault Service
+#   Vault Service Instantiated Successfully
+#   Starting main.py
+
+# F. Scheduler registered jobs
+kubectl logs -n provider-paperless-stage deploy/ppl-prun-utils --tail=500 | grep -iE 'scheduler|job_id|added job'
+# Expect APScheduler logs showing the 9 jobs registered
+
+# G. Liveness/readiness still TCP-probing :8080
+kubectl describe pod -n provider-paperless-stage -l app=ppl-prun-utils | grep -E 'Liveness|Readiness'
+# Expect: Liveness:  tcp-socket :8080 ...   Readiness: tcp-socket :8080 ...
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+--13
+# 1. See current revision
+helm history ppl-prun-utils -n provider-paperless-stage
+
+# 2. Pretend a new bad revision was deployed by re-running with no actual change
+#    (this just bumps the revision counter — useful only for the drill)
+helm upgrade ppl-prun-utils ./helm \
+  --namespace provider-paperless-stage \
+  --values ./helm/values-stage.yml \
+  --set image.tag=0.1.0 \
+  --set vaultRoleId="$STAGE_VAULT_ROLE_ID" \
+  --set vaultSecretId="$STAGE_VAULT_SECRET_ID" \
+  --reuse-values
+
+# 3. Check history — should now show 2 revisions
+helm history ppl-prun-utils -n provider-paperless-stage
+
+# 4. Roll back to previous revision
+helm rollback ppl-prun-utils 1 -n provider-paperless-stage --wait
+
+# 5. Confirm rollback succeeded
+helm history ppl-prun-utils -n provider-paperless-stage
+# Expect a new revision marked "Rollback to 1"
+
+# 6. Pod still healthy
+kubectl get pod -n provider-paperless-stage -l app=ppl-prun-utils
