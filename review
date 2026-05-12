@@ -1,60 +1,65 @@
-# Strip the bad lines from both shell profiles
-sed -i '' '/CLOUDSDK_PYTHON/d' ~/.zshrc ~/.bash_profile
-
-# Append the correct Apple Silicon path to BOTH (zsh is your active shell, bash_profile kept consistent for any bash subshells)
-echo 'export CLOUDSDK_PYTHON="/opt/homebrew/bin/python3"' >> ~/.zshrc
-echo 'export CLOUDSDK_PYTHON="/opt/homebrew/bin/python3"' >> ~/.bash_profile
-
-# Reload current shell
-source ~/.zshrc
-
-# Verify only ONE definition remains in each file, pointing at the correct path
-grep -n CLOUDSDK_PYTHON ~/.zshrc ~/.bash_profile
-echo "Active value: $CLOUDSDK_PYTHON"
-ls -l "$CLOUDSDK_PYTHON"
-
-
-
-
-
-
-
-
-
-
-
-gcloud --version
-gcloud components list   # MUST show the Optum components table
-gcloud auth login        # browser opens — sign in with rahul_maheshvari@optumcloud.com (NOT MSID)
-
-
-
-
-
-
-
-
-
-
-
-
-
-brew install python@3.12
-
-sed -i '' '/CLOUDSDK_PYTHON/d' ~/.zshrc ~/.bash_profile
-echo 'export CLOUDSDK_PYTHON="/opt/homebrew/opt/python@3.12/bin/python3.12"' >> ~/.zshrc
-echo 'export CLOUDSDK_PYTHON="/opt/homebrew/opt/python@3.12/bin/python3.12"' >> ~/.bash_profile
-source ~/.zshrc
-
-gcloud components list
-gcloud auth login
-
-
-
-
-
-
-
-
-
-
+rahul_maheshvari@optum.com@LAMU0KMQ4JX73GM ppl-paperless-activiti % for T in GPSKafkaDocumentTemplate ATSKafkaDocumentTemplate MnRKafkaDocumentTemplate \
+for> ConsumerEngineeringKafkaDocumentTemplate PCPEmailRequestToPENTemplate \
+for> KafkaDocumentTemplate; do
+for> echo "===$T==="
+for> grep -rn "$T" src/main src/test \
+for> | grep -v "template/java/impl/$T.java"\
+for pipe>  | grep -v "template/java$T.java"\
+for pipe pipe>  | grep -v "emplate/$T" \
+for pipe pipe pipe> | grep -v "kafka/kafkaConsumer/"
+for> done
+===GPSKafkaDocumentTemplate===
+src/main/java/com/optum/fds/paperless/template/java/GPSKafkaDocumentTemplate.java:12:public class GPSKafkaDocumentTemplate extends TemplateHandler {
+src/main/java/com/optum/fds/paperless/template/java/TemplateFactory.java:61:            TEMPLATE_HANDLERS.put(Templates.GPS_KAFKA_DOCUMENT.getTemplate(), new GPSKafkaDocumentTemplate());
+src/test/java/com/optum/fds/paperless/regression/suite/ActivitiTestSuite.java:129:      GPSKafkaDocumentTemplateTest.class,
+===ATSKafkaDocumentTemplate===
+src/main/java/com/optum/fds/paperless/template/java/TemplateFactory.java:56:            TEMPLATE_HANDLERS.put(Templates.ATS_KAFKA_DOCUMENT.getTemplate(),new ATSKafkaDocumentTemplate());
+===MnRKafkaDocumentTemplate===
+src/main/java/com/optum/fds/paperless/template/java/TemplateFactory.java:52:            TEMPLATE_HANDLERS.put(Templates.KAFKA_MNR_DOCUMENT.getTemplate(),new MnRKafkaDocumentTemplate());
+===ConsumerEngineeringKafkaDocumentTemplate===
+src/main/java/com/optum/fds/paperless/template/java/TemplateFactory.java:62:            TEMPLATE_HANDLERS.put(Templates.KAFKA_CONSUMER_ENGINEERING_DOCUMENT.getTemplate(), new ConsumerEngineeringKafkaDocumentTemplate());
+===PCPEmailRequestToPENTemplate===
+src/main/java/com/optum/fds/paperless/template/java/TemplateFactory.java:63:            TEMPLATE_HANDLERS.put(Templates.PCP_EMAIL_REQUEST_TO_PEN.getTemplate(), new PCPEmailRequestToPENTemplate());
+src/test/java/com/optum/fds/paperless/regression/suite/ActivitiTestSuite.java:128:      PCPEmailRequestToPENTemplateTest.class,
+===KafkaDocumentTemplate===
+src/main/java/com/optum/fds/paperless/template/java/impl/MnRKafkaDocumentTemplate.java:18:public class MnRKafkaDocumentTemplate extends TemplateHandler {
+src/main/java/com/optum/fds/paperless/template/java/impl/MnRKafkaDocumentTemplate.java:20:      private static final Logger LOGGER = LoggerFactory.getLogger(MnRKafkaDocumentTemplate.class);
+src/main/java/com/optum/fds/paperless/template/java/impl/MnRKafkaDocumentTemplate.java:53:            LOGGER.error("MnRKafkaDocumentTemplate --> unable to convert json string to KafkaResponse, e={}", e.getMessage());
+src/main/java/com/optum/fds/paperless/template/java/impl/ConsumerEngineeringKafkaDocumentTemplate.java:19:public class ConsumerEngineeringKafkaDocumentTemplate extends TemplateHandler {
+src/main/java/com/optum/fds/paperless/template/java/impl/ConsumerEngineeringKafkaDocumentTemplate.java:22:      private static final Logger LOGGER = LoggerFactory.getLogger(ConsumerEngineeringKafkaDocumentTemplate.class);
+src/main/java/com/optum/fds/paperless/template/java/impl/ConsumerEngineeringKafkaDocumentTemplate.java:37:              LOGGER.error("KafkaDocumentTemplate --> unable to convert json string to KafkaMessage, e={}", e.getMessage());
+src/main/java/com/optum/fds/paperless/template/java/impl/ConsumerEngineeringKafkaDocumentTemplate.java:52:             LOGGER.warn("KafkaDocumentTemplate --> providerDetails is null in Kafka message.");
+src/main/java/com/optum/fds/paperless/template/java/impl/ATSKafkaDocumentTemplate.java:19:public class ATSKafkaDocumentTemplate extends TemplateHandler {
+src/main/java/com/optum/fds/paperless/template/java/impl/ATSKafkaDocumentTemplate.java:21:    private static final Logger LOGGER = LoggerFactory.getLogger(ATSKafkaDocumentTemplate.class);
+src/main/java/com/optum/fds/paperless/template/java/GPSKafkaDocumentTemplate.java:12:public class GPSKafkaDocumentTemplate extends TemplateHandler {
+src/main/java/com/optum/fds/paperless/template/java/TemplateFactory.java:51:            TEMPLATE_HANDLERS.put(Templates.KAFKA_RESPONSE_DOCUMENT.getTemplate(),new KafkaDocumentTemplate());
+src/main/java/com/optum/fds/paperless/template/java/TemplateFactory.java:52:            TEMPLATE_HANDLERS.put(Templates.KAFKA_MNR_DOCUMENT.getTemplate(),new MnRKafkaDocumentTemplate());
+src/main/java/com/optum/fds/paperless/template/java/TemplateFactory.java:54:            TEMPLATE_HANDLERS.put(Templates.CNS_KAFKA_MESSAGE.getTemplate(),new KafkaDocumentTemplate());
+src/main/java/com/optum/fds/paperless/template/java/TemplateFactory.java:56:            TEMPLATE_HANDLERS.put(Templates.ATS_KAFKA_DOCUMENT.getTemplate(),new ATSKafkaDocumentTemplate());
+src/main/java/com/optum/fds/paperless/template/java/TemplateFactory.java:61:            TEMPLATE_HANDLERS.put(Templates.GPS_KAFKA_DOCUMENT.getTemplate(), new GPSKafkaDocumentTemplate());
+src/main/java/com/optum/fds/paperless/template/java/TemplateFactory.java:62:            TEMPLATE_HANDLERS.put(Templates.KAFKA_CONSUMER_ENGINEERING_DOCUMENT.getTemplate(), new ConsumerEngineeringKafkaDocumentTemplate());
+src/test/java/com/optum/fds/paperless/template/ConsumerEngineeringKafkaDocumentTemplateTest.java:16:import com.optum.fds.paperless.template.java.impl.ConsumerEngineeringKafkaDocumentTemplate;
+src/test/java/com/optum/fds/paperless/template/ConsumerEngineeringKafkaDocumentTemplateTest.java:18:public class ConsumerEngineeringKafkaDocumentTemplateTest {
+src/test/java/com/optum/fds/paperless/template/ConsumerEngineeringKafkaDocumentTemplateTest.java:20:    private ConsumerEngineeringKafkaDocumentTemplate consumerEngineeringKafkaDocumentTemplate;
+src/test/java/com/optum/fds/paperless/template/ConsumerEngineeringKafkaDocumentTemplateTest.java:24:             consumerEngineeringKafkaDocumentTemplate = new ConsumerEngineeringKafkaDocumentTemplate();         
+src/test/java/com/optum/fds/paperless/template/ConsumerEngineeringKafkaDocumentTemplateTest.java:30:             Method formatTinMethod = ConsumerEngineeringKafkaDocumentTemplate.class.getDeclaredMethod("formatTin", String.class);
+src/test/java/com/optum/fds/paperless/template/ConsumerEngineeringKafkaDocumentTemplateTest.java:34:         String formattedTin = (String) formatTinMethod.invoke(consumerEngineeringKafkaDocumentTemplate, tin);
+src/test/java/com/optum/fds/paperless/template/ConsumerEngineeringKafkaDocumentTemplateTest.java:40:         Method formatTinMethod = ConsumerEngineeringKafkaDocumentTemplate.class.getDeclaredMethod("formatTin", String.class);
+src/test/java/com/optum/fds/paperless/template/ConsumerEngineeringKafkaDocumentTemplateTest.java:44:         String formattedTin = (String) formatTinMethod.invoke(consumerEngineeringKafkaDocumentTemplate, tin);
+src/test/java/com/optum/fds/paperless/template/ConsumerEngineeringKafkaDocumentTemplateTest.java:50:         Method formatTinMethod = ConsumerEngineeringKafkaDocumentTemplate.class.getDeclaredMethod("formatTin", String.class);
+src/test/java/com/optum/fds/paperless/template/ConsumerEngineeringKafkaDocumentTemplateTest.java:53:         String formattedTin = (String) formatTinMethod.invoke(consumerEngineeringKafkaDocumentTemplate, (String) null);
+src/test/java/com/optum/fds/paperless/template/ConsumerEngineeringKafkaDocumentTemplateTest.java:59:         Method formatTinMethod = ConsumerEngineeringKafkaDocumentTemplate.class.getDeclaredMethod("formatTin", String.class);
+src/test/java/com/optum/fds/paperless/template/ConsumerEngineeringKafkaDocumentTemplateTest.java:63:         String formattedTin = (String) formatTinMethod.invoke(consumerEngineeringKafkaDocumentTemplate, tin);
+src/test/java/com/optum/fds/paperless/template/AlinkKafkaTemplateTest.java:16:    public void testALinkKafkaDocumentTemplate() throws IOException, JSONException {
+src/test/java/com/optum/fds/paperless/template/ATSKafkaDocumentTemplateTest.java:14:public class ATSKafkaDocumentTemplateTest {
+src/test/java/com/optum/fds/paperless/template/ATSKafkaDocumentTemplateTest.java:18:    public void testATSKafkaDocumentTemplate() throws IOException, JSONException {
+src/test/java/com/optum/fds/paperless/template/ATSKafkaDocumentTemplateTest.java:129:    public void testATSKafkaDocumentTemplateMissingLstClaimInfo() throws IOException, JSONException {
+src/test/java/com/optum/fds/paperless/template/GPSKafkaDocumentTemplateTest.java:5:import com.optum.fds.paperless.template.java.GPSKafkaDocumentTemplate;
+src/test/java/com/optum/fds/paperless/template/GPSKafkaDocumentTemplateTest.java:12:public class GPSKafkaDocumentTemplateTest {
+src/test/java/com/optum/fds/paperless/template/GPSKafkaDocumentTemplateTest.java:16:        GPSKafkaDocumentTemplate template = new GPSKafkaDocumentTemplate();
+src/test/java/com/optum/fds/paperless/template/GPSKafkaDocumentTemplateTest.java:67:        GPSKafkaDocumentTemplate template = new GPSKafkaDocumentTemplate();
+src/test/java/com/optum/fds/paperless/template/MnRKafkaDocumentTemplateTest.java:15:public class MnRKafkaDocumentTemplateTest {
+src/test/java/com/optum/fds/paperless/template/MnRKafkaDocumentTemplateTest.java:20:    public void testKafkaDocumentTemplate() throws IOException, JSONException {
+src/test/java/com/optum/fds/paperless/regression/suite/ActivitiTestSuite.java:114://    KafkaDocumentTemplateTest.class,
+src/test/java/com/optum/fds/paperless/regression/suite/ActivitiTestSuite.java:129:      GPSKafkaDocumentTemplateTest.class,
+rahul_maheshvari@optum.com@LAMU0KMQ4JX73GM ppl-paperless-activiti %    
