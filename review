@@ -1,65 +1,72 @@
-rahul_maheshvari@optum.com@LAMU0KMQ4JX73GM ppl-paperless-activiti % for T in GPSKafkaDocumentTemplate ATSKafkaDocumentTemplate MnRKafkaDocumentTemplate \
-for> ConsumerEngineeringKafkaDocumentTemplate PCPEmailRequestToPENTemplate \
-for> KafkaDocumentTemplate; do
-for> echo "===$T==="
-for> grep -rn "$T" src/main src/test \
-for> | grep -v "template/java/impl/$T.java"\
-for pipe>  | grep -v "template/java$T.java"\
-for pipe pipe>  | grep -v "emplate/$T" \
-for pipe pipe pipe> | grep -v "kafka/kafkaConsumer/"
-for> done
-===GPSKafkaDocumentTemplate===
-src/main/java/com/optum/fds/paperless/template/java/GPSKafkaDocumentTemplate.java:12:public class GPSKafkaDocumentTemplate extends TemplateHandler {
-src/main/java/com/optum/fds/paperless/template/java/TemplateFactory.java:61:            TEMPLATE_HANDLERS.put(Templates.GPS_KAFKA_DOCUMENT.getTemplate(), new GPSKafkaDocumentTemplate());
-src/test/java/com/optum/fds/paperless/regression/suite/ActivitiTestSuite.java:129:      GPSKafkaDocumentTemplateTest.class,
-===ATSKafkaDocumentTemplate===
-src/main/java/com/optum/fds/paperless/template/java/TemplateFactory.java:56:            TEMPLATE_HANDLERS.put(Templates.ATS_KAFKA_DOCUMENT.getTemplate(),new ATSKafkaDocumentTemplate());
-===MnRKafkaDocumentTemplate===
-src/main/java/com/optum/fds/paperless/template/java/TemplateFactory.java:52:            TEMPLATE_HANDLERS.put(Templates.KAFKA_MNR_DOCUMENT.getTemplate(),new MnRKafkaDocumentTemplate());
-===ConsumerEngineeringKafkaDocumentTemplate===
-src/main/java/com/optum/fds/paperless/template/java/TemplateFactory.java:62:            TEMPLATE_HANDLERS.put(Templates.KAFKA_CONSUMER_ENGINEERING_DOCUMENT.getTemplate(), new ConsumerEngineeringKafkaDocumentTemplate());
-===PCPEmailRequestToPENTemplate===
-src/main/java/com/optum/fds/paperless/template/java/TemplateFactory.java:63:            TEMPLATE_HANDLERS.put(Templates.PCP_EMAIL_REQUEST_TO_PEN.getTemplate(), new PCPEmailRequestToPENTemplate());
-src/test/java/com/optum/fds/paperless/regression/suite/ActivitiTestSuite.java:128:      PCPEmailRequestToPENTemplateTest.class,
-===KafkaDocumentTemplate===
-src/main/java/com/optum/fds/paperless/template/java/impl/MnRKafkaDocumentTemplate.java:18:public class MnRKafkaDocumentTemplate extends TemplateHandler {
-src/main/java/com/optum/fds/paperless/template/java/impl/MnRKafkaDocumentTemplate.java:20:      private static final Logger LOGGER = LoggerFactory.getLogger(MnRKafkaDocumentTemplate.class);
-src/main/java/com/optum/fds/paperless/template/java/impl/MnRKafkaDocumentTemplate.java:53:            LOGGER.error("MnRKafkaDocumentTemplate --> unable to convert json string to KafkaResponse, e={}", e.getMessage());
-src/main/java/com/optum/fds/paperless/template/java/impl/ConsumerEngineeringKafkaDocumentTemplate.java:19:public class ConsumerEngineeringKafkaDocumentTemplate extends TemplateHandler {
-src/main/java/com/optum/fds/paperless/template/java/impl/ConsumerEngineeringKafkaDocumentTemplate.java:22:      private static final Logger LOGGER = LoggerFactory.getLogger(ConsumerEngineeringKafkaDocumentTemplate.class);
-src/main/java/com/optum/fds/paperless/template/java/impl/ConsumerEngineeringKafkaDocumentTemplate.java:37:              LOGGER.error("KafkaDocumentTemplate --> unable to convert json string to KafkaMessage, e={}", e.getMessage());
-src/main/java/com/optum/fds/paperless/template/java/impl/ConsumerEngineeringKafkaDocumentTemplate.java:52:             LOGGER.warn("KafkaDocumentTemplate --> providerDetails is null in Kafka message.");
-src/main/java/com/optum/fds/paperless/template/java/impl/ATSKafkaDocumentTemplate.java:19:public class ATSKafkaDocumentTemplate extends TemplateHandler {
-src/main/java/com/optum/fds/paperless/template/java/impl/ATSKafkaDocumentTemplate.java:21:    private static final Logger LOGGER = LoggerFactory.getLogger(ATSKafkaDocumentTemplate.class);
-src/main/java/com/optum/fds/paperless/template/java/GPSKafkaDocumentTemplate.java:12:public class GPSKafkaDocumentTemplate extends TemplateHandler {
-src/main/java/com/optum/fds/paperless/template/java/TemplateFactory.java:51:            TEMPLATE_HANDLERS.put(Templates.KAFKA_RESPONSE_DOCUMENT.getTemplate(),new KafkaDocumentTemplate());
-src/main/java/com/optum/fds/paperless/template/java/TemplateFactory.java:52:            TEMPLATE_HANDLERS.put(Templates.KAFKA_MNR_DOCUMENT.getTemplate(),new MnRKafkaDocumentTemplate());
-src/main/java/com/optum/fds/paperless/template/java/TemplateFactory.java:54:            TEMPLATE_HANDLERS.put(Templates.CNS_KAFKA_MESSAGE.getTemplate(),new KafkaDocumentTemplate());
-src/main/java/com/optum/fds/paperless/template/java/TemplateFactory.java:56:            TEMPLATE_HANDLERS.put(Templates.ATS_KAFKA_DOCUMENT.getTemplate(),new ATSKafkaDocumentTemplate());
-src/main/java/com/optum/fds/paperless/template/java/TemplateFactory.java:61:            TEMPLATE_HANDLERS.put(Templates.GPS_KAFKA_DOCUMENT.getTemplate(), new GPSKafkaDocumentTemplate());
-src/main/java/com/optum/fds/paperless/template/java/TemplateFactory.java:62:            TEMPLATE_HANDLERS.put(Templates.KAFKA_CONSUMER_ENGINEERING_DOCUMENT.getTemplate(), new ConsumerEngineeringKafkaDocumentTemplate());
-src/test/java/com/optum/fds/paperless/template/ConsumerEngineeringKafkaDocumentTemplateTest.java:16:import com.optum.fds.paperless.template.java.impl.ConsumerEngineeringKafkaDocumentTemplate;
-src/test/java/com/optum/fds/paperless/template/ConsumerEngineeringKafkaDocumentTemplateTest.java:18:public class ConsumerEngineeringKafkaDocumentTemplateTest {
-src/test/java/com/optum/fds/paperless/template/ConsumerEngineeringKafkaDocumentTemplateTest.java:20:    private ConsumerEngineeringKafkaDocumentTemplate consumerEngineeringKafkaDocumentTemplate;
-src/test/java/com/optum/fds/paperless/template/ConsumerEngineeringKafkaDocumentTemplateTest.java:24:             consumerEngineeringKafkaDocumentTemplate = new ConsumerEngineeringKafkaDocumentTemplate();         
-src/test/java/com/optum/fds/paperless/template/ConsumerEngineeringKafkaDocumentTemplateTest.java:30:             Method formatTinMethod = ConsumerEngineeringKafkaDocumentTemplate.class.getDeclaredMethod("formatTin", String.class);
-src/test/java/com/optum/fds/paperless/template/ConsumerEngineeringKafkaDocumentTemplateTest.java:34:         String formattedTin = (String) formatTinMethod.invoke(consumerEngineeringKafkaDocumentTemplate, tin);
-src/test/java/com/optum/fds/paperless/template/ConsumerEngineeringKafkaDocumentTemplateTest.java:40:         Method formatTinMethod = ConsumerEngineeringKafkaDocumentTemplate.class.getDeclaredMethod("formatTin", String.class);
-src/test/java/com/optum/fds/paperless/template/ConsumerEngineeringKafkaDocumentTemplateTest.java:44:         String formattedTin = (String) formatTinMethod.invoke(consumerEngineeringKafkaDocumentTemplate, tin);
-src/test/java/com/optum/fds/paperless/template/ConsumerEngineeringKafkaDocumentTemplateTest.java:50:         Method formatTinMethod = ConsumerEngineeringKafkaDocumentTemplate.class.getDeclaredMethod("formatTin", String.class);
-src/test/java/com/optum/fds/paperless/template/ConsumerEngineeringKafkaDocumentTemplateTest.java:53:         String formattedTin = (String) formatTinMethod.invoke(consumerEngineeringKafkaDocumentTemplate, (String) null);
-src/test/java/com/optum/fds/paperless/template/ConsumerEngineeringKafkaDocumentTemplateTest.java:59:         Method formatTinMethod = ConsumerEngineeringKafkaDocumentTemplate.class.getDeclaredMethod("formatTin", String.class);
-src/test/java/com/optum/fds/paperless/template/ConsumerEngineeringKafkaDocumentTemplateTest.java:63:         String formattedTin = (String) formatTinMethod.invoke(consumerEngineeringKafkaDocumentTemplate, tin);
-src/test/java/com/optum/fds/paperless/template/AlinkKafkaTemplateTest.java:16:    public void testALinkKafkaDocumentTemplate() throws IOException, JSONException {
-src/test/java/com/optum/fds/paperless/template/ATSKafkaDocumentTemplateTest.java:14:public class ATSKafkaDocumentTemplateTest {
-src/test/java/com/optum/fds/paperless/template/ATSKafkaDocumentTemplateTest.java:18:    public void testATSKafkaDocumentTemplate() throws IOException, JSONException {
-src/test/java/com/optum/fds/paperless/template/ATSKafkaDocumentTemplateTest.java:129:    public void testATSKafkaDocumentTemplateMissingLstClaimInfo() throws IOException, JSONException {
-src/test/java/com/optum/fds/paperless/template/GPSKafkaDocumentTemplateTest.java:5:import com.optum.fds.paperless.template.java.GPSKafkaDocumentTemplate;
-src/test/java/com/optum/fds/paperless/template/GPSKafkaDocumentTemplateTest.java:12:public class GPSKafkaDocumentTemplateTest {
-src/test/java/com/optum/fds/paperless/template/GPSKafkaDocumentTemplateTest.java:16:        GPSKafkaDocumentTemplate template = new GPSKafkaDocumentTemplate();
-src/test/java/com/optum/fds/paperless/template/GPSKafkaDocumentTemplateTest.java:67:        GPSKafkaDocumentTemplate template = new GPSKafkaDocumentTemplate();
-src/test/java/com/optum/fds/paperless/template/MnRKafkaDocumentTemplateTest.java:15:public class MnRKafkaDocumentTemplateTest {
-src/test/java/com/optum/fds/paperless/template/MnRKafkaDocumentTemplateTest.java:20:    public void testKafkaDocumentTemplate() throws IOException, JSONException {
-src/test/java/com/optum/fds/paperless/regression/suite/ActivitiTestSuite.java:114://    KafkaDocumentTemplateTest.class,
-src/test/java/com/optum/fds/paperless/regression/suite/ActivitiTestSuite.java:129:      GPSKafkaDocumentTemplateTest.class,
-rahul_maheshvari@optum.com@LAMU0KMQ4JX73GM ppl-paperless-activiti %    
+rahul_maheshvari@optum.com@LAMU0KMQ4JX73GM ppl-paperless-activiti % grep -rnE "com\.optum\.fds\.paperless\.kafka\.model\.|.model\.|com\.optum\.fds\.paperless\.kafka\.consumer\.|com\.optum\.ce\.referrals" src/main src/test
+src/main/java/com/optum/fds/paperless/util/PdfUtil.java:5:import org.apache.pdfbox.pdmodel.PDDocument;
+src/main/java/com/optum/fds/paperless/util/PdfUtil.java:6:import org.apache.pdfbox.pdmodel.PDPage;
+src/main/java/com/optum/fds/paperless/util/PdfUtil.java:7:import org.apache.pdfbox.pdmodel.PDPageContentStream;
+src/main/java/com/optum/fds/paperless/util/PdfUtil.java:8:import org.apache.pdfbox.pdmodel.PDPageTree;
+src/main/java/com/optum/fds/paperless/util/PdfUtil.java:9:import org.apache.pdfbox.pdmodel.common.PDRectangle;
+src/main/java/com/optum/fds/paperless/util/PdfUtil.java:10:import org.apache.pdfbox.pdmodel.font.PDFont;
+src/main/java/com/optum/fds/paperless/util/PdfUtil.java:11:import org.apache.pdfbox.pdmodel.font.PDType1Font;
+src/main/java/com/optum/fds/paperless/util/PdfUtil.java:12:import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
+src/main/java/com/optum/fds/paperless/redis/model/Payload.java:13:import com.optum.fds.paperless.model.GenericResponse;
+src/main/java/com/optum/fds/paperless/template/java/impl/IHRDocumentTemplate.java:9:import org.apache.poi.ss.usermodel.Cell;
+src/main/java/com/optum/fds/paperless/template/java/impl/IHRDocumentTemplate.java:10:import org.apache.poi.ss.usermodel.CellType;
+src/main/java/com/optum/fds/paperless/template/java/impl/IHRDocumentTemplate.java:11:import org.apache.poi.ss.usermodel.Row;
+src/main/java/com/optum/fds/paperless/template/java/impl/IHRDocumentTemplate.java:12:import org.apache.poi.ss.usermodel.Sheet;
+src/main/java/com/optum/fds/paperless/template/java/impl/IHRDocumentTemplate.java:13:import org.apache.poi.ss.usermodel.Workbook;
+src/main/java/com/optum/fds/paperless/template/java/impl/IHRDocumentTemplate.java:15:import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+src/main/java/com/optum/fds/paperless/FDSHelper.java:46:import com.optum.fds.paperless.model.GenericResponse;
+src/main/java/com/optum/fds/paperless/java/delegate/SendDocumentToPENRealTime.java:12:import com.optum.fds.paperless.model.PENRealTimeResponse;
+src/main/java/com/optum/fds/paperless/java/delegate/SendDocumentToPENRealTime.java:13:import com.optum.fds.paperless.model.PENRealTimeTemplateResponse;
+src/main/java/com/optum/fds/paperless/java/delegate/CreateShutterflyDocuments.java:5:import com.optum.fds.paperless.model.FixedLengthMetadata;
+src/main/java/com/optum/fds/paperless/java/delegate/CreateShutterflyDocuments.java:16:import com.optum.fds.paperless.model.FixedLengthMetadataOCM;
+src/main/java/com/optum/fds/paperless/java/delegate/CsvSftpProcessCallback.java:21:import com.optum.fds.paperless.model.GenericResponse;
+src/main/java/com/optum/fds/paperless/java/delegate/ProcessMetadataFilesCallback.java:27:import com.optum.fds.paperless.model.GenericResponse;
+src/main/java/com/optum/fds/paperless/java/delegate/RetrieveProviderEmailAddress.java:42:import com.optum.fds.paperless.model.GenericResponse;
+src/main/java/com/optum/fds/paperless/java/delegate/RetrieveEmailFromDigiSec.java:43:import com.optum.fds.paperless.model.ActiveUser;
+src/main/java/com/optum/fds/paperless/java/delegate/RetrieveEmailFromDigiSec.java:44:import com.optum.fds.paperless.model.Org;
+src/main/java/com/optum/fds/paperless/java/delegate/RetrieveEmailFromDigiSec.java:45:import com.optum.fds.paperless.model.User;
+src/main/java/com/optum/fds/paperless/controller/CSVProcessorController.java:6:import com.optum.fds.paperless.model.GenericResponse;
+src/main/java/com/optum/fds/paperless/controller/DocumentController.java:5:import com.optum.fds.paperless.model.GenericResponse;
+src/main/java/com/optum/fds/paperless/controller/DocumentController.java:6:import com.optum.fds.paperless.model.MultiPostResponse;
+src/main/java/com/optum/fds/paperless/controller/HooksController.java:35:import com.optum.fds.paperless.model.GenericResponse;
+src/main/java/com/optum/fds/paperless/controller/HooksController.java:36:import com.optum.fds.paperless.model.MultiPostResponse;
+src/main/java/com/optum/fds/paperless/controller/FDSServicesController.java:17:import com.optum.fds.paperless.model.GenericResponse;
+src/main/java/com/optum/fds/paperless/controller/ProcessorController.java:5:import com.optum.fds.paperless.model.GenericResponse;
+src/main/java/com/optum/fds/paperless/controller/PDODocumentsController.java:30:import com.optum.fds.paperless.model.GenericResponse;
+src/main/java/com/optum/fds/paperless/controller/PDODocumentsController.java:31:import com.optum.fds.paperless.model.MultiPostResponse;
+src/main/java/com/optum/fds/paperless/queue/SendQueue.java:21:import com.optum.fds.paperless.model.GenericResponse;
+src/main/java/com/optum/fds/paperless/domain/service/DocumentMetaDataService.java:17:import com.optum.fds.paperless.model.MultiPutResponse;
+src/main/java/com/optum/fds/paperless/domain/service/FilestoreServiceImpl.java:12:import com.amazonaws.services.s3.model.CannedAccessControlList;
+src/main/java/com/optum/fds/paperless/domain/service/FilestoreServiceImpl.java:13:import com.amazonaws.services.s3.model.DeleteObjectRequest;
+src/main/java/com/optum/fds/paperless/domain/service/FilestoreServiceImpl.java:14:import com.amazonaws.services.s3.model.GetObjectRequest;
+src/main/java/com/optum/fds/paperless/domain/service/FilestoreServiceImpl.java:15:import com.amazonaws.services.s3.model.PutObjectRequest;
+src/main/java/com/optum/fds/paperless/domain/service/FilestoreServiceImpl.java:16:import com.amazonaws.services.s3.model.S3Object;
+src/main/java/com/optum/fds/paperless/domain/service/ServiceBase.java:25:import com.optum.fds.paperless.model.GenericResponse;
+src/main/java/com/optum/fds/paperless/domain/service/SendQueueServiceImpl.java:6:import com.optum.fds.paperless.model.GenericResponse;
+src/main/java/com/optum/fds/paperless/domain/service/DocumentMetaDataServiceImpl.java:8:import com.optum.fds.paperless.model.MultiPutResponse;
+src/test/java/com/optum/fds/paperless/redis/model/PayloadTest.java:12:import com.optum.fds.paperless.model.GenericResponse;
+src/test/java/com/optum/fds/paperless/java/delegate/ProcessMetadataFilesCallbackTest.java:25:import com.optum.fds.paperless.model.GenericResponse;
+src/test/java/com/optum/fds/paperless/java/delegate/CreateShutterflyDocumentsTest.java:7:import com.optum.fds.paperless.model.FixedLengthMetadata;
+src/test/java/com/optum/fds/paperless/java/delegate/CreateShutterflyDocumentsTest.java:8:import com.optum.fds.paperless.model.FixedLengthMetadataOCM;
+src/test/java/com/optum/fds/paperless/java/delegate/CsvToJsonFileTest.java:26:import com.optum.fds.paperless.model.GenericResponse;
+src/test/java/com/optum/fds/paperless/java/delegate/DelegateExecutionImpl.java:3:import org.flowable.bpmn.model.FlowableListener;
+src/test/java/com/optum/fds/paperless/java/delegate/DelegateExecutionImpl.java:4:import org.flowable.bpmn.model.FlowElement;
+src/test/java/com/optum/fds/paperless/java/delegate/CsvSftpProcessCallbackTest.java:15:import com.optum.fds.paperless.model.GenericResponse;
+src/test/java/com/optum/fds/paperless/java/delegate/RetrieveEmailFromDigiSecTest.java:43:import com.optum.fds.paperless.model.ActiveUser;
+src/test/java/com/optum/fds/paperless/java/delegate/RetrieveEmailFromDigiSecTest.java:44:import com.optum.fds.paperless.model.User;
+src/test/java/com/optum/fds/paperless/java/delegate/CleanupFilesCreateACKTest.java:3:import com.amazonaws.services.sagemaker.model.AthenaResultCompressionType;
+src/test/java/com/optum/fds/paperless/controller/HooksControllerTest.java:29:import com.optum.fds.paperless.model.GenericResponse;
+src/test/java/com/optum/fds/paperless/controller/PDODocumentsControllerTest.java:25:import com.optum.fds.paperless.model.GenericResponse;
+src/test/java/com/optum/fds/paperless/controller/FDSServicesControllerTest.java:44:import com.optum.fds.paperless.model.GenericResponse;
+src/test/java/com/optum/fds/paperless/controller/ProcessorControllerTest.java:25:import com.optum.fds.paperless.model.GenericResponse;
+src/test/java/com/optum/fds/paperless/controller/DocumentControllerTest.java:30:import com.optum.fds.paperless.model.GenericResponse;
+src/test/java/com/optum/fds/paperless/controller/CSVProcessorControllerTest.java:21:import com.optum.fds.paperless.model.GenericResponse;
+src/test/java/com/optum/fds/paperless/regression/suite/MongoTestSuite.java:11:import com.optum.fds.paperless.model.*;
+src/test/java/com/optum/fds/paperless/regression/suite/ActivitiTestSuite.java:19:import com.optum.fds.paperless.redis.model.*;
+src/test/java/com/optum/fds/paperless/regression/suite/ActivitiTestSuite.java:36:import com.optum.fds.paperless.model.*;
+src/test/java/com/optum/fds/paperless/domain/service/SendQueueServiceImplTest.java:5:import com.optum.fds.paperless.model.GenericResponse;
+src/test/java/com/optum/fds/paperless/domain/service/DocumentMetaDataServiceImplTest.java:11:import com.optum.fds.paperless.model.MultiPutResponse;
+src/test/java/com/optum/fds/paperless/domain/service/ServiceBaseTest.java:6:import com.optum.fds.paperless.model.GenericResponse;
+src/test/java/com/optum/fds/paperless/domain/service/DocumentMetaDataServiceTest.java:42:import com.optum.fds.paperless.model.MultiPutResponse;
+src/test/java/com/optum/fs/workflow/java/delegate/bean/DelegateExecutionImpl.java:8:import org.flowable.bpmn.model.FlowElement;
+src/test/java/com/optum/fs/workflow/java/delegate/bean/DelegateExecutionImpl.java:9:import org.flowable.bpmn.model.FlowableListener;
