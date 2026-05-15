@@ -1,72 +1,949 @@
-rahul_maheshvari@optum.com@LAMU0KMQ4JX73GM ppl-paperless-activiti % grep -rnE "com\.optum\.fds\.paperless\.kafka\.model\.|.model\.|com\.optum\.fds\.paperless\.kafka\.consumer\.|com\.optum\.ce\.referrals" src/main src/test
-src/main/java/com/optum/fds/paperless/util/PdfUtil.java:5:import org.apache.pdfbox.pdmodel.PDDocument;
-src/main/java/com/optum/fds/paperless/util/PdfUtil.java:6:import org.apache.pdfbox.pdmodel.PDPage;
-src/main/java/com/optum/fds/paperless/util/PdfUtil.java:7:import org.apache.pdfbox.pdmodel.PDPageContentStream;
-src/main/java/com/optum/fds/paperless/util/PdfUtil.java:8:import org.apache.pdfbox.pdmodel.PDPageTree;
-src/main/java/com/optum/fds/paperless/util/PdfUtil.java:9:import org.apache.pdfbox.pdmodel.common.PDRectangle;
-src/main/java/com/optum/fds/paperless/util/PdfUtil.java:10:import org.apache.pdfbox.pdmodel.font.PDFont;
-src/main/java/com/optum/fds/paperless/util/PdfUtil.java:11:import org.apache.pdfbox.pdmodel.font.PDType1Font;
-src/main/java/com/optum/fds/paperless/util/PdfUtil.java:12:import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
-src/main/java/com/optum/fds/paperless/redis/model/Payload.java:13:import com.optum.fds.paperless.model.GenericResponse;
-src/main/java/com/optum/fds/paperless/template/java/impl/IHRDocumentTemplate.java:9:import org.apache.poi.ss.usermodel.Cell;
-src/main/java/com/optum/fds/paperless/template/java/impl/IHRDocumentTemplate.java:10:import org.apache.poi.ss.usermodel.CellType;
-src/main/java/com/optum/fds/paperless/template/java/impl/IHRDocumentTemplate.java:11:import org.apache.poi.ss.usermodel.Row;
-src/main/java/com/optum/fds/paperless/template/java/impl/IHRDocumentTemplate.java:12:import org.apache.poi.ss.usermodel.Sheet;
-src/main/java/com/optum/fds/paperless/template/java/impl/IHRDocumentTemplate.java:13:import org.apache.poi.ss.usermodel.Workbook;
-src/main/java/com/optum/fds/paperless/template/java/impl/IHRDocumentTemplate.java:15:import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-src/main/java/com/optum/fds/paperless/FDSHelper.java:46:import com.optum.fds.paperless.model.GenericResponse;
-src/main/java/com/optum/fds/paperless/java/delegate/SendDocumentToPENRealTime.java:12:import com.optum.fds.paperless.model.PENRealTimeResponse;
-src/main/java/com/optum/fds/paperless/java/delegate/SendDocumentToPENRealTime.java:13:import com.optum.fds.paperless.model.PENRealTimeTemplateResponse;
-src/main/java/com/optum/fds/paperless/java/delegate/CreateShutterflyDocuments.java:5:import com.optum.fds.paperless.model.FixedLengthMetadata;
-src/main/java/com/optum/fds/paperless/java/delegate/CreateShutterflyDocuments.java:16:import com.optum.fds.paperless.model.FixedLengthMetadataOCM;
-src/main/java/com/optum/fds/paperless/java/delegate/CsvSftpProcessCallback.java:21:import com.optum.fds.paperless.model.GenericResponse;
-src/main/java/com/optum/fds/paperless/java/delegate/ProcessMetadataFilesCallback.java:27:import com.optum.fds.paperless.model.GenericResponse;
-src/main/java/com/optum/fds/paperless/java/delegate/RetrieveProviderEmailAddress.java:42:import com.optum.fds.paperless.model.GenericResponse;
-src/main/java/com/optum/fds/paperless/java/delegate/RetrieveEmailFromDigiSec.java:43:import com.optum.fds.paperless.model.ActiveUser;
-src/main/java/com/optum/fds/paperless/java/delegate/RetrieveEmailFromDigiSec.java:44:import com.optum.fds.paperless.model.Org;
-src/main/java/com/optum/fds/paperless/java/delegate/RetrieveEmailFromDigiSec.java:45:import com.optum.fds.paperless.model.User;
-src/main/java/com/optum/fds/paperless/controller/CSVProcessorController.java:6:import com.optum.fds.paperless.model.GenericResponse;
-src/main/java/com/optum/fds/paperless/controller/DocumentController.java:5:import com.optum.fds.paperless.model.GenericResponse;
-src/main/java/com/optum/fds/paperless/controller/DocumentController.java:6:import com.optum.fds.paperless.model.MultiPostResponse;
-src/main/java/com/optum/fds/paperless/controller/HooksController.java:35:import com.optum.fds.paperless.model.GenericResponse;
-src/main/java/com/optum/fds/paperless/controller/HooksController.java:36:import com.optum.fds.paperless.model.MultiPostResponse;
-src/main/java/com/optum/fds/paperless/controller/FDSServicesController.java:17:import com.optum.fds.paperless.model.GenericResponse;
-src/main/java/com/optum/fds/paperless/controller/ProcessorController.java:5:import com.optum.fds.paperless.model.GenericResponse;
-src/main/java/com/optum/fds/paperless/controller/PDODocumentsController.java:30:import com.optum.fds.paperless.model.GenericResponse;
-src/main/java/com/optum/fds/paperless/controller/PDODocumentsController.java:31:import com.optum.fds.paperless.model.MultiPostResponse;
-src/main/java/com/optum/fds/paperless/queue/SendQueue.java:21:import com.optum.fds.paperless.model.GenericResponse;
-src/main/java/com/optum/fds/paperless/domain/service/DocumentMetaDataService.java:17:import com.optum.fds.paperless.model.MultiPutResponse;
-src/main/java/com/optum/fds/paperless/domain/service/FilestoreServiceImpl.java:12:import com.amazonaws.services.s3.model.CannedAccessControlList;
-src/main/java/com/optum/fds/paperless/domain/service/FilestoreServiceImpl.java:13:import com.amazonaws.services.s3.model.DeleteObjectRequest;
-src/main/java/com/optum/fds/paperless/domain/service/FilestoreServiceImpl.java:14:import com.amazonaws.services.s3.model.GetObjectRequest;
-src/main/java/com/optum/fds/paperless/domain/service/FilestoreServiceImpl.java:15:import com.amazonaws.services.s3.model.PutObjectRequest;
-src/main/java/com/optum/fds/paperless/domain/service/FilestoreServiceImpl.java:16:import com.amazonaws.services.s3.model.S3Object;
-src/main/java/com/optum/fds/paperless/domain/service/ServiceBase.java:25:import com.optum.fds.paperless.model.GenericResponse;
-src/main/java/com/optum/fds/paperless/domain/service/SendQueueServiceImpl.java:6:import com.optum.fds.paperless.model.GenericResponse;
-src/main/java/com/optum/fds/paperless/domain/service/DocumentMetaDataServiceImpl.java:8:import com.optum.fds.paperless.model.MultiPutResponse;
-src/test/java/com/optum/fds/paperless/redis/model/PayloadTest.java:12:import com.optum.fds.paperless.model.GenericResponse;
-src/test/java/com/optum/fds/paperless/java/delegate/ProcessMetadataFilesCallbackTest.java:25:import com.optum.fds.paperless.model.GenericResponse;
-src/test/java/com/optum/fds/paperless/java/delegate/CreateShutterflyDocumentsTest.java:7:import com.optum.fds.paperless.model.FixedLengthMetadata;
-src/test/java/com/optum/fds/paperless/java/delegate/CreateShutterflyDocumentsTest.java:8:import com.optum.fds.paperless.model.FixedLengthMetadataOCM;
-src/test/java/com/optum/fds/paperless/java/delegate/CsvToJsonFileTest.java:26:import com.optum.fds.paperless.model.GenericResponse;
-src/test/java/com/optum/fds/paperless/java/delegate/DelegateExecutionImpl.java:3:import org.flowable.bpmn.model.FlowableListener;
-src/test/java/com/optum/fds/paperless/java/delegate/DelegateExecutionImpl.java:4:import org.flowable.bpmn.model.FlowElement;
-src/test/java/com/optum/fds/paperless/java/delegate/CsvSftpProcessCallbackTest.java:15:import com.optum.fds.paperless.model.GenericResponse;
-src/test/java/com/optum/fds/paperless/java/delegate/RetrieveEmailFromDigiSecTest.java:43:import com.optum.fds.paperless.model.ActiveUser;
-src/test/java/com/optum/fds/paperless/java/delegate/RetrieveEmailFromDigiSecTest.java:44:import com.optum.fds.paperless.model.User;
-src/test/java/com/optum/fds/paperless/java/delegate/CleanupFilesCreateACKTest.java:3:import com.amazonaws.services.sagemaker.model.AthenaResultCompressionType;
-src/test/java/com/optum/fds/paperless/controller/HooksControllerTest.java:29:import com.optum.fds.paperless.model.GenericResponse;
-src/test/java/com/optum/fds/paperless/controller/PDODocumentsControllerTest.java:25:import com.optum.fds.paperless.model.GenericResponse;
-src/test/java/com/optum/fds/paperless/controller/FDSServicesControllerTest.java:44:import com.optum.fds.paperless.model.GenericResponse;
-src/test/java/com/optum/fds/paperless/controller/ProcessorControllerTest.java:25:import com.optum.fds.paperless.model.GenericResponse;
-src/test/java/com/optum/fds/paperless/controller/DocumentControllerTest.java:30:import com.optum.fds.paperless.model.GenericResponse;
-src/test/java/com/optum/fds/paperless/controller/CSVProcessorControllerTest.java:21:import com.optum.fds.paperless.model.GenericResponse;
-src/test/java/com/optum/fds/paperless/regression/suite/MongoTestSuite.java:11:import com.optum.fds.paperless.model.*;
-src/test/java/com/optum/fds/paperless/regression/suite/ActivitiTestSuite.java:19:import com.optum.fds.paperless.redis.model.*;
-src/test/java/com/optum/fds/paperless/regression/suite/ActivitiTestSuite.java:36:import com.optum.fds.paperless.model.*;
-src/test/java/com/optum/fds/paperless/domain/service/SendQueueServiceImplTest.java:5:import com.optum.fds.paperless.model.GenericResponse;
-src/test/java/com/optum/fds/paperless/domain/service/DocumentMetaDataServiceImplTest.java:11:import com.optum.fds.paperless.model.MultiPutResponse;
-src/test/java/com/optum/fds/paperless/domain/service/ServiceBaseTest.java:6:import com.optum.fds.paperless.model.GenericResponse;
-src/test/java/com/optum/fds/paperless/domain/service/DocumentMetaDataServiceTest.java:42:import com.optum.fds.paperless.model.MultiPutResponse;
-src/test/java/com/optum/fs/workflow/java/delegate/bean/DelegateExecutionImpl.java:8:import org.flowable.bpmn.model.FlowElement;
-src/test/java/com/optum/fs/workflow/java/delegate/bean/DelegateExecutionImpl.java:9:import org.flowable.bpmn.model.FlowableListener;
+decl(type, name, val) ::= "<type> <name><init(val)>;"
+init(v) ::= "<if(v)> = <v><endif>"
+
+checkWritePRAMatchAndMerge(list, counter) ::= <%
+	{
+		"originalCompanionFileRecords" : [
+			<list:{it| "<it.barcode; format="17- -R">|<it.div; format="3- -R">|<it.memberNumber; format="18- -R">|<it.memberName; format="30- -R">|<it.claimNumber; format="11- -R">|<it.mediaType; format="3- -R">|<it.claimSystem; format="6- -R">"}; anchor, separator = ",\n">
+		]
+	}
+%>
+
+checkWritePRAResponse(list, counter) ::= <%
+    Barcode|Division|Member Number|Member Name|Claim Number|Media Type|Claims System|Original File Name|Original Received Date|Meter Date|Trail ID|TFID|PubNbr<\n>
+    <list:{it| <it.originalCompanionFileRecords>|<it.fileName; format="47- -R">|<it.dateCreated; format="yyyy-MM-dd HH:mm:ss.SSS">|<it.dateModified; format="yyyy-MM-dd HH:mm:ss.SSS">|<it.originalPrintTrail; format="4- -R">|<it.id; format="24- -R">|<it.fixedWidth; format="2- -R">}; anchor, separator = ",\n">
+    <\n>TRL|<counter; format="9-0-L">
+%>
+
+checkWritePRACompanion(list, counter) ::= <%
+    BARCODE|DIV|MEMBER NUMBER|MEMBER NAME|CLAIM NUMBER|MEDIA TYPE|CLAIM SYSTEM<\n>
+    <list:{it| <it.originalCompanionFileRecords>}; anchor, separator = "\n">
+    <\n>TRL|<counter; format="9-0-L">
+%>
+
+checkWritePRAEmailAlert(list,counter) ::=<%
+
+<list:{it| <if(it.sendCompanionFileMissingEmail)>File <it.sampleZipFileName; format="18- -R"> has been waiting for its companion file in the <it.environment; format="5- -R"> file processing system since <it.dateCreated; format="yyyy-MM-dd HH:mm:ss.SSS"> <endif> <if(it.sendCompanionFileUnreadableEmail)>FDS is unable to read <it.fileName; format="14- -R"> received on <it.companionFileDateReceived; format="yyyy-MM-dd HH:mm:ss.SSS"><endif>}; wrap, anchor, separator = ",\n">
+
+%>
+
+
+optumPayNumberDocument(list) ::= <% 
+{"Documents": [
+<list:{it| 
+<{
+<\u007B>
+	"status" : "AVAILABLE",
+	"fileType" : "APFile",
+    "metadata": <\u007B>
+    	"payerId" : "<it; format="substring-2-10">",
+		"payerAdditionalId" : "<it; format="substring-11-19">",
+        "npi" : "<it; format="substring-20-29">",
+        "providerTin" : "<it; format="substring-30-38">",
+        "unconsolidatedPaymentNumber" : "<it; format="substring-39-88">",
+        "unconsolidatedPaymentAmt" : "<it; format="substring-89-98">",
+        "consolidatedPaymentNumber" : "<it; format="substring-99-148">",
+        "consolidatedPaymentAmt" : "<it; format="substring-149-158">",
+        "origPaymentMethod" : "<it; format="substring-159-161">",
+        "payeeName" : "<it; format="substring-162-221">",
+        "origPaymentDate" : "<it; format="substring-222-229">",
+        "checkNumber" : "<it; format="substring-430-479">",
+        "revisedPaymentMethod" : "<it; format="substring-480-482">",
+        "norCode": "<it; format="substring-483-485">",
+        "vcpStatus": "<it; format="substring-486-488">",
+        "reOriginatedDate": "<it; format="substring-489-496">"
+    <\u007D>
+<\u007D>
+}>
+}; anchor, separator = ",\n">
+]}
+%>
+
+IHRDocumentTemplate(list) ::= <%
+{"Documents": [
+<list:{it|
+<{
+<\u007B>
+	"status" : "AVAILABLE",
+    "metadata": <\u007B>
+        "createApplication": "IHR",
+        "category": "IHR",
+        <it.keys:{k | "<k>" : "<it.(k)>"}; separator=",\n">
+    <\u007D>
+<\u007D>
+}>
+}; anchor, separator = ",\n">
+]}
+%>
+
+TXGCCSVDocument(list) ::= <%
+{"Documents": [
+<list:{it|
+<{
+<\u007B>
+	"status" : "AVAILABLE",
+    "metadata": <\u007B>
+        "createApplication": "P360",
+        <it.keys:{k | "<k>" : "<it.(k)>"}; separator=",\n">
+    <\u007D>
+<\u007D>
+}>
+}; anchor, separator = ",\n">
+]}
+%>
+
+
+CCDocumentTemplate(list) ::= <%
+{"Documents": [
+<list:{it|
+<{
+<\u007B>
+	"status" : "AVAILABLE",
+    "metadata": <\u007B>
+        "createApplication": "CC",
+        <it.keys:{k | "<k>" : "<it.(k)>"}; separator=",\n">
+    <\u007D>
+<\u007D>
+}>
+}; anchor, separator = ",\n">
+]}
+
+%>
+
+
+docLibPutRequest(document) ::= <%
+{
+	"fileId": "<document.fdsAttachmentId>",
+	"fileCreatedDate": "<document.dateCreated; format="yyyy-MM-dd'T'HH:mm:ss.SSSZZZ">",
+	"paymentNumber": "<document.metadata.consolidatedPaymentNumber>"
+}
+%>
+
+filterReqFieldForDocvault(document, map, attachments) ::= <%
+    {
+        "fdsDocumentId" : "<document.fdsDocumentId>",
+        "space_id" : "<document.spaceId>",
+        "cloudSpaceId" : "<document.cloudSpaceId>",
+        "status" : "<document.status>",
+        "dateCreated" : "<document.dateCreated>",
+        "attachments" : <attachments>,
+        "metadata": {
+            <map.keys:{k | "<k>" : "<map.(k)>",}>
+            "fileDescription" : "<document.metadata.fileDescription>",
+            "fileName" : "<document.metadata.fileName>",
+            "subCategory" : "<document.metadata.subCategory>",
+            "filePath" : "<document.metadata.filePath>",
+            "privilege" : "<document.metadata.privilege>",
+            "expiryDate" : "<document.metadata.expiryDate>",
+            "createApplication" : "<document.metadata.createApplication>",
+            "tin" : "<document.metadata.tin>",
+            "mpin" : "<document.metadata.mpin>",
+            "category" : "<document.metadata.category>",
+            "fileType" : "<document.metadata.fileType>",
+            "tenant" : "<document.metadata.tenant>",
+            "corporateMpin" : "<document.metadata.corporateMpin>"
+        }
+    }
+%>
+
+filterFDSCloudSearchTerms(map) ::= <%
+{
+<map.keys:{k | "<k>" : "<map.(k)>"}; anchor, separator = ",\n">
+}
+%>
+
+
+PDOCSVTemplate(document, map) ::= <%
+    {
+        "metadata": {
+            <map.keys:{k | "<k>" : "<map.(k)>",}>
+            "tin" : "<document.metadata.tin>",
+            "mpin" : "<document.metadata.mpin>",
+            "fileName" : "<document.metadata.fileName>",
+            "fileType" : "<document.metadata.fileType>",
+            "providerEmailId" : "<document.metadata.providerEmailId>",
+            "frequency" : "<document.metadata.frequency>",
+            "deliveryMethod" : "<document.metadata.deliveryMethod>",
+            "autoEdelUpdateInd" : "<document.metadata.autoEdelUpdateInd>",
+            "okToChangePDOInd" : "<document.metadata.okToChangePDOInd>",
+            "autoOptOutInd" : "N"
+        }
+    }
+%>
+
+emailRequestToPEN(document, map) ::= <%
+    {
+         "documentId" : "<document.id>",
+         "appId" : "<document.spaceId>",
+         "providerEmailId" : "<document.metadata.providerEmailId>",
+         "dayOfWeek" : "<document.metadata.dayOfWeek>",
+         "category" : "<document.metadata.category>",
+         "frequency" : "<document.metadata.frequency>"
+    }
+%>
+
+TrackItEmailRequestToPEN(document, list) ::= <%
+{
+     "AppId" : "<document.spaceId>",
+     "TemplateName" : "TrackIt",
+     "ProviderEmailId" : "<document.metadata.providerEmailId>",
+     "providerEmailIdList" : "<document.metadata.providerEmailId>",
+     "Category" : "TrackIt",
+     "metadata": {
+             "list": [
+                 <list:{item|
+                 {
+                     "CorporateOwnerName": "<item.providerOrganizationName>",
+                     "TaxIDNumber" : "<item.formattedTin>",
+                     "CorporateTaxIDOwner" : "<item.formattedCorpMpin>",
+                     "ProviderName" : "<item.providerOrganizationName>",
+                     "RejectedClaims" : "<item.rejectedClaims>",
+                     "DocumentationEdits" : "<item.documentationEdits>",
+                     "PriorAuthorizations" : "<item.priorAuthorizations>",
+                     "Referrals" : "<item.referrals>",                     
+                     "Recons" : "<item.reconsiderations>",
+                     "PendingClaims" : "<item.pendingClaims>",
+                     "PendedTickets" : "<item.pendedTickets>",
+                     "PriorAuthAppeals" : "<item.priorAuthAppeals>",
+                     "ExpiringReferrals" : "<item.expiringReferrals>",
+                     "RecordType" : "<item.recordType>"
+                 \}
+                 }; anchor, separator = ",">
+             ]
+     }
+}
+%>
+
+ADTCNSEmailRequestToPEN(document, formattedTin, formattedCorpMpin, recordTypeUrl, numberOfUpdates) ::= <%
+    {
+         "AppId" : "<document.spaceId>",
+         "TemplateName" : "ADT",
+         "ProviderEmailId" : "<document.metadata.providerEmailId>",
+         "providerEmailIdList" : "<document.metadata.providerEmailId>",
+         "Category" : "ADT",
+         "metadata" : {
+             "recordType" : "<document.metadata.recordInfo.recordType>",
+             "recordTypeUrl" : "<recordTypeUrl>",
+             "CorporateTaxIDOwner": "<formattedCorpMpin>",
+             "TaxIDNumber" : "<formattedTin>",
+             "NotificationType" : "Action Required",
+             "NumberOfUpdates" : "<numberOfUpdates>",
+             "ProviderOrganizationName" : "<document.metadata.providerName>"
+        }
+    }
+%>
+
+
+appealsNotificationEmailRequestToPEN(document, appealsDate, list,templateName,category) ::= <%
+{
+    "AppId": "<document.spaceId>",
+    "providerEmailIdList": "<document.metadata.providerEmailId>",
+    "TemplateName": "<templateName>",
+    "Category": "<category>",
+    "AppealsDate": "<appealsDate>",
+    "metadata": {
+        "list": [
+            <list:{item|
+            {
+                "Category": "<item.Category>",
+                "CorporateTaxIDOwner": "<item.CorporateTaxIDOwner>",
+                "AppealReferenceNumber": "<item.AppealReferenceNumber>",
+                "NotificationType": "Claim Appeals",
+                "TaxIDNumber": "<item.TaxIDNumber>",
+                "CurrentStatus": "<item.CurrentStatus>",
+                "NumberOfUpdates": "1",
+                "ProviderOrganizationName": "<item.ProviderOrganizationName>"
+            \}
+            }; anchor, separator = ",">
+        ]
+    }
+}
+%>
+
+cosmosAckTemplate(batch, list) ::= <%
+    \<Batch>
+    <\n>\<BatchId><batch.batchId>\</BatchId>
+    <\n>\<Count><batch.count>\</Count>
+    <\n>\<FileNameList>
+    <\n><list:{it| \<FileName Status=<it.Status>><it.fileName>\</FileName>}; anchor, separator = "\n">
+    <\n>\</FileNameList>
+    <\n>\</Batch>
+%>
+
+
+cosmosDoc1StatusTemplate(batch, list) ::= <%
+    \<?xml version="1.0" encoding="UTF-8"?>
+    <\n>\<Batch>
+    <\n>\<BatchID><batch.batchId>\</BatchID>
+    <\n>\<Count><batch.count>\</Count>
+    <\n>\<UploadDate><batch.uploadDate; format="yyyyMMdd" >\</UploadDate>
+    <\n>\<FileNameList>
+    <\n><list:{it| \<FileName Status="<it.Status>"><it.fileName>\</FileName>}; anchor, separator = "\n">
+    <\n>\</FileNameList>
+    <\n>\</Batch>
+%>
+
+MRAppealsResponse(list, counter) ::= <%
+    Case_Id|LetterFilename|NGSID|Original_Zip_file|Preference|Delivery_Status|EmailAddress|UploadDateTime|EmailDateTime|EmailFailure_Reason<\n>
+    <list:{it| <it.caseId>|<it.fileName>|<it.ngsId>|<it.originalZipFileName>|<it.emailAlertReq>|<it.docLibAPIResponse>|<it.providerEmailId>|<it.docLibUploadDate>|<it.dateEmailSent>|<it.eDeliveryError>}; anchor, separator = "\n">
+%>
+
+ODARResponse(list, counter) ::= <%
+    LetterGroupId,LetterType,LetterSentDate,LetterStatus<\n>
+    <list:{it| <it.letterGroupId>,<it.letterType>,<it.dateCreated; format="MM/dd/yyyy">,LINK}; anchor, separator = "\n">
+%>
+
+ETSAppealsResponse(list, counter) ::= <%
+    Format|MeterDate|CaseID|HistoryID|ZipFileName|emailNotificationDate<\n>
+    <list:{it| <"Emailed">|<it.docLibUploadDate>|<it.caseId>|<it.historyId>|<it.originalZipFileName>|<it.dateEmailSent>}; anchor, separator = "\n">
+%>
+
+CSPClaimsResponse(list, counter,date) ::= <%
+H<date; format="yyyyMMddHHmmss"><\n>
+<list:{it| D<it.createApplication><date; format="yyyyDDD">EDELIVER<""; format="12-0-R"><it.createdDate; format="yyyyMMdd"><it.createdDate; format="HHmm"><""; format="16- -L"><""; format="22-0-R"><date; format="yyyyMMdd"><""; format="20-0-R"><it.passThruData; format="38- -R">eDelivery   <it.providerEmailId; format="100- -R"><it.dateEmailSent; format="22- -R"><it.deliveryError>}; anchor, separator = "\n">
+ <\n>T<counter; format="7-0-L">
+%>
+
+PriorAuthResponse(list, counter,date) ::= <%
+H<date; format="yyyyMMddHHmmss"><\n>
+<list:{it| D<it.createApplication><date; format="yyyyDDD">EDELIVER<""; format="12-0-R"><it.createdDate; format="yyyyMMdd"><it.createdDate; format="HHmm"><""; format="16- -L"><""; format="22-0-R"><date; format="yyyyMMdd"><""; format="20-0-R"><it.passThruData; format="38- -R">eDelivery   <it.providerEmailId; format="100- -R"><it.dateEmailSent; format="22- -R"><it.deliveryError>}; anchor, separator = "\n">
+ <\n>T<counter; format="7-0-L">
+%>
+
+CosmosPRACompanion(list,counter) ::=<%
+[
+<list:{it| {"BARCODE":"<it.barcode>","BARCODE_FIFTEEN":"<it.barcode_fifteen>","DIV":"<it.div>","memberNumber":"<it.memberNumber>","memberName":"<it.memberName>","claimNumber":"<it.claimNumber>","mediaType":"<it.mediaType>","claimSystem":"<it.claimSystem>"\}}; anchor, separator = ",\n">
+]
+%>
+
+OCMResponse(list, counter,date) ::= <%
+H<date; format="yyyyMMddHHmmss"><\n>
+<list:{it| D<it.createApplication; format="4- -R"><date; format="yyyyDDD">EDELIVER<""; format="12-0-R">yyyyMMddHHmm<""; format="16- -L"><""; format="22-0-R"><date; format="yyyyMMdd"><""; format="20-0-R"><it.passThruData; format="38- -R">eDelivery   <it.providerEmailId; format="100- -R"><it.dateEmailSent; format="22- -R"><it.deliveryError; format="200- -R"><it.NotificationLetterID; format="30- -R">}; anchor, separator = "\n">
+ <\n>T<counter; format="7-0-L">
+%>
+
+IHRResponse(list) ::= <%
+	PROVIDER_NAME,PROVIDER_ID,NPI,TAX_ID,GROUP_PROVIDER_ID,GROUP_PROVIDER_MPIN,GROUP_NPI,GROUP_TAX_ID,EMAIL,PROV_ADDRESS_LINE_1,PROV_ADDRESS_LINE_2,PCP_FLAG,PROVIDER_SPECIALITY,PROVIDER_TYPE,DATE_EMAIL_SENT,EDELIVERYERROR<\n>
+    <list:{it| "<it.providerName>",<it.providerId>,<it.npi>,<it.taxId>,<it.groupProviderId>,<it.groupProviderMpin>,<it.groupNpi>,<it.groupTaxId>,<it.email>,<it.provAddressLine1>,<it.provAddressLine2>,<it.pcpFlag>,<it.providerSpecialty>,<it.providerType>,<it.dateEmailSent>,<it.eDeliveryError>}; anchor, separator = "\n">
+%>
+
+CCResponse(list) ::= <%
+	tin,corporateMpin,providerEmailId,dateEmailSent,eDeliveryError<\n>
+	<list:{it| <it.tin>,<it.corporateMpin>,<it.providerEmailId>,<it.dateEmailSent>,<it.eDeliveryError>}; anchor, separator = "\n">
+%>
+
+CAPResponse(list) ::= <%
+	deliveryFormat,documentLibraryDate,emailNotificationDate,letterId,eDeliverySuccessful,documentId,eDeliveryError,emailAlertReq<\n> 
+	<list:{it| <it.deliveryFormat>,<it.docLibUploadDate>,<it.dateEmailSent>,<it.letterId>,<it.eDeliverySuccessful>,<it.id>,<it.eDeliveryError>,<it.emailAlertReq>}; anchor, separator = "\n">
+%>
+
+TrackItResponse(params) ::= <%
+{
+    "recordID": "<params.recordId>",
+    "emailAddress": "<params.providerEmailId>",
+    "deliveryStatus": "<params.deliveryStatus>",
+    "notificationSentDateAndTime": "<params.dateEmailSent>",
+    "eDeliveryError": "<params.eDeliveryError>"
+}
+%>
+
+
+HouseCallsResponse(list) ::= <%
+{
+"EmailSummary":[
+<list : { item |
+  {
+    "FileName": "<item.fileName>",
+    "DocumentId": "<item.id>",
+    "DateProcessed": "<item.dateCreated>",
+    "memberId": "<item.memberId>",
+    "DateDocumentUploadedtoDocLib": "<item.docLibUploadDate>",
+    "DateEmailSent": "<item.dateEmailSent>",
+    "eDeliveryFailureReason": "<item.eDeliveryError>"
+    \}
+  };anchor, separator = ",">
+]
+}
+%>
+
+USPClaimsResponse(batchInfo, itemList) ::= <%
+   \<?xml version="1.0" encoding="UTF-8"?>
+<\n>\<batchstatus xmlns:com="http://enterprise.unitedhealthgroup.com/schema/canonical/base/common/v7_00" xmlns="http://dms-fsl.uhc.com/fulfillment/schema" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+     <\n>\<batchStatusHeader>
+          <\n>\<requestID><batchInfo.zipFileName>\</requestID>
+           <\n>\<sourceID>MC\</sourceID>
+           <\n>\<destinationID>SBS-FDS\</destinationID>
+          <\n>\<requestDate><batchInfo.zipFileCreationDate>\</requestDate>
+          <\n>\<requestType>PostStatus\</requestType>
+          <\n>\<businessSegmentID>EI\</businessSegmentID>
+           <\n>\<marketSegmentCd>OXF\</marketSegmentCd>
+          <\n>\<fulfillmentType>10001\</fulfillmentType>
+         <\n>\<requestCategory>BulkDataOnly\</requestCategory>
+       <\n>\<serviceLevelCategory>2\</serviceLevelCategory>
+       <\n>\<bulkRequestHeaderID><batchInfo.zipFileName>\</bulkRequestHeaderID>
+    <\n>\</batchStatusHeader>
+    <\n>\<batchStatusItems>
+       <\n><itemList:{it| \<batchItemStatusDetail>
+            
+            \<batchItemRequest>
+                \<requestHeader>
+                    \<requestID><it.passThroughData>\</requestID>
+                    \<sourceID>MC\</sourceID>
+                    \<destinationID>SBS-FDS\</destinationID>
+                    \<requestDate><it.filecreationDate>\</requestDate>
+                    \<requestType>PostStatus\</requestType>
+                    \<businessSegmentID>EI\</businessSegmentID>
+                    \<fulfillmentType>10001\</fulfillmentType>
+                    \<marketSegmentCd>OXF\</marketSegmentCd>
+                    \<requestCategory>TransactionalInlineDataOnly\</requestCategory>
+                    \<dataFormat>XML\</dataFormat>
+                    \<serviceLevelCategory>2\</serviceLevelCategory>
+                    \<bulkRequestHeaderID><batchInfo.zipFileName>\</bulkRequestHeaderID>
+                \</requestHeader>
+                \<requestDetail>
+                    \<transactionalRequestDetail>
+                      \<recipient>
+                         \<recipientId><it.recipientId>\</recipientId>
+                         \<idQualifier>ProviderID\</idQualifier>
+                         \<deliveryMethod1><it.deliveryMethod1>\</deliveryMethod1>
+                         \<recipientType>Provider\</recipientType>
+                      \</recipient>
+                        \<data/>
+                    \</transactionalRequestDetail>
+                \</requestDetail>
+                \<requestTrailer>
+                    \<requestItemCount>1\</requestItemCount>
+                \</requestTrailer>
+            \</batchItemRequest>
+            \<batchItemEventLog>
+                \<processor>SBS-FDS\</processor>
+                \<eventType>Fulfilled\</eventType>
+                \<FulfilledDate><it.filedateEmailSent>\</FulfilledDate>
+                \<dispatchedDate><it.dispatchedDate>\</dispatchedDate>
+                \<receivedDate><it.receivedDate>\</receivedDate>
+                \<recipientId><it.recipientId>\</recipientId>
+                \<deliveryMethodCd><it.filedeliveryMethod>\</deliveryMethodCd>
+                \<statusCode>Accepted\</statusCode>
+                \<successCount><it.successcount>\</successCount>
+                \<exceptionCount>0\</exceptionCount>
+                \<postFeedback>
+                    \<com:name>deliveryType\</com:name>
+                    \<com:value><it.deliveryTypeValue>\</com:value>
+                \</postFeedback>
+            \</batchItemEventLog>
+        \</batchItemStatusDetail>}; anchor, separator = "\n">
+    <\n>\</batchStatusItems>
+    <\n>\<batchStatusTrailer>
+        <\n>\<requestItemCount><batchInfo.itemsCount>\</requestItemCount>
+    <\n>\</batchStatusTrailer>
+<\n>\</batchstatus>
+
+%>
+
+USPClaimsResponseApiNotify(responseFileInfo, list) ::= <%
+
+{
+    "fulfillmentRequestStatus": {
+        "requestHeader": {
+            "requestID": "<responseFileInfo.zipFileName>",
+            "sourceID": "MC",
+            "destinationID": "SBS-FDS",
+            "requestDate": "<responseFileInfo.zipFileCreationDate>",
+            "requestType": "PostStatus",
+            "businessSegmentID": "EI",
+            "marketSegmentCd": "OXF",
+            "fulfillmentType": "10001",
+            "requestCategory": "BulkDataOnly",
+            "serviceLevelCategory": null,
+            "dataFormat": "JSON",
+            "requestorRefNo": null,
+            "supplierRefNo": null,
+            "bulkRequestHeaderID": "<responseFileInfo.zipFileName>",
+            "docCompositionEngineID": null
+        },
+        "requestHistory": [
+            {
+                "processor": "SBS-FDS",
+                "eventType": "Fulfilled",
+                "receivedDate": "<responseFileInfo.receivedDate>",
+                "dispatchedDate": "<responseFileInfo.dispatchedDate>",
+                "statusCode": "<responseFileInfo.statusCode>",
+                "successCount": <responseFileInfo.itemCount>, 
+                "exceptionCount":0,
+                "postFeedback": []
+            } 
+                
+                      
+        ],
+        "postItemStatusBulkDetail": [
+            {
+                "filePath": "<responseFileInfo.filePath>",
+                "fileName": "<responseFileInfo.fileName>",
+                "fileSize": "<responseFileInfo.fileSize>",
+                "ecgDetail": null,
+                "sourceDetail": null
+            }
+        ],
+        "requestTrailer": {
+            "requestItemCount":<responseFileInfo.itemCount>
+        }
+    }
+}
+
+
+%>
+
+
+NGSResponse(list, counter) ::= <%
+    Format|MeterDate|CaseID|HistoryID|ZipFileName<\n>
+    <list:{it| <"Emailed">|<it.docLibUploadDate>|<it.caseId>|<it.historyId>|<it.originalZipFileName>}; anchor, separator = "\n">
+%>
+
+NGSClaimsResponse(list, counter) ::= <%
+    Case_Id|LetterFilename|NGSID|Original_Zip_file|Preference|Delivery_Status|EmailAddress|UploadDateTime|EmailDateTime|EmailFailure_Reason<\n>
+    <list:{it| <it.caseId>|<it.fileName>|<it.ngsId>|<it.originalZipFileName>|<it.emailAlertReq>|<it.docLibAPIResponse>|<it.providerEmailId>|<it.docLibUploadDate>|<it.dateEmailSent>|<it.eDeliveryError>}; anchor, separator = "\n">
+%>
+
+TXGCJSONDocument(list) ::= <%
+{"Documents": [
+<list:{it|
+<{
+<\u007B>
+	"status" : "AVAILABLE",
+    "metadata": <\u007B>
+        "createApplication": "P360",
+        "providerNPI": "<it.providerNPI>",
+        "exemptionEffectiveEndDate": "<it.ExemptionEndDt>",
+        "exemptionEffectiveStartDate": "<it.ExemptionStartDt>",
+        "exemptionFlag": "<it.ExemptionApprovalStatus>",
+        "cycleStartDate": "<it.ExemptionCycleStartDt>",
+        "cycleEndDate": "<it.ExemptionCycleEndDt>",
+        "Codes" : <it.Codes>
+    <\u007D>
+<\u007D>
+}>
+}; anchor, separator = ",\n">
+]}
+%>
+
+TexasGoldCardELGSFile(batchInfo, provData, codes, count, timestamp, batchId) ::= <%
+   \<?xml version="1.0" encoding="UTF-8"?>
+<\n>\<BatchRequest xmlns="http://elgs.uhc.com/schema/LetterRequest" count="<count>" timeStamp="<timestamp>" ID="<batchId>">
+     <\n>\<Request>
+          <\n>\<Requestor name="TXGC"/>
+          <\n>\<ApplicationID>TXGC\</ApplicationID>
+          <\n>\<SegmentID>TXGC\</SegmentID>
+    <\n>\</Request>
+    <provData:{pd|
+    <\n>\<LetterRequest>
+        <\n>\<Request ID="<pd.Count>" requestType="batch" batchID="<batchId>"/>
+        <\n>\<Letter>
+            <\n>\<TemplateName><pd.TemplateName>\</TemplateName>
+            <\n>\<GroupName>Texas_Gold_Card\</GroupName>
+        <\n>\</Letter>
+        <\n>\<Recipients/>
+        <\n>\<Variables>
+            <\n>\<Variable name="UniqueID"><pd.TXGCID>\</Variable>
+            <\n>\<Variable name="WorkGroupName">Texas_Gold_Card\</Variable>
+            <\n>\<Variable name="CLLibraryNme">Texas_Gold_Card\</Variable>
+            <\n>\<Variable name="GroupNme"><pd.GroupName>\</Variable>
+            <\n>\<Variable name="TemplateName"><pd.TemplateName>\</Variable>
+            <\n>\<Variable name="ProvFullNme"><pd.ProvFullName>\</Variable>
+            <\n>\<Variable name="ProvFirstNme"><pd.ProvFirstName>\</Variable>
+            <\n>\<Variable name="ProvLastNme"><pd.ProvLastName>\</Variable>
+            <\n>\<Variable name="ProvAddr1"><pd.ProvAddr1>\</Variable>
+            <\n>\<Variable name="ProvAddr2"><pd.ProvAddr2>\</Variable>
+            <\n>\<Variable name="ProvCity"><pd.ProvCity>\</Variable>
+            <\n>\<Variable name="ProvSt"><pd.ProvSt>\</Variable>
+            <\n>\<Variable name="ProvZip"><pd.ProvZip>\</Variable>
+            <\n>\<Variable name="ProvProvinceRegion"><pd.ProvProvinceRegion>\</Variable>
+            <\n>\<Variable name="ProvCountry"><pd.ProvCountry>\</Variable>
+            <\n>\<Variable name="NPI"><pd.npi>\</Variable>
+            <\n>\<Variable name="TIN"><pd.tin>\</Variable>
+            <\n>\<Variable name="ExemptionStartDt"><pd.exemptionEffectiveStartDate>\</Variable>
+            <\n>\<Variable name="ExemptionEndDt"><pd.exemptionEffectiveEndDate>\</Variable>
+            <\n>\<Variable name="ExemptionReqStartDt"><pd.cycleStartDate>\</Variable>
+            <\n>\<Variable name="ExemptionReqEndDt"><pd.cycleEndDate>\</Variable>
+            <\n>\<Variable name="RecipientType"><pd.providerType>\</Variable>
+            <\n>\<VariableGroup name="SERVICE" list="true">
+			<pd.codes:{cd|
+				<\n>\<VariableGroup name="Service">
+					<\n>\<Variable name="ProcCd"><cd.procedureCodeType>\</Variable>
+					<\n>\<Variable name="ProcCdDesc"><cd.procCodeDescription>\</Variable>
+					<\n>\<Variable name="ApprovalRate"><cd.approvalRate>\</Variable>
+					<\n>\<Variable name="NbrCds"><cd.numberOfCodesInCluster>\</Variable>
+				<\n>\</VariableGroup>};anchor, separator = "">
+			<\n>\</VariableGroup>
+  		<\n>\</Variables>
+    <\n>\</LetterRequest>};anchor, separator = "">
+<\n>\</BatchRequest>
+%>
+
+
+CNSJSONResponse(documentInfo, list) ::= <%
+{
+	"transactionId": "<documentInfo.transactionId>", 
+    "memberDetails" : {
+        "patientFirstName" : "<documentInfo.patientFirstName>",
+        "patientLastName" : "<documentInfo.patientLastName>",
+        "patientDateOfBirth" : "<documentInfo.patientDateOfBirth>",
+        "lob" : "<documentInfo.lob>",
+        "state" : "<documentInfo.state>"
+    },
+    "providerDetailsList" : [
+     <list:{it|
+      {
+        "providerTin" : "<it.providerTin>",
+        "admittingProviderName" : "<it.admittingProviderName>",
+        "facilityProvider" : "<it.facilityProvider>",
+        "providerName" : "<it.providerName>",
+        "providerNpi" : "<it.providerNpi>",
+        "dateEmailSent" : "<it.dateEmailSent>",
+        "notificationStatus" : "<it.notificationStatus>",
+        "eDeliveryError": "<it.eDeliveryError>",
+        "providerEmailId": "<it.providerEmailId>",
+        "corporateMpin": "<it.corporateMpin>",
+        "isBHProvider": <it.isBHProvider>
+      \}
+
+     };anchor, separator = ",">
+   ]
+}
+%>
+
+AlinkKafkaTemplate(documentInfo) ::= <%
+<\u007B>
+            "transactionId": "<documentInfo.key>",
+            "createdOn": "<documentInfo.createdOn>",
+            "corporateMpin": "<documentInfo.corporateMpin>",
+            "tin": "<documentInfo.tin>",
+            "caseNumber": "<documentInfo.appealReferenceNumber>",
+            "providerName": "<documentInfo.providerName>",
+            "caseStatus": "<documentInfo.appealStatus>",
+            "notificationType": "<documentInfo.notificationType>",
+            "numberOfUpdates": "<documentInfo.numberOfUpdates>",
+            "providerEmailId": "<documentInfo.providerEmailId>",
+            "createApplication": "UHCPAttachments"
+<\u007D>
+
+}>
+]}
+%>
+
+MNRJSONResponse(documentInfo) ::= <%
+{
+	"transactionId": "<documentInfo.transactionId>", 
+    "dateEmailSent" : "<documentInfo.dateEmailSent>", 
+    "notificationStatus": "<documentInfo.notificationStatus>",
+    "eDeliveryError": "<documentInfo.eDeliveryError>",
+    "providerEmailId": "<documentInfo.providerEmailId>",
+    "corporateMpin": "<documentInfo.corporateMpin>",
+    "memberDetails" : {
+        "patientFirstName" : "<documentInfo.patientFirstName>",
+        "patientLastName" : "<documentInfo.patientLastName>",
+        "patientDateOfBirth" : "<documentInfo.patientDateOfBirth>",
+        "lob" : "<documentInfo.lob>",
+        "state" : "<documentInfo.state>"
+    },
+    "providerDetails" : {
+        "providerTin" : "<documentInfo.providerTin>",
+        "admittingProviderName" : "<documentInfo.admittingProviderName>",
+        "facilityProvider" : "<documentInfo.facilityProvider>",
+        "providerName" : "<documentInfo.providerName>",
+        "providerNpi" : "<documentInfo.providerNpi>"
+    }
+}
+%>
+
+CNSKafkaMessage(recordInfo,memberInfo, providerInfoList, transactionId) ::= <%
+[
+<providerInfoList:{it|
+<{
+<\u007B>
+	"recordInfo" : <\u007B>
+        "recordID" : "<recordInfo.recordID>",
+        "recordType" : "<recordInfo.recordType>",
+        "recordLastUpdateDate" : "<recordInfo.recordLastUpdateDate>",
+        "encounterID" : "<recordInfo.encounterID>"
+    <\u007D>,
+    "memberDetails" : <\u007B>
+        "patientFirstName" : "<memberInfo.patientFirstName>",
+        "patientLastName" : "<memberInfo.patientLastName>",
+        "patientDateOfBirth" : "<memberInfo.patientDateOfBirth>",
+        "lob" : "<memberInfo.lob>",
+        "state" : "<memberInfo.state>"
+    <\u007D>,
+    "providerDetails" : <\u007B>
+        "providerTin" : "<it.providerTin>",
+        "admittingProviderName" : "<it.admittingProviderName>",
+        "facilityProvider" : "<it.facilityProvider>",
+        "providerName" : "<it.providerName>",
+        "providerNpi" : "<it.providerNpi>",
+        "isBHProvider": <it.isBHProvider>
+    <\u007D>,
+    "createApplication" : "TrackItCnS",
+    "providerEmailId": "",
+    "transactionId" : "<transactionId>",
+    "tin" : "<it.providerTin>",
+    "isBHProvider": <it.isBHProvider>
+<\u007D>
+}>
+}; anchor, separator = ",\n">
+]
+%>
+
+AppealsNotificationsResponse(list) ::= <%
+    tin|corporateMpin|providerEmailId|dateEmailSent|eDeliveryError|appealsReferenceNumber|status|attemptNumber|receivedDate<\n>
+    <list:{items| '<items.tin>'|'<items.corporateMpin>'|<items.providerEmailId>|<items.dateEmailSent>|<items.eDeliveryError>|<items.appealsReferenceNumber>|<items.status>|<items.attemptNumber>|<items.receivedDate>}; anchor, separator = "\n">
+%>
+
+ATSKafkaDocument(caseInfo, claimInfo, memberInfo, transactionId) ::= <%
+<\u007B>
+    "caseNumber" : "<caseInfo.caseNumber>",
+    "caseStatus" : "<caseInfo.caseStatus>",
+    "createdOn" : "<caseInfo.createdOn>",
+    "corporateMpin" : "<caseInfo.mpin>",
+    "tin" : "<caseInfo.tin>",
+    "createdOn": "<caseInfo.CreatedOn>",
+    "providerEmailId": "",
+    "category": "Appeals",
+    <if(claimInfo)>
+    "lstClaimInfo" : [
+            <claimInfo:{it|
+            <\u007B>
+                "trn_ClaimInfoID" : "<it.trn_ClaimInfoID>",
+                "providerStatus" : "<it.providerStatus>",
+                "claimNumber" : "<it.claimNumber>",
+                "tin" : "<it.billingTaxID>",
+                "corporateMpin" : "<it.mpin>",
+                "claimSystem" : "<it.claimSystem>",
+                "patientID" : "<it.patientID>"
+            <\u007D>
+            }; separator = ",\n">
+        ],
+    <endif>
+    "memberInfo" : <\u007B>
+        "memberId" : "<memberInfo.memberId>",
+        "memberFirstName" : "<memberInfo.memberFirstName>",
+        "memberLastName" : "<memberInfo.memberLastName>"
+    <\u007D>,
+    "transactionId" : "<transactionId>",
+    "createApplication" : "ATS"
+<\u007D>
+%>
+
+
+KafkaResponseDocument(recordInfo,memberInfo, providerInfo, encounterInfo, transactionId) ::= <%
+{
+    "recordInfo" : {
+        "recordID" : "<recordInfo.recordID>",
+        "recordType" : "<recordInfo.recordType>",
+        "recordLastUpdateDate" : "<recordInfo.recordLastUpdateDate>",
+        "encounterID" : "<recordInfo.encounterID>"
+    },
+    "memberDetails" : {
+        "patientFirstName" : "<memberInfo.patientFirstName>",
+        "patientLastName" : "<memberInfo.patientLastName>",
+        "patientDateOfBirth" : "<memberInfo.patientDateOfBirth>",
+        "lob" : "<memberInfo.lob>",
+        "state" : "<memberInfo.state>"
+    },
+    "providerDetails" : {
+        "providerTin" : "<providerInfo.providerTin>",
+        "admittingProviderName" : "<providerInfo.admittingProviderName>",
+        "facilityProvider" : "<providerInfo.facilityProvider>",
+        "providerName" : "<providerInfo.providerName>",
+        "providerNpi" : "<providerInfo.providerNpi>"
+    },
+    "createApplication" : "TrackItCnS",
+    "transactionId" : "<transactionId>",
+    "tin" : "<providerInfo.providerTin>"
+}
+%>
+
+KafkaMnRDocument(recordInfo, providerInfo, memberInfo, encounterDetails, dischargeDispositionlist, chiefComplaintList, transactionId) ::= <%
+{
+    "recordInfo" : {
+        "recordID" : "<recordInfo.recordID>",
+        "recordType" : "<recordInfo.recordType>",
+        "encounterID" : "<recordInfo.encounterID>"
+    },
+    "providerDetails" : {
+        "admittingProviderName" : "<providerInfo.admittingProviderName>",
+        "providerTin" : "<providerInfo.providerTin>",
+        "providerName" : "<providerInfo.providerName>",
+        "facilityProvider" : "<providerInfo.facilityProvider>",
+        "providerNpi" : "<providerInfo.providerNpi>"
+    },
+    "memberDetails" : {
+        "patientFirstName" : "<memberInfo.patientFirstName>",
+        "patientLastName" : "<memberInfo.patientLastName>",
+        "lob" : "<memberInfo.lob>",
+        "state" : "<memberInfo.state>",
+        "patientDateOfBirth" : "<memberInfo.patientDateOfBirth>"
+    },
+    "encounterDetails" : {
+        "admitDate" : "<encounterDetails.admitDate>",
+        "dischargeDisposition" : [
+         <dischargeDispositionlist:{it| "<it>"    }; anchor, separator = ",\n">
+        ],
+        "chiefComplaintList": [
+         <chiefComplaintList:{it| "<it>"    }; anchor, separator = ",\n">
+        ]
+
+    },
+    "transactionId" : "<transactionId>",
+    "providerEmailId" : "",
+    "tin" : "<providerInfo.providerTin>"
+}
+%>
+
+KafkaGPSDocument(message, providers, transactionId) ::= <%
+[
+<providers:{p|
+<{
+<\u007B>
+      "id": "<message.id>",
+      "householdId": "<message.householdId>",
+      "insuredPlanId": "<message.insuredPlanId>",
+      "applicationId": "<message.applicationId>",
+      "type": "<message.type>",
+      "effectiveDate": "<message.effectiveDate>",
+      "endDate": "<message.endDate>",
+      "status": "<message.status>",
+      "eventType": "<message.eventType>",
+      "sourceType": "<message.sourceType>",
+      "programNames": [
+        <message.programNames:{it|"<it>"}; separator = ", ">
+      ],
+      "providers": <\u007B>
+            "providerId": "<p.providerId>",
+            "npi": "<p.npi>",
+            "pcpName": "<p.pcpName>",
+            "taxId": "<p.taxId>",
+            "emailAddress": [<p.emailAddress:{e|"<e>"}; separator = ", ">]
+      <\u007D>,
+      "tin" : "<p.taxId>",
+      "providerEmailId" : "<p.emailAddress:{e|<e>}; separator = "|">",
+      "providerName" :  "<p.pcpName>",
+      "mpin" :  "<p.providerId>",
+      "mbi" : "<message.mbi>",
+      "firstName" : "<message.firstName>",
+      "lastName" : "<message.lastName>",
+      "dateOfBirth" : "<message.dateOfBirth>",
+      "transactionId" : "<transactionId>"
+<\u007D>
+}>
+}; anchor, separator = ",\n">
+]
+%>
+
+KafkaConsumerEngineering(requestingMember, requestedMember, planDetails, providerDetails, referralDetails, diagnosisCodeslist, transactionId) ::= <%
+{
+   "memberInfo": {
+        "requestingMember": {
+            "memberIdCardNbr": "<requestingMember.memberIdCardNbr>",
+            "firstName": "<requestingMember.firstName>",
+            "lastName": "<requestingMember.lastName>",
+            "dob": "<requestingMember.dob>",
+            "groupNumber": "<requestingMember.groupNumber>",
+            "dependentSeqNbr": "<requestingMember.dependentSeqNbr>"
+        },
+        "requestedMember": {
+            "memberIdCardNbr": "<requestedMember.memberIdCardNbr>",
+            "firstName": "<requestedMember.firstName>",
+            "lastName": "<requestedMember.lastName>",
+            "groupNumber": "<requestedMember.groupNumber>",
+            "dob": "<requestedMember.dob>"
+        }
+    },
+    "planDetails": {
+        "insuranceType": "<planDetails.insuranceType>",
+        "planEndDate": "<planDetails.planEndDate>",
+        "planStartDate": "<planDetails.planStartDate>",
+        "policyId": "<planDetails.policyId>",
+        "policyType": "<planDetails.policyType>"
+    },
+    "providerDetails" : {
+        "primaryCareProviderFirstName": "<providerDetails.primaryCareProviderFirstName> ",
+        "primaryCareProviderLastName": "<providerDetails.primaryCareProviderLastName>",
+        "primaryCareProviderCorpMpin": "<providerDetails.primaryCareProviderCorpMpin>",
+        "primaryCareProviderTin": "<providerDetails.primaryCareProviderTin>",
+        "referredToProviderFirstName": "<providerDetails.referredToProviderFirstName>",
+        "referredToProviderLastName": "<providerDetails.referredToProviderLastName>",
+        "referredToProviderTin": "<providerDetails.referredToProviderTin>",
+        "referredToProviderCorpMpin": "<providerDetails.referredToProviderCorpMpin>",
+        "referredToProviderId": "<providerDetails.referredToProviderId>"
+    },
+    "referralDetails" : {
+        "requestId": "<referralDetails.RequestId>",
+        "specialty": "<referralDetails.specialty> ",
+        "comments": "<referralDetails.comments>",
+        "diagnosisCodes" : [
+         <diagnosisCodeslist:{it| "<it>"    }; anchor, separator = ",\n">
+        ]
+    },
+    "tin" : "<providerDetails.primaryCareProviderTin>",
+    "corporateMpin" : "<providerDetails.primaryCareProviderCorpMpin>",
+    "providerEmailId" : "",
+    "createApplication" : "Consumer Engineering",
+    "requestId" : "<referralDetails.RequestId>",
+    "referralStatus" : "IN_PROCESS"
+}
+%>
+
+PCPEmailRequestToPEN(document, values) ::= <%
+{
+    "AppId" : "<document.spaceId>",
+    "TemplateName" : "<values.templateName>",
+    "providerEmailIdList" : "<document.metadata.providerEmailId>",
+    "Category" : "<values.category>",
+    "metadata" : {
+        "RequestId" : "<values.requestId>",
+        "EndDate": "<values.planEndDate>"
+    }
+}
+%>
+
+SSBCIEmailRequestToPEN(document, templateName, category) ::= <%
+    {
+         "AppId" : "<document.spaceId>",
+         "providerEmailIdList" : "<document.metadata.providerEmailId>",
+         "TemplateName": "<templateName>",
+         "Category": "<category>",
+         "metadata" : {
+             "salutation": "<document.metadata.providerName>",
+             "effectiveDate" : "<document.metadata.effectiveDate>",
+             "providerName" : "<document.metadata.providerName>"
+        }
+    }
+%>
+
+TrackItJSONResponse(documentInfo, list) ::= <%
+{
+	"transactionId": "<documentInfo.transactionId>",
+    "providerDetailsList" : [
+     <list:{it|
+      {
+        "providerTin" : "<it.providerTin>",
+        "mpin" : "<it.mpin>",
+        "corporateMpin": "<it.corporateMpin>",
+        "reconCount" : "<it.reconCount>",
+        "paanCount" : "<it.paanCount>",
+        "appealCount" : "<it.appealCount>",
+        "providerName" : "<it.providerName>",
+        "dateEmailSent" : "<it.dateEmailSent>",
+        "notificationStatus" : "<it.notificationStatus>",
+        "eDeliveryError": "<it.eDeliveryError>",
+        "providerEmailId": "<it.providerEmailId>"
+      \}
+
+
+     };anchor, separator = ",">
+   ]
+}
+%>
+SSBCIResponseTemplate(list) ::= <%
+    Provider TIN,Corporate MPIN,Provider Email ID,Type,Date Email Sent,eDelivery Error,Transaction ID,Household ID,Insured Plan ID,Effective Date,End Date,Event Type,Provider Name,Provider NPI<\n>
+    <list:{it| <it.providerTin>,<it.corporateMpin>,<it.providerEmailId>,<it.type>,<it.dateEmailSent>,<it.eDeliveryError>,<it.transactionId>,<it.householdId>,<it.insuredPlanId>,<it.effectiveDate>,<it.endDate>,<it.eventType>,<it.providerName>,<it.providerNpi>}; anchor, separator = "\n">
+%>
