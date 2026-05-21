@@ -1,708 +1,326 @@
-decl(type, name, val) ::= "<type> <name><init(val)>;"
-init(v) ::= "<if(v)> = <v><endif>"
+package com.optum.fds.paperless.client.pojo;
 
-checkWritePRAMatchAndMerge(list, counter) ::= <%
-	{
-		"originalCompanionFileRecords" : [
-			<list:{it| "<it.barcode; format="17- -R">|<it.div; format="3- -R">|<it.memberNumber; format="18- -R">|<it.memberName; format="30- -R">|<it.claimNumber; format="11- -R">|<it.mediaType; format="3- -R">|<it.claimSystem; format="6- -R">"}; anchor, separator = ",\n">
-		]
-	}
-%>
+import java.io.IOException;
+import java.util.HashSet;
+import java.util.Set;
 
-checkWritePRAResponse(list, counter) ::= <%
-    Barcode|Division|Member Number|Member Name|Claim Number|Media Type|Claims System|Original File Name|Original Received Date|Meter Date|Trail ID|TFID|PubNbr<\n>
-    <list:{it| <it.originalCompanionFileRecords>|<it.fileName; format="47- -R">|<it.dateCreated; format="yyyy-MM-dd HH:mm:ss.SSS">|<it.dateModified; format="yyyy-MM-dd HH:mm:ss.SSS">|<it.originalPrintTrail; format="4- -R">|<it.id; format="24- -R">|<it.fixedWidth; format="2- -R">}; anchor, separator = ",\n">
-    <\n>TRL|<counter; format="9-0-L">
-%>
+import org.everit.json.schema.Schema;
+import org.everit.json.schema.ValidationException;
+import org.everit.json.schema.loader.SchemaLoader;
+import org.json.JSONObject;
+import org.json.JSONTokener;
+import org.junit.Before;
+import org.junit.Test;
 
-checkWritePRACompanion(list, counter) ::= <%
-    BARCODE|DIV|MEMBER NUMBER|MEMBER NAME|CLAIM NUMBER|MEDIA TYPE|CLAIM SYSTEM<\n>
-    <list:{it| <it.originalCompanionFileRecords>}; anchor, separator = "\n">
-    <\n>TRL|<counter; format="9-0-L">
-%>
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
-checkWritePRAEmailAlert(list,counter) ::=<%
+/**
+ * Unit test for {@link PaymentSummary}.
+ *
+ * <p>PaymentSummary is delivered to Activiti by {@code pp-kafka-service} as a JSON
+ * payload (NOT as an FDS XML metadata file), so this test deliberately diverges
+ * from the XML-driven pattern in the other *MetadataTest classes. We still
+ * extend {@link AbstractMetadataTestUtil} to reuse:
+ *   - {@link AbstractMetadataTestUtil#objectMapper}
+ *   - {@link AbstractMetadataTestUtil#getClientSchema(String)}
+ *   - {@link AbstractMetadataTestUtil#getErrEnumFromClientName(String)}
+ *   - {@link AbstractMetadataTestUtil#getErrors(String, Set, Class)}
+ *
+ * <p>Test coverage matrix:
+ * <ol>
+ *   <li>Routing-flag contract baked into the constructor (DocLib only; no
+ *       Shutterfly, no email, no PEN API).</li>
+ *   <li>{@code paymentType -> filePath} dispatch via the
+ *       {@link PaymentSummary.PaymentTypeFilePath} enum (Open/Closed).</li>
+ *   <li>Fail-fast on null / blank / unsupported {@code paymentType}.</li>
+ *   <li>Jackson deserialization from both upstream {@code u_*} alias keys and
+ *       canonical PRUN keys.</li>
+ *   <li>JSON-schema happy path.</li>
+ *   <li>JSON-schema negative paths, one per required field, each translated
+ *       through {@link PaymentSummary.ErrorMsg} into the recoverable
+ *       (code 12) user-facing message.</li>
+ *   <li>{@link PaymentSummary.ErrorMsg} surface sanity (count + codes).</li>
+ * </ol>
+ */
+public class PaymentSummaryMetadataTest extends AbstractMetadataTestUtil {
 
-<list:{it| <if(it.sendCompanionFileMissingEmail)>File <it.sampleZipFileName; format="18- -R"> has been waiting for its companion file in the <it.environment; format="5- -R"> file processing system since <it.dateCreated; format="yyyy-MM-dd HH:mm:ss.SSS"> <endif> <if(it.sendCompanionFileUnreadableEmail)>FDS is unable to read <it.fileName; format="14- -R"> received on <it.companionFileDateReceived; format="yyyy-MM-dd HH:mm:ss.SSS"><endif>}; wrap, anchor, separator = ",\n">
+    private static final String CLIENT_NAME = "PaymentSummary";
 
-%>
+    private Schema jsonSchema;
 
+    @Before
+    public void loadSchemaFromClasspath() throws IOException {
+        JSONTokener tokener = getClientSchema(CLIENT_NAME);
+        assertNotNull(
+                "PaymentSummary_client_schema.json must be present at /schemas/ on the classpath",
+                tokener);
+        JSONObject schemaJson = new JSONObject(tokener);
+        jsonSchema = SchemaLoader.builder()
+                .schemaJson(schemaJson)
+                .build()
+                .load()
+                .build();
+    }
 
-optumPayNumberDocument(list) ::= <% 
-{"Documents": [
-<list:{it| 
-<{
-<\u007B>
-	"status" : "AVAILABLE",
-	"fileType" : "APFile",
-    "metadata": <\u007B>
-    	"payerId" : "<it; format="substring-2-10">",
-		"payerAdditionalId" : "<it; format="substring-11-19">",
-        "npi" : "<it; format="substring-20-29">",
-        "providerTin" : "<it; format="substring-30-38">",
-        "unconsolidatedPaymentNumber" : "<it; format="substring-39-88">",
-        "unconsolidatedPaymentAmt" : "<it; format="substring-89-98">",
-        "consolidatedPaymentNumber" : "<it; format="substring-99-148">",
-        "consolidatedPaymentAmt" : "<it; format="substring-149-158">",
-        "origPaymentMethod" : "<it; format="substring-159-161">",
-        "payeeName" : "<it; format="substring-162-221">",
-        "origPaymentDate" : "<it; format="substring-222-229">",
-        "checkNumber" : "<it; format="substring-430-479">",
-        "revisedPaymentMethod" : "<it; format="substring-480-482">",
-        "norCode": "<it; format="substring-483-485">",
-        "vcpStatus": "<it; format="substring-486-488">",
-        "reOriginatedDate": "<it; format="substring-489-496">"
-    <\u007D>
-<\u007D>
-}>
-}; anchor, separator = ",\n">
-]}
-%>
+    // ------------------------------------------------------------------
+    // 1. Constructor / routing-flag CONTRACT
+    //
+    // These flags are the contract with the workflow: every document of
+    // clientName=PaymentSummary must go to DocLib ONLY. If somebody
+    // accidentally flips one of these (e.g. enables Shutterfly), member
+    // PHI could be printed and mailed. This test is the regression guard.
+    // ------------------------------------------------------------------
 
-IHRDocumentTemplate(list) ::= <%
-{"Documents": [
-<list:{it|
-<{
-<\u007B>
-	"status" : "AVAILABLE",
-    "metadata": <\u007B>
-        "createApplication": "IHR",
-        "category": "IHR",
-        <it.keys:{k | "<k>" : "<it.(k)>"}; separator=",\n">
-    <\u007D>
-<\u007D>
-}>
-}; anchor, separator = ",\n">
-]}
-%>
+    @Test
+    public void constructor_default_setsImmutableClientContract() {
+        PaymentSummary ps = new PaymentSummary();
 
-TXGCCSVDocument(list) ::= <%
-{"Documents": [
-<list:{it|
-<{
-<\u007B>
-	"status" : "AVAILABLE",
-    "metadata": <\u007B>
-        "createApplication": "P360",
-        <it.keys:{k | "<k>" : "<it.(k)>"}; separator=",\n">
-    <\u007D>
-<\u007D>
-}>
-}; anchor, separator = ",\n">
-]}
-%>
+        // Identity fields — static across every PaymentSummary document
+        assertEquals("Payment Documents", ps.getCategory());
+        assertEquals("PmntEng",            ps.getCreateApplication());
+        assertEquals("Claim Status",       ps.getPrivilege());
+        assertEquals("PRUN",               ps.getSource());
+        assertEquals("",                   ps.getProviderEmailId());
 
+        // Routing flags — the safety contract
+        assertTrue ("PaymentSummary MUST persist to DocLib",          ps.getSendToDocVault());
+        assertFalse("PaymentSummary MUST NOT print via Shutterfly",   ps.getSendToShutterfly());
+        assertFalse("PaymentSummary MUST NOT trigger email",          ps.getSendEmailNotifications());
+        assertFalse("PaymentSummary MUST NOT call PEN API",           ps.getSendPENAPIRequest());
+        assertFalse("PaymentSummary postCardInd defaults to false",   ps.getPostCardInd());
+    }
 
-CCDocumentTemplate(list) ::= <%
-{"Documents": [
-<list:{it|
-<{
-<\u007B>
-	"status" : "AVAILABLE",
-    "metadata": <\u007B>
-        "createApplication": "CC",
-        <it.keys:{k | "<k>" : "<it.(k)>"}; separator=",\n">
-    <\u007D>
-<\u007D>
-}>
-}; anchor, separator = ",\n">
-]}
+    // ------------------------------------------------------------------
+    // 2. paymentType -> filePath dispatch via enum
+    //
+    // The DocLib filePath is derived, not pushed from upstream. The
+    // mapping lives in PaymentTypeFilePath so adding a new payment
+    // cadence is purely additive (Open/Closed).
+    // ------------------------------------------------------------------
 
-%>
+    @Test
+    public void setPaymentType_DLY_routesToDailyFolder() {
+        PaymentSummary ps = new PaymentSummary();
+        ps.setPaymentType("DLY");
+        assertEquals("DLY",                              ps.getPaymentType());
+        assertEquals("Payment Summary Reports/Daily",    ps.getFilePath());
+    }
 
+    @Test
+    public void setPaymentType_MTY_routesToMonthlyFolder() {
+        PaymentSummary ps = new PaymentSummary();
+        ps.setPaymentType("MTY");
+        assertEquals("MTY",                              ps.getPaymentType());
+        assertEquals("Payment Summary Reports/Monthly",  ps.getFilePath());
+    }
 
-docLibPutRequest(document) ::= <%
-{
-	"fileId": "<document.fdsAttachmentId>",
-	"fileCreatedDate": "<document.dateCreated; format="yyyy-MM-dd'T'HH:mm:ss.SSSZZZ">",
-	"paymentNumber": "<document.metadata.consolidatedPaymentNumber>"
-}
-%>
+    // ------------------------------------------------------------------
+    // 3. Fail-fast on bad paymentType
+    //
+    // Misrouting a payment document into the wrong DocLib folder would
+    // be a silent compliance issue. We refuse to default; the workflow
+    // must surface the error.
+    // ------------------------------------------------------------------
 
-filterReqFieldForDocvault(document, map, attachments) ::= <%
-    {
-        "fdsDocumentId" : "<document.fdsDocumentId>",
-        "space_id" : "<document.spaceId>",
-        "cloudSpaceId" : "<document.cloudSpaceId>",
-        "status" : "<document.status>",
-        "dateCreated" : "<document.dateCreated>",
-        "attachments" : <attachments>,
-        "metadata": {
-            <map.keys:{k | "<k>" : "<map.(k)>",}>
-            "fileDescription" : "<document.metadata.fileDescription>",
-            "fileName" : "<document.metadata.fileName>",
-            "subCategory" : "<document.metadata.subCategory>",
-            "filePath" : "<document.metadata.filePath>",
-            "privilege" : "<document.metadata.privilege>",
-            "expiryDate" : "<document.metadata.expiryDate>",
-            "createApplication" : "<document.metadata.createApplication>",
-            "tin" : "<document.metadata.tin>",
-            "mpin" : "<document.metadata.mpin>",
-            "category" : "<document.metadata.category>",
-            "fileType" : "<document.metadata.fileType>",
-            "tenant" : "<document.metadata.tenant>",
-            "corporateMpin" : "<document.metadata.corporateMpin>"
+    @Test(expected = NullPointerException.class)
+    public void setPaymentType_null_throwsNpe() {
+        new PaymentSummary().setPaymentType(null);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void setPaymentType_blank_throwsIae() {
+        new PaymentSummary().setPaymentType("   ");
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void setPaymentType_unsupportedValue_throwsIae() {
+        // "DAILY" is a plausible upstream typo of "DLY".
+        // Must fail loudly, never silently default to Daily.
+        new PaymentSummary().setPaymentType("DAILY");
+    }
+
+    // ------------------------------------------------------------------
+    // 4. Jackson @JsonAlias - upstream key compatibility
+    //
+    // pp-kafka-service ships ServiceNow-style "u_*" keys; PRUN persists
+    // canonical camelCase. The POJO must accept both, and the setter
+    // side-effect (filePath dispatch) must still fire when Jackson is
+    // the caller.
+    // ------------------------------------------------------------------
+
+    @Test
+    public void objectMapper_deserialize_upstreamAliasKeys() throws IOException {
+        String upstreamJson = ""
+                + "{"
+                +   "\"u_tax_id\":\"123456789\","
+                +   "\"u_payment_summary_dt\":\"2026-05-20\","
+                +   "\"u_payment_typ\":\"DLY\","
+                +   "\"u_payment_nbr\":\"PMT-001\""
+                + "}";
+
+        PaymentSummary ps = objectMapper.readValue(upstreamJson, PaymentSummary.class);
+
+        assertEquals("123456789", ps.getTin());
+        assertEquals("2026-05-20", ps.getPaymentDate());
+        assertEquals("DLY",        ps.getPaymentType());
+        assertEquals("PMT-001",    ps.getPaymentNumber());
+        // The setter side-effect MUST still fire through Jackson:
+        assertEquals("Payment Summary Reports/Daily", ps.getFilePath());
+    }
+
+    @Test
+    public void objectMapper_deserialize_canonicalKeys() throws IOException {
+        String canonicalJson = ""
+                + "{"
+                +   "\"tin\":\"123456789\","
+                +   "\"paymentDate\":\"2026-05-20\","
+                +   "\"paymentType\":\"MTY\","
+                +   "\"paymentNumber\":\"PMT-002\""
+                + "}";
+
+        PaymentSummary ps = objectMapper.readValue(canonicalJson, PaymentSummary.class);
+
+        assertEquals("123456789", ps.getTin());
+        assertEquals("MTY",       ps.getPaymentType());
+        assertEquals("Payment Summary Reports/Monthly", ps.getFilePath());
+    }
+
+    // ------------------------------------------------------------------
+    // 5. JSON Schema validation - happy path
+    // ------------------------------------------------------------------
+
+    @Test
+    public void schema_happyPath_passesWithoutErrors() {
+        JSONObject payload = new JSONObject()
+                .put("u_tax_id",             "123456789")
+                .put("u_payment_summary_dt", "2026-05-20")
+                .put("u_payment_typ",        "DLY")
+                .put("u_payment_nbr",        "PMT-001");
+
+        jsonSchema.validate(payload); // throws if invalid; absence of throw IS the assertion
+    }
+
+    // ------------------------------------------------------------------
+    // 6. JSON Schema validation - one missing-field test per required
+    //    field, asserting it maps through ErrorMsg into the exact
+    //    user-facing message stored in DocumentMetaData.errorList.
+    // ------------------------------------------------------------------
+
+    @Test
+    public void schema_missingTaxId_producesTaxIdError() {
+        Set<String> errors = collectErrors(new JSONObject()
+                .put("u_payment_summary_dt", "2026-05-20")
+                .put("u_payment_typ",        "DLY")
+                .put("u_payment_nbr",        "PMT-001"));
+
+        assertTrue("Expected Tax ID error, got " + errors,
+                errors.contains("Missing or invalid data: Tax ID"));
+    }
+
+    @Test
+    public void schema_missingPaymentDate_producesPaymentDateError() {
+        Set<String> errors = collectErrors(new JSONObject()
+                .put("u_tax_id",      "123456789")
+                .put("u_payment_typ", "DLY")
+                .put("u_payment_nbr", "PMT-001"));
+
+        assertTrue("Expected Payment Summary Date error, got " + errors,
+                errors.contains("Missing or invalid data: Payment Summary Date"));
+    }
+
+    @Test
+    public void schema_missingPaymentType_producesPaymentTypeError() {
+        Set<String> errors = collectErrors(new JSONObject()
+                .put("u_tax_id",             "123456789")
+                .put("u_payment_summary_dt", "2026-05-20")
+                .put("u_payment_nbr",        "PMT-001"));
+
+        assertTrue("Expected Payment Type error, got " + errors,
+                errors.contains("Missing or invalid data: Payment Type (expected DLY or MTY)"));
+    }
+
+    @Test
+    public void schema_missingPaymentNumber_producesPaymentNumberError() {
+        Set<String> errors = collectErrors(new JSONObject()
+                .put("u_tax_id",             "123456789")
+                .put("u_payment_summary_dt", "2026-05-20")
+                .put("u_payment_typ",        "DLY"));
+
+        assertTrue("Expected Payment Number error, got " + errors,
+                errors.contains("Missing or invalid data: Payment Number"));
+    }
+
+    @Test
+    public void schema_invalidPaymentTypeEnum_failsValidation() {
+        JSONObject payload = new JSONObject()
+                .put("u_tax_id",             "123456789")
+                .put("u_payment_summary_dt", "2026-05-20")
+                .put("u_payment_typ",        "WEEKLY")     // not in {DLY, MTY}
+                .put("u_payment_nbr",        "PMT-001");
+        try {
+            jsonSchema.validate(payload);
+            fail("Expected ValidationException for u_payment_typ=WEEKLY");
+        } catch (ValidationException expected) {
+            assertTrue(
+                    "Validation error should reference u_payment_typ, got: " + expected.getAllMessages(),
+                    expected.getAllMessages().toString().contains("u_payment_typ"));
         }
     }
-%>
 
-filterFDSCloudSearchTerms(map) ::= <%
-{
-<map.keys:{k | "<k>" : "<map.(k)>"}; anchor, separator = ",\n">
-}
-%>
+    // ------------------------------------------------------------------
+    // 7. ErrorMsg / PaymentTypeFilePath enum sanity
+    //
+    // These guard against accidental enum-member additions/removals
+    // that would silently change the contract.
+    // ------------------------------------------------------------------
 
+    @Test
+    public void errorMsgEnum_hasExactlyFourMembers_allCode12() {
+        PaymentSummary.ErrorMsg[] values = PaymentSummary.ErrorMsg.values();
 
-PDOCSVTemplate(document, map) ::= <%
-    {
-        "metadata": {
-            <map.keys:{k | "<k>" : "<map.(k)>",}>
-            "tin" : "<document.metadata.tin>",
-            "mpin" : "<document.metadata.mpin>",
-            "fileName" : "<document.metadata.fileName>",
-            "fileType" : "<document.metadata.fileType>",
-            "providerEmailId" : "<document.metadata.providerEmailId>",
-            "frequency" : "<document.metadata.frequency>",
-            "deliveryMethod" : "<document.metadata.deliveryMethod>",
-            "autoEdelUpdateInd" : "<document.metadata.autoEdelUpdateInd>",
-            "okToChangePDOInd" : "<document.metadata.okToChangePDOInd>",
-            "autoOptOutInd" : "N"
+        assertEquals("ErrorMsg should expose exactly 4 required-field codes", 4, values.length);
+        for (PaymentSummary.ErrorMsg e : values) {
+            assertEquals(
+                    "All PaymentSummary errors are recoverable (code 12) - severe (22) is reserved for unrecoverable",
+                    12, e.getErrorCode());
+            assertNotNull("ErrorMsg." + e.name() + " has null message", e.getErrorMessage());
+            assertFalse ("ErrorMsg." + e.name() + " has blank message", e.getErrorMessage().isBlank());
         }
     }
-%>
 
-emailRequestToPEN(document, map) ::= <%
-    {
-         "documentId" : "<document.id>",
-         "appId" : "<document.spaceId>",
-         "providerEmailId" : "<document.metadata.providerEmailId>",
-         "dayOfWeek" : "<document.metadata.dayOfWeek>",
-         "category" : "<document.metadata.category>",
-         "frequency" : "<document.metadata.frequency>"
+    @Test
+    public void paymentTypeFilePathEnum_hasExactlyTwoMembers() {
+        // If a third cadence is added (weekly, quarterly), the test must be
+        // updated alongside the schema enum and the from(String) dispatch.
+        assertEquals(2, PaymentSummary.PaymentTypeFilePath.values().length);
     }
-%>
 
-TrackItEmailRequestToPEN(document, list) ::= <%
-{
-     "AppId" : "<document.spaceId>",
-     "TemplateName" : "TrackIt",
-     "ProviderEmailId" : "<document.metadata.providerEmailId>",
-     "providerEmailIdList" : "<document.metadata.providerEmailId>",
-     "Category" : "TrackIt",
-     "metadata": {
-             "list": [
-                 <list:{item|
-                 {
-                     "CorporateOwnerName": "<item.providerOrganizationName>",
-                     "TaxIDNumber" : "<item.formattedTin>",
-                     "CorporateTaxIDOwner" : "<item.formattedCorpMpin>",
-                     "ProviderName" : "<item.providerOrganizationName>",
-                     "RejectedClaims" : "<item.rejectedClaims>",
-                     "DocumentationEdits" : "<item.documentationEdits>",
-                     "PriorAuthorizations" : "<item.priorAuthorizations>",
-                     "Referrals" : "<item.referrals>",                     
-                     "Recons" : "<item.reconsiderations>",
-                     "PendingClaims" : "<item.pendingClaims>",
-                     "PendedTickets" : "<item.pendedTickets>",
-                     "PriorAuthAppeals" : "<item.priorAuthAppeals>",
-                     "ExpiringReferrals" : "<item.expiringReferrals>",
-                     "RecordType" : "<item.recordType>"
-                 \}
-                 }; anchor, separator = ",">
-             ]
-     }
-}
-%>
+    // ------------------------------------------------------------------
+    // helpers
+    // ------------------------------------------------------------------
 
-ADTCNSEmailRequestToPEN(document, formattedTin, formattedCorpMpin, recordTypeUrl, numberOfUpdates) ::= <%
-    {
-         "AppId" : "<document.spaceId>",
-         "TemplateName" : "ADT",
-         "ProviderEmailId" : "<document.metadata.providerEmailId>",
-         "providerEmailIdList" : "<document.metadata.providerEmailId>",
-         "Category" : "ADT",
-         "metadata" : {
-             "recordType" : "<document.metadata.recordInfo.recordType>",
-             "recordTypeUrl" : "<recordTypeUrl>",
-             "CorporateTaxIDOwner": "<formattedCorpMpin>",
-             "TaxIDNumber" : "<formattedTin>",
-             "NotificationType" : "Action Required",
-             "NumberOfUpdates" : "<numberOfUpdates>",
-             "ProviderOrganizationName" : "<document.metadata.providerName>"
-        }
-    }
-%>
-
-
-appealsNotificationEmailRequestToPEN(document, appealsDate, list,templateName,category) ::= <%
-{
-    "AppId": "<document.spaceId>",
-    "providerEmailIdList": "<document.metadata.providerEmailId>",
-    "TemplateName": "<templateName>",
-    "Category": "<category>",
-    "AppealsDate": "<appealsDate>",
-    "metadata": {
-        "list": [
-            <list:{item|
-            {
-                "Category": "<item.Category>",
-                "CorporateTaxIDOwner": "<item.CorporateTaxIDOwner>",
-                "AppealReferenceNumber": "<item.AppealReferenceNumber>",
-                "NotificationType": "Claim Appeals",
-                "TaxIDNumber": "<item.TaxIDNumber>",
-                "CurrentStatus": "<item.CurrentStatus>",
-                "NumberOfUpdates": "1",
-                "ProviderOrganizationName": "<item.ProviderOrganizationName>"
-            \}
-            }; anchor, separator = ",">
-        ]
-    }
-}
-%>
-
-cosmosAckTemplate(batch, list) ::= <%
-    \<Batch>
-    <\n>\<BatchId><batch.batchId>\</BatchId>
-    <\n>\<Count><batch.count>\</Count>
-    <\n>\<FileNameList>
-    <\n><list:{it| \<FileName Status=<it.Status>><it.fileName>\</FileName>}; anchor, separator = "\n">
-    <\n>\</FileNameList>
-    <\n>\</Batch>
-%>
-
-
-cosmosDoc1StatusTemplate(batch, list) ::= <%
-    \<?xml version="1.0" encoding="UTF-8"?>
-    <\n>\<Batch>
-    <\n>\<BatchID><batch.batchId>\</BatchID>
-    <\n>\<Count><batch.count>\</Count>
-    <\n>\<UploadDate><batch.uploadDate; format="yyyyMMdd" >\</UploadDate>
-    <\n>\<FileNameList>
-    <\n><list:{it| \<FileName Status="<it.Status>"><it.fileName>\</FileName>}; anchor, separator = "\n">
-    <\n>\</FileNameList>
-    <\n>\</Batch>
-%>
-
-MRAppealsResponse(list, counter) ::= <%
-    Case_Id|LetterFilename|NGSID|Original_Zip_file|Preference|Delivery_Status|EmailAddress|UploadDateTime|EmailDateTime|EmailFailure_Reason<\n>
-    <list:{it| <it.caseId>|<it.fileName>|<it.ngsId>|<it.originalZipFileName>|<it.emailAlertReq>|<it.docLibAPIResponse>|<it.providerEmailId>|<it.docLibUploadDate>|<it.dateEmailSent>|<it.eDeliveryError>}; anchor, separator = "\n">
-%>
-
-ODARResponse(list, counter) ::= <%
-    LetterGroupId,LetterType,LetterSentDate,LetterStatus<\n>
-    <list:{it| <it.letterGroupId>,<it.letterType>,<it.dateCreated; format="MM/dd/yyyy">,LINK}; anchor, separator = "\n">
-%>
-
-ETSAppealsResponse(list, counter) ::= <%
-    Format|MeterDate|CaseID|HistoryID|ZipFileName|emailNotificationDate<\n>
-    <list:{it| <"Emailed">|<it.docLibUploadDate>|<it.caseId>|<it.historyId>|<it.originalZipFileName>|<it.dateEmailSent>}; anchor, separator = "\n">
-%>
-
-CSPClaimsResponse(list, counter,date) ::= <%
-H<date; format="yyyyMMddHHmmss"><\n>
-<list:{it| D<it.createApplication><date; format="yyyyDDD">EDELIVER<""; format="12-0-R"><it.createdDate; format="yyyyMMdd"><it.createdDate; format="HHmm"><""; format="16- -L"><""; format="22-0-R"><date; format="yyyyMMdd"><""; format="20-0-R"><it.passThruData; format="38- -R">eDelivery   <it.providerEmailId; format="100- -R"><it.dateEmailSent; format="22- -R"><it.deliveryError>}; anchor, separator = "\n">
- <\n>T<counter; format="7-0-L">
-%>
-
-PriorAuthResponse(list, counter,date) ::= <%
-H<date; format="yyyyMMddHHmmss"><\n>
-<list:{it| D<it.createApplication><date; format="yyyyDDD">EDELIVER<""; format="12-0-R"><it.createdDate; format="yyyyMMdd"><it.createdDate; format="HHmm"><""; format="16- -L"><""; format="22-0-R"><date; format="yyyyMMdd"><""; format="20-0-R"><it.passThruData; format="38- -R">eDelivery   <it.providerEmailId; format="100- -R"><it.dateEmailSent; format="22- -R"><it.deliveryError>}; anchor, separator = "\n">
- <\n>T<counter; format="7-0-L">
-%>
-
-CosmosPRACompanion(list,counter) ::=<%
-[
-<list:{it| {"BARCODE":"<it.barcode>","BARCODE_FIFTEEN":"<it.barcode_fifteen>","DIV":"<it.div>","memberNumber":"<it.memberNumber>","memberName":"<it.memberName>","claimNumber":"<it.claimNumber>","mediaType":"<it.mediaType>","claimSystem":"<it.claimSystem>"\}}; anchor, separator = ",\n">
-]
-%>
-
-OCMResponse(list, counter,date) ::= <%
-H<date; format="yyyyMMddHHmmss"><\n>
-<list:{it| D<it.createApplication; format="4- -R"><date; format="yyyyDDD">EDELIVER<""; format="12-0-R">yyyyMMddHHmm<""; format="16- -L"><""; format="22-0-R"><date; format="yyyyMMdd"><""; format="20-0-R"><it.passThruData; format="38- -R">eDelivery   <it.providerEmailId; format="100- -R"><it.dateEmailSent; format="22- -R"><it.deliveryError; format="200- -R"><it.NotificationLetterID; format="30- -R">}; anchor, separator = "\n">
- <\n>T<counter; format="7-0-L">
-%>
-
-IHRResponse(list) ::= <%
-	PROVIDER_NAME,PROVIDER_ID,NPI,TAX_ID,GROUP_PROVIDER_ID,GROUP_PROVIDER_MPIN,GROUP_NPI,GROUP_TAX_ID,EMAIL,PROV_ADDRESS_LINE_1,PROV_ADDRESS_LINE_2,PCP_FLAG,PROVIDER_SPECIALITY,PROVIDER_TYPE,DATE_EMAIL_SENT,EDELIVERYERROR<\n>
-    <list:{it| "<it.providerName>",<it.providerId>,<it.npi>,<it.taxId>,<it.groupProviderId>,<it.groupProviderMpin>,<it.groupNpi>,<it.groupTaxId>,<it.email>,<it.provAddressLine1>,<it.provAddressLine2>,<it.pcpFlag>,<it.providerSpecialty>,<it.providerType>,<it.dateEmailSent>,<it.eDeliveryError>}; anchor, separator = "\n">
-%>
-
-CCResponse(list) ::= <%
-	tin,corporateMpin,providerEmailId,dateEmailSent,eDeliveryError<\n>
-	<list:{it| <it.tin>,<it.corporateMpin>,<it.providerEmailId>,<it.dateEmailSent>,<it.eDeliveryError>}; anchor, separator = "\n">
-%>
-
-CAPResponse(list) ::= <%
-	deliveryFormat,documentLibraryDate,emailNotificationDate,letterId,eDeliverySuccessful,documentId,eDeliveryError,emailAlertReq<\n> 
-	<list:{it| <it.deliveryFormat>,<it.docLibUploadDate>,<it.dateEmailSent>,<it.letterId>,<it.eDeliverySuccessful>,<it.id>,<it.eDeliveryError>,<it.emailAlertReq>}; anchor, separator = "\n">
-%>
-
-TrackItResponse(params) ::= <%
-{
-    "recordID": "<params.recordId>",
-    "emailAddress": "<params.providerEmailId>",
-    "deliveryStatus": "<params.deliveryStatus>",
-    "notificationSentDateAndTime": "<params.dateEmailSent>",
-    "eDeliveryError": "<params.eDeliveryError>"
-}
-%>
-
-
-HouseCallsResponse(list) ::= <%
-{
-"EmailSummary":[
-<list : { item |
-  {
-    "FileName": "<item.fileName>",
-    "DocumentId": "<item.id>",
-    "DateProcessed": "<item.dateCreated>",
-    "memberId": "<item.memberId>",
-    "DateDocumentUploadedtoDocLib": "<item.docLibUploadDate>",
-    "DateEmailSent": "<item.dateEmailSent>",
-    "eDeliveryFailureReason": "<item.eDeliveryError>"
-    \}
-  };anchor, separator = ",">
-]
-}
-%>
-
-USPClaimsResponse(batchInfo, itemList) ::= <%
-   \<?xml version="1.0" encoding="UTF-8"?>
-<\n>\<batchstatus xmlns:com="http://enterprise.unitedhealthgroup.com/schema/canonical/base/common/v7_00" xmlns="http://dms-fsl.uhc.com/fulfillment/schema" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-     <\n>\<batchStatusHeader>
-          <\n>\<requestID><batchInfo.zipFileName>\</requestID>
-           <\n>\<sourceID>MC\</sourceID>
-           <\n>\<destinationID>SBS-FDS\</destinationID>
-          <\n>\<requestDate><batchInfo.zipFileCreationDate>\</requestDate>
-          <\n>\<requestType>PostStatus\</requestType>
-          <\n>\<businessSegmentID>EI\</businessSegmentID>
-           <\n>\<marketSegmentCd>OXF\</marketSegmentCd>
-          <\n>\<fulfillmentType>10001\</fulfillmentType>
-         <\n>\<requestCategory>BulkDataOnly\</requestCategory>
-       <\n>\<serviceLevelCategory>2\</serviceLevelCategory>
-       <\n>\<bulkRequestHeaderID><batchInfo.zipFileName>\</bulkRequestHeaderID>
-    <\n>\</batchStatusHeader>
-    <\n>\<batchStatusItems>
-       <\n><itemList:{it| \<batchItemStatusDetail>
-            
-            \<batchItemRequest>
-                \<requestHeader>
-                    \<requestID><it.passThroughData>\</requestID>
-                    \<sourceID>MC\</sourceID>
-                    \<destinationID>SBS-FDS\</destinationID>
-                    \<requestDate><it.filecreationDate>\</requestDate>
-                    \<requestType>PostStatus\</requestType>
-                    \<businessSegmentID>EI\</businessSegmentID>
-                    \<fulfillmentType>10001\</fulfillmentType>
-                    \<marketSegmentCd>OXF\</marketSegmentCd>
-                    \<requestCategory>TransactionalInlineDataOnly\</requestCategory>
-                    \<dataFormat>XML\</dataFormat>
-                    \<serviceLevelCategory>2\</serviceLevelCategory>
-                    \<bulkRequestHeaderID><batchInfo.zipFileName>\</bulkRequestHeaderID>
-                \</requestHeader>
-                \<requestDetail>
-                    \<transactionalRequestDetail>
-                      \<recipient>
-                         \<recipientId><it.recipientId>\</recipientId>
-                         \<idQualifier>ProviderID\</idQualifier>
-                         \<deliveryMethod1><it.deliveryMethod1>\</deliveryMethod1>
-                         \<recipientType>Provider\</recipientType>
-                      \</recipient>
-                        \<data/>
-                    \</transactionalRequestDetail>
-                \</requestDetail>
-                \<requestTrailer>
-                    \<requestItemCount>1\</requestItemCount>
-                \</requestTrailer>
-            \</batchItemRequest>
-            \<batchItemEventLog>
-                \<processor>SBS-FDS\</processor>
-                \<eventType>Fulfilled\</eventType>
-                \<FulfilledDate><it.filedateEmailSent>\</FulfilledDate>
-                \<dispatchedDate><it.dispatchedDate>\</dispatchedDate>
-                \<receivedDate><it.receivedDate>\</receivedDate>
-                \<recipientId><it.recipientId>\</recipientId>
-                \<deliveryMethodCd><it.filedeliveryMethod>\</deliveryMethodCd>
-                \<statusCode>Accepted\</statusCode>
-                \<successCount><it.successcount>\</successCount>
-                \<exceptionCount>0\</exceptionCount>
-                \<postFeedback>
-                    \<com:name>deliveryType\</com:name>
-                    \<com:value><it.deliveryTypeValue>\</com:value>
-                \</postFeedback>
-            \</batchItemEventLog>
-        \</batchItemStatusDetail>}; anchor, separator = "\n">
-    <\n>\</batchStatusItems>
-    <\n>\<batchStatusTrailer>
-        <\n>\<requestItemCount><batchInfo.itemsCount>\</requestItemCount>
-    <\n>\</batchStatusTrailer>
-<\n>\</batchstatus>
-
-%>
-
-USPClaimsResponseApiNotify(responseFileInfo, list) ::= <%
-
-{
-    "fulfillmentRequestStatus": {
-        "requestHeader": {
-            "requestID": "<responseFileInfo.zipFileName>",
-            "sourceID": "MC",
-            "destinationID": "SBS-FDS",
-            "requestDate": "<responseFileInfo.zipFileCreationDate>",
-            "requestType": "PostStatus",
-            "businessSegmentID": "EI",
-            "marketSegmentCd": "OXF",
-            "fulfillmentType": "10001",
-            "requestCategory": "BulkDataOnly",
-            "serviceLevelCategory": null,
-            "dataFormat": "JSON",
-            "requestorRefNo": null,
-            "supplierRefNo": null,
-            "bulkRequestHeaderID": "<responseFileInfo.zipFileName>",
-            "docCompositionEngineID": null
-        },
-        "requestHistory": [
-            {
-                "processor": "SBS-FDS",
-                "eventType": "Fulfilled",
-                "receivedDate": "<responseFileInfo.receivedDate>",
-                "dispatchedDate": "<responseFileInfo.dispatchedDate>",
-                "statusCode": "<responseFileInfo.statusCode>",
-                "successCount": <responseFileInfo.itemCount>, 
-                "exceptionCount":0,
-                "postFeedback": []
-            } 
-                
-                      
-        ],
-        "postItemStatusBulkDetail": [
-            {
-                "filePath": "<responseFileInfo.filePath>",
-                "fileName": "<responseFileInfo.fileName>",
-                "fileSize": "<responseFileInfo.fileSize>",
-                "ecgDetail": null,
-                "sourceDetail": null
+    /**
+     * Mirrors {@code ProcessConvertMetadata.convertMetadata} for the
+     * schema-validate -> ErrorMsg-lookup leg of the pipeline. Returns the
+     * exact user-facing error messages that the workflow would persist on
+     * {@code DocumentMetaData.errorList}.
+     */
+    @SuppressWarnings("rawtypes")
+    private Set<String> collectErrors(JSONObject payload) {
+        Set<String> errors = new HashSet<>();
+        try {
+            jsonSchema.validate(payload);
+        } catch (ValidationException ve) {
+            Class enumClass = getErrEnumFromClientName(CLIENT_NAME);
+            assertNotNull("ErrorMsg enum must resolve via reflection for client=" + CLIENT_NAME, enumClass);
+            for (String m : ve.getAllMessages()) {
+                getErrors(m, errors, enumClass);
             }
-        ],
-        "requestTrailer": {
-            "requestItemCount":<responseFileInfo.itemCount>
         }
+        return errors;
     }
 }
-
-
-%>
-
-
-NGSResponse(list, counter) ::= <%
-    Format|MeterDate|CaseID|HistoryID|ZipFileName<\n>
-    <list:{it| <"Emailed">|<it.docLibUploadDate>|<it.caseId>|<it.historyId>|<it.originalZipFileName>}; anchor, separator = "\n">
-%>
-
-NGSClaimsResponse(list, counter) ::= <%
-    Case_Id|LetterFilename|NGSID|Original_Zip_file|Preference|Delivery_Status|EmailAddress|UploadDateTime|EmailDateTime|EmailFailure_Reason<\n>
-    <list:{it| <it.caseId>|<it.fileName>|<it.ngsId>|<it.originalZipFileName>|<it.emailAlertReq>|<it.docLibAPIResponse>|<it.providerEmailId>|<it.docLibUploadDate>|<it.dateEmailSent>|<it.eDeliveryError>}; anchor, separator = "\n">
-%>
-
-TXGCJSONDocument(list) ::= <%
-{"Documents": [
-<list:{it|
-<{
-<\u007B>
-	"status" : "AVAILABLE",
-    "metadata": <\u007B>
-        "createApplication": "P360",
-        "providerNPI": "<it.providerNPI>",
-        "exemptionEffectiveEndDate": "<it.ExemptionEndDt>",
-        "exemptionEffectiveStartDate": "<it.ExemptionStartDt>",
-        "exemptionFlag": "<it.ExemptionApprovalStatus>",
-        "cycleStartDate": "<it.ExemptionCycleStartDt>",
-        "cycleEndDate": "<it.ExemptionCycleEndDt>",
-        "Codes" : <it.Codes>
-    <\u007D>
-<\u007D>
-}>
-}; anchor, separator = ",\n">
-]}
-%>
-
-TexasGoldCardELGSFile(batchInfo, provData, codes, count, timestamp, batchId) ::= <%
-   \<?xml version="1.0" encoding="UTF-8"?>
-<\n>\<BatchRequest xmlns="http://elgs.uhc.com/schema/LetterRequest" count="<count>" timeStamp="<timestamp>" ID="<batchId>">
-     <\n>\<Request>
-          <\n>\<Requestor name="TXGC"/>
-          <\n>\<ApplicationID>TXGC\</ApplicationID>
-          <\n>\<SegmentID>TXGC\</SegmentID>
-    <\n>\</Request>
-    <provData:{pd|
-    <\n>\<LetterRequest>
-        <\n>\<Request ID="<pd.Count>" requestType="batch" batchID="<batchId>"/>
-        <\n>\<Letter>
-            <\n>\<TemplateName><pd.TemplateName>\</TemplateName>
-            <\n>\<GroupName>Texas_Gold_Card\</GroupName>
-        <\n>\</Letter>
-        <\n>\<Recipients/>
-        <\n>\<Variables>
-            <\n>\<Variable name="UniqueID"><pd.TXGCID>\</Variable>
-            <\n>\<Variable name="WorkGroupName">Texas_Gold_Card\</Variable>
-            <\n>\<Variable name="CLLibraryNme">Texas_Gold_Card\</Variable>
-            <\n>\<Variable name="GroupNme"><pd.GroupName>\</Variable>
-            <\n>\<Variable name="TemplateName"><pd.TemplateName>\</Variable>
-            <\n>\<Variable name="ProvFullNme"><pd.ProvFullName>\</Variable>
-            <\n>\<Variable name="ProvFirstNme"><pd.ProvFirstName>\</Variable>
-            <\n>\<Variable name="ProvLastNme"><pd.ProvLastName>\</Variable>
-            <\n>\<Variable name="ProvAddr1"><pd.ProvAddr1>\</Variable>
-            <\n>\<Variable name="ProvAddr2"><pd.ProvAddr2>\</Variable>
-            <\n>\<Variable name="ProvCity"><pd.ProvCity>\</Variable>
-            <\n>\<Variable name="ProvSt"><pd.ProvSt>\</Variable>
-            <\n>\<Variable name="ProvZip"><pd.ProvZip>\</Variable>
-            <\n>\<Variable name="ProvProvinceRegion"><pd.ProvProvinceRegion>\</Variable>
-            <\n>\<Variable name="ProvCountry"><pd.ProvCountry>\</Variable>
-            <\n>\<Variable name="NPI"><pd.npi>\</Variable>
-            <\n>\<Variable name="TIN"><pd.tin>\</Variable>
-            <\n>\<Variable name="ExemptionStartDt"><pd.exemptionEffectiveStartDate>\</Variable>
-            <\n>\<Variable name="ExemptionEndDt"><pd.exemptionEffectiveEndDate>\</Variable>
-            <\n>\<Variable name="ExemptionReqStartDt"><pd.cycleStartDate>\</Variable>
-            <\n>\<Variable name="ExemptionReqEndDt"><pd.cycleEndDate>\</Variable>
-            <\n>\<Variable name="RecipientType"><pd.providerType>\</Variable>
-            <\n>\<VariableGroup name="SERVICE" list="true">
-			<pd.codes:{cd|
-				<\n>\<VariableGroup name="Service">
-					<\n>\<Variable name="ProcCd"><cd.procedureCodeType>\</Variable>
-					<\n>\<Variable name="ProcCdDesc"><cd.procCodeDescription>\</Variable>
-					<\n>\<Variable name="ApprovalRate"><cd.approvalRate>\</Variable>
-					<\n>\<Variable name="NbrCds"><cd.numberOfCodesInCluster>\</Variable>
-				<\n>\</VariableGroup>};anchor, separator = "">
-			<\n>\</VariableGroup>
-  		<\n>\</Variables>
-    <\n>\</LetterRequest>};anchor, separator = "">
-<\n>\</BatchRequest>
-%>
-
-
-CNSJSONResponse(documentInfo, list) ::= <%
-{
-	"transactionId": "<documentInfo.transactionId>", 
-    "memberDetails" : {
-        "patientFirstName" : "<documentInfo.patientFirstName>",
-        "patientLastName" : "<documentInfo.patientLastName>",
-        "patientDateOfBirth" : "<documentInfo.patientDateOfBirth>",
-        "lob" : "<documentInfo.lob>",
-        "state" : "<documentInfo.state>"
-    },
-    "providerDetailsList" : [
-     <list:{it|
-      {
-        "providerTin" : "<it.providerTin>",
-        "admittingProviderName" : "<it.admittingProviderName>",
-        "facilityProvider" : "<it.facilityProvider>",
-        "providerName" : "<it.providerName>",
-        "providerNpi" : "<it.providerNpi>",
-        "dateEmailSent" : "<it.dateEmailSent>",
-        "notificationStatus" : "<it.notificationStatus>",
-        "eDeliveryError": "<it.eDeliveryError>",
-        "providerEmailId": "<it.providerEmailId>",
-        "corporateMpin": "<it.corporateMpin>",
-        "isBHProvider": <it.isBHProvider>
-      \}
-
-     };anchor, separator = ",">
-   ]
-}
-%>
-
-
-]}
-%>
-
-MNRJSONResponse(documentInfo) ::= <%
-{
-	"transactionId": "<documentInfo.transactionId>", 
-    "dateEmailSent" : "<documentInfo.dateEmailSent>", 
-    "notificationStatus": "<documentInfo.notificationStatus>",
-    "eDeliveryError": "<documentInfo.eDeliveryError>",
-    "providerEmailId": "<documentInfo.providerEmailId>",
-    "corporateMpin": "<documentInfo.corporateMpin>",
-    "memberDetails" : {
-        "patientFirstName" : "<documentInfo.patientFirstName>",
-        "patientLastName" : "<documentInfo.patientLastName>",
-        "patientDateOfBirth" : "<documentInfo.patientDateOfBirth>",
-        "lob" : "<documentInfo.lob>",
-        "state" : "<documentInfo.state>"
-    },
-    "providerDetails" : {
-        "providerTin" : "<documentInfo.providerTin>",
-        "admittingProviderName" : "<documentInfo.admittingProviderName>",
-        "facilityProvider" : "<documentInfo.facilityProvider>",
-        "providerName" : "<documentInfo.providerName>",
-        "providerNpi" : "<documentInfo.providerNpi>"
-    }
-}
-%>
-
-
-AppealsNotificationsResponse(list) ::= <%
-    tin|corporateMpin|providerEmailId|dateEmailSent|eDeliveryError|appealsReferenceNumber|status|attemptNumber|receivedDate<\n>
-    <list:{items| '<items.tin>'|'<items.corporateMpin>'|<items.providerEmailId>|<items.dateEmailSent>|<items.eDeliveryError>|<items.appealsReferenceNumber>|<items.status>|<items.attemptNumber>|<items.receivedDate>}; anchor, separator = "\n">
-%>
-
-
-
-
-
-
-PCPEmailRequestToPEN(document, values) ::= <%
-{
-    "AppId" : "<document.spaceId>",
-    "TemplateName" : "<values.templateName>",
-    "providerEmailIdList" : "<document.metadata.providerEmailId>",
-    "Category" : "<values.category>",
-    "metadata" : {
-        "RequestId" : "<values.requestId>",
-        "EndDate": "<values.planEndDate>"
-    }
-}
-%>
-
-SSBCIEmailRequestToPEN(document, templateName, category) ::= <%
-    {
-         "AppId" : "<document.spaceId>",
-         "providerEmailIdList" : "<document.metadata.providerEmailId>",
-         "TemplateName": "<templateName>",
-         "Category": "<category>",
-         "metadata" : {
-             "salutation": "<document.metadata.providerName>",
-             "effectiveDate" : "<document.metadata.effectiveDate>",
-             "providerName" : "<document.metadata.providerName>"
-        }
-    }
-%>
-
-TrackItJSONResponse(documentInfo, list) ::= <%
-{
-	"transactionId": "<documentInfo.transactionId>",
-    "providerDetailsList" : [
-     <list:{it|
-      {
-        "providerTin" : "<it.providerTin>",
-        "mpin" : "<it.mpin>",
-        "corporateMpin": "<it.corporateMpin>",
-        "reconCount" : "<it.reconCount>",
-        "paanCount" : "<it.paanCount>",
-        "appealCount" : "<it.appealCount>",
-        "providerName" : "<it.providerName>",
-        "dateEmailSent" : "<it.dateEmailSent>",
-        "notificationStatus" : "<it.notificationStatus>",
-        "eDeliveryError": "<it.eDeliveryError>",
-        "providerEmailId": "<it.providerEmailId>"
-      \}
-
-
-     };anchor, separator = ",">
-   ]
-}
-%>
-SSBCIResponseTemplate(list) ::= <%
-    Provider TIN,Corporate MPIN,Provider Email ID,Type,Date Email Sent,eDelivery Error,Transaction ID,Household ID,Insured Plan ID,Effective Date,End Date,Event Type,Provider Name,Provider NPI<\n>
-    <list:{it| <it.providerTin>,<it.corporateMpin>,<it.providerEmailId>,<it.type>,<it.dateEmailSent>,<it.eDeliveryError>,<it.transactionId>,<it.householdId>,<it.insuredPlanId>,<it.effectiveDate>,<it.endDate>,<it.eventType>,<it.providerName>,<it.providerNpi>}; anchor, separator = "\n">
-%>
