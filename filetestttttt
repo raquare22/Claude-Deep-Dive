@@ -1,0 +1,713 @@
+    // ------------------------------------------------------------------
+    // SHARED HELPER — builds the entire mocked WebClient "fluent chain"
+    // so the production call reaches retrieve()/toEntity() without a real
+    // network call. Each test then decides what toEntity(...) returns.
+    // ------------------------------------------------------------------
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private WebClient.ResponseSpec setupWebClientChain() {
+        WebClient webClient = mock(WebClient.class);
+        WebClient.RequestBodyUriSpec bodyUriSpec = mock(WebClient.RequestBodyUriSpec.class);
+        WebClient.RequestHeadersSpec headersSpec = mock(WebClient.RequestHeadersSpec.class);
+        WebClient.ResponseSpec responseSpec = mock(WebClient.ResponseSpec.class);
+
+        // getNewWebClient() calls webClientBuilder.clientConnector(...).build().
+        // If clientConnector(any()) is NOT stubbed, build() runs on a null and NPEs.
+        when(webClientBuilder.clientConnector(any())).thenReturn(webClientBuilder);
+        when(webClientBuilder.build()).thenReturn(webClient);
+
+        // Now mirror the exact call chain in the production code:
+        // post().uri(..).contentType(..).header(..).body(..).retrieve()
+        when(webClient.post()).thenReturn(bodyUriSpec);
+        when(bodyUriSpec.uri(any(URI.class))).thenReturn(bodyUriSpec);
+        when(bodyUriSpec.contentType(MediaType.MULTIPART_FORM_DATA)).thenReturn(bodyUriSpec);
+        when(bodyUriSpec.header(anyString(), anyString())).thenReturn(bodyUriSpec);
+        when(bodyUriSpec.body(any(BodyInserters.MultipartInserter.class))).thenReturn(headersSpec);
+        when(headersSpec.retrieve()).thenReturn(responseSpec);
+
+        // The OAuth token call must return something non-null for both the
+        // first attempt and the retry (forceRefresh = true) attempt.
+        when(oauthUtil.getOauthToken(anyString(), anyString(), anyString(), anyString(),
+                anyString(), any(), anyBoolean())).thenReturn("mockToken");
+
+        return responseSpec; // the test programs this object's toEntity(...) outcome
+    }
+
+    private static final String FDS_URL = "http://fds.example.com/documents";
+
+    // Tiny wrappers so each test is one readable line instead of repeating args.
+    private ResponseEntity<FDSCloudDocument> callFds() throws Exception {
+        return webClientSync.sendMultiPartDataWithRetry(
+                FDS_URL, new URI(FDS_URL), new File("test.txt"), "metadata", "searchTerms");
+    }
+
+    private ResponseEntity<Doc360Response> callDoc360() throws Exception {
+        return webClientSync.sendMultiPartDataWithRetryForDoc360(
+                FDS_URL, new URI(FDS_URL), new File("test.txt"), "{\"k\":\"v\"}");
+    }
+
+    // ===================== sendMultiPartDataWithRetry (FDS) =====================
+
+    @Test
+    public void testSendMultiPartDataWithRetry_firstAttemptSucceeds_returns200() throws Exception {
+        WebClient.ResponseSpec responseSpec = setupWebClientChain();
+        FDSCloudDocument doc = new FDSCloudDocument();
+        doc.setDocumentId("doc-1");
+        // toEntity returns a successful Mono -> first attempt works, no retry needed.
+        when(responseSpec.toEntity(FDSCloudDocument.class))
+                .thenReturn(Mono.just(new ResponseEntity<>(doc, HttpStatus.OK)));
+
+        ResponseEntity<FDSCloudDocument> response = callFds();
+
+        assertEquals(HttpStatus.OK, response.getStatusCode()); // proves the success/break path
+        assertNotNull(response.getBody());
+        assertEquals("doc-1", response.getBody().getDocumentId());
+    }
+
+    @Test
+    public void testSendMultiPartDataWithRetry_retryableThenSucceeds_takesRetryBranch() throws Exception {
+        WebClient.ResponseSpec responseSpec = setupWebClientChain();
+        // 1st call: a 503 (retryable) error. 2nd call: success.
+        when(responseSpec.toEntity(FDSCloudDocument.class))
+                .thenReturn(Mono.error(new HttpServerErrorException(HttpStatus.SERVICE_UNAVAILABLE)))
+                .thenReturn(Mono.just(new ResponseEntity<>(new FDSCloudDocument(), HttpStatus.OK)));
+
+        ResponseEntity<FDSCloudDocument> response = callFds();
+
+        assertEquals(HttpStatus.OK, response.getStatusCode()); // proves the retry loop recovered
+        // The retry branch must request a FRESH token (forceRefresh = true).
+        verify(oauthUtil).getOauthToken(anyString(), anyString(), anyString(), anyString(),
+                anyString(), any(), eq(true));
+    }
+
+    @Test
+    public void testSendMultiPartDataWithRetry_httpStatusCodeException_nonRetryable_returnsStatus() throws Exception {
+        WebClient.ResponseSpec responseSpec = setupWebClientChain();
+        // 400 is NOT in {500,502,503,504}, so it is non-retryable -> return that status immediately.
+        when(responseSpec.toEntity(FDSCloudDocument.class))
+                .thenReturn(Mono.error(new HttpClientErrorException(HttpStatus.BAD_REQUEST)));
+
+        assertEquals(HttpStatus.BAD_REQUEST, callFds().getStatusCode()); // proves the non-retryable else branch
+    }
+
+    @Test
+    public void testSendMultiPartDataWithRetry_httpStatusCodeException_retryableExhausts_returns500() throws Exception {
+        WebClient.ResponseSpec responseSpec = setupWebClientChain();
+        // Always 500 (retryable) -> retries get used up -> OutOfRetriesException -> 500.
+        when(responseSpec.toEntity(FDSCloudDocument.class))
+                .thenReturn(Mono.error(new HttpServerErrorException(HttpStatus.INTERNAL_SERVER_ERROR)));
+
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, callFds().getStatusCode()); // proves the OutOfRetries catch
+    }
+
+    @Test
+    public void testSendMultiPartDataWithRetry_webClientResponseException_nonRetryable_returnsStatus() throws Exception {
+        WebClient.ResponseSpec responseSpec = setupWebClientChain();
+        // Same idea but via the OTHER exception type (WebClientResponseException), non-retryable 404.
+        when(responseSpec.toEntity(FDSCloudDocument.class))
+                .thenReturn(Mono.error(new WebClientResponseException(404, "Not Found", null, null, null)));
+
+        assertEquals(HttpStatus.NOT_FOUND, callFds().getStatusCode());
+    }
+
+    @Test
+    public void testSendMultiPartDataWithRetry_webClientResponseException_retryableExhausts_returns500() throws Exception {
+        WebClient.ResponseSpec responseSpec = setupWebClientChain();
+        // WebClientResponseException with retryable 503 -> exhausts retries -> 500.
+        when(responseSpec.toEntity(FDSCloudDocument.class))
+                .thenReturn(Mono.error(new WebClientResponseException(503, "Service Unavailable", null, null, null)));
+
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, callFds().getStatusCode());
+    }
+
+    @Test
+    public void testSendMultiPartDataWithRetry_genericException_returns500() throws Exception {
+        WebClient.ResponseSpec responseSpec = setupWebClientChain();
+        // Neither Http* nor WebClient* -> falls into the generic catch -> 500.
+        when(responseSpec.toEntity(FDSCloudDocument.class))
+                .thenReturn(Mono.error(new IllegalStateException("boom")));
+
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, callFds().getStatusCode());
+    }
+
+    // ================= sendMultiPartDataWithRetryForDoc360 ======================
+
+    @Test
+    public void testDoc360_retryableThenSucceeds_takesRetryBranchWithBearerToken() throws Exception {
+        WebClient.ResponseSpec responseSpec = setupWebClientChain();
+        Doc360Response ok = new Doc360Response();
+        ok.setStatus("201");
+        when(responseSpec.toEntity(Doc360Response.class))
+                .thenReturn(Mono.error(new HttpServerErrorException(HttpStatus.BAD_GATEWAY))) // 502 retryable
+                .thenReturn(Mono.just(new ResponseEntity<>(ok, HttpStatus.CREATED)));
+
+        ResponseEntity<Doc360Response> response = callDoc360();
+
+        assertEquals(HttpStatus.CREATED, response.getStatusCode());
+        assertEquals("201", response.getBody().getStatus());
+    }
+
+    @Test
+    public void testDoc360_httpStatusCodeException_nonRetryable_returnsStatus() throws Exception {
+        WebClient.ResponseSpec responseSpec = setupWebClientChain();
+        when(responseSpec.toEntity(Doc360Response.class))
+                .thenReturn(Mono.error(new HttpClientErrorException(HttpStatus.UNAUTHORIZED))); // 401 non-retryable
+
+        assertEquals(HttpStatus.UNAUTHORIZED, callDoc360().getStatusCode());
+    }
+
+    @Test
+    public void testDoc360_httpStatusCodeException_retryableExhausts_returns500() throws Exception {
+        WebClient.ResponseSpec responseSpec = setupWebClientChain();
+        when(responseSpec.toEntity(Doc360Response.class))
+                .thenReturn(Mono.error(new HttpServerErrorException(HttpStatus.GATEWAY_TIMEOUT))); // 504 retryable
+
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, callDoc360().getStatusCode());
+    }
+
+    @Test
+    public void testDoc360_webClientResponseException_nonRetryable_returnsStatus() throws Exception {
+        WebClient.ResponseSpec responseSpec = setupWebClientChain();
+        when(responseSpec.toEntity(Doc360Response.class))
+                .thenReturn(Mono.error(new WebClientResponseException(403, "Forbidden", null, null, null)));
+
+        assertEquals(HttpStatus.FORBIDDEN, callDoc360().getStatusCode());
+    }
+
+    @Test
+    public void testDoc360_webClientResponseException_retryableExhausts_returns500() throws Exception {
+        WebClient.ResponseSpec responseSpec = setupWebClientChain();
+        when(responseSpec.toEntity(Doc360Response.class))
+                .thenReturn(Mono.error(new WebClientResponseException(502, "Bad Gateway", null, null, null)));
+
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, callDoc360().getStatusCode());
+    }
+
+    @Test
+    public void testDoc360_genericException_returns500() throws Exception {
+        WebClient.ResponseSpec responseSpec = setupWebClientChain();
+        when(responseSpec.toEntity(Doc360Response.class))
+                .thenReturn(Mono.error(new IllegalStateException("boom")));
+
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, callDoc360().getStatusCode());
+    }
+
+    // ============================ responseFilter ================================
+
+    @Test
+    public void testResponseFilter_errorStatus_emitsHttpServerException() {
+        ClientResponse response = mock(ClientResponse.class);
+        ClientResponse.Headers headers = mock(ClientResponse.Headers.class);
+        when(response.statusCode()).thenReturn(HttpStatus.INTERNAL_SERVER_ERROR); // status.isError() == true
+        when(response.bodyToMono(String.class)).thenReturn(Mono.just("error body"));
+        when(response.headers()).thenReturn(headers);
+        when(headers.asHttpHeaders()).thenReturn(new HttpHeaders());
+
+        Mono<ClientResponse> result = WebClientSync.responseFilter(response);
+
+        try {
+            result.block();                 // executing the Mono runs the error lambda
+            fail("Expected HttpServerException on error status");
+        } catch (HttpServerException e) {
+            assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, e.getStatus()); // proves the error branch
+        }
+    }
+
+    @Test
+    public void testResponseFilter_successStatus_passesResponseThrough() {
+        ClientResponse response = mock(ClientResponse.class);
+        ClientResponse.Headers headers = mock(ClientResponse.Headers.class);
+        when(response.statusCode()).thenReturn(HttpStatus.OK); // status.isError() == false
+        when(response.bodyToMono(String.class)).thenReturn(Mono.just("ok body"));
+        when(response.headers()).thenReturn(headers);
+        when(headers.asHttpHeaders()).thenReturn(new HttpHeaders());
+
+        Mono<ClientResponse> result = WebClientSync.responseFilter(response);
+
+        assertSame(response, result.block()); // proves the success branch returns the same response
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    // Needs: import org.springframework.http.MediaType;  (add at top if not present)
+
+    @Test
+    public void sanitizeNumericString_nonNumericInput_returnsZero() {
+        // "abc12!" does NOT match [0-9]+, so the method must fall through to "0".
+        // Covers the previously-missed else branch (line 47).
+        Assert.assertEquals("0", SanitizeUtil.sanitizeNumericString("abc12!"));
+    }
+
+    @Test
+    public void sanitizeString_nullInput_returnsNull() {
+        // Hits the null-guard at the top of sanitizeString (lines 18-19),
+        // which the existing valid/invalid-JSON tests never reach.
+        Assert.assertNull(SanitizeUtil.sanitizeString(null));
+    }
+
+    @Test
+    public void sanitizeMethods_nullInput_returnNull() {
+        // Each of these methods uses the ternary "str == null ? null : ...".
+        // The existing tests only pass non-null values, so the "== null -> null"
+        // TRUE branch is missed. One assertion per method closes that branch gap.
+        Assert.assertNull(SanitizeUtil.sanitizeToString(null));
+        Assert.assertNull(SanitizeUtil.sanitizeIntegerString(null));
+        Assert.assertNull(SanitizeUtil.sanitizeAlphaString(null));
+        Assert.assertNull(SanitizeUtil.sanitizeAlphaNumericString(null));
+        Assert.assertNull(SanitizeUtil.sanitizeAlphaNumericStringWithHyphen(null));
+    }
+
+    @Test
+    public void sanitizeHttpEntityHeaderRmAuth_noContentType_removesAuthorizationHeader() {
+        // Build an entity that HAS an Authorization header but NO Content-Type.
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Authorization", "Bearer super-secret-token");
+        HttpEntity<String> entity = new HttpEntity<>("body", headers);
+
+        HttpEntity<?> result = SanitizeUtil.sanitizeHttpEntityHeaderRmAuth(entity);
+
+        // The method must strip the Authorization header (security: don't leak tokens).
+        Assert.assertFalse(result.getHeaders().containsKey("Authorization"));
+        // With no content type set, the "if (contentType != null)" guard is FALSE,
+        // so we cover the method's entry + the false branch + the return (lines 30-32, 33-false, 36).
+        Assert.assertNull(result.getHeaders().getContentType());
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+package com.optum.fds.paperless;
+
+import static org.junit.Assert.assertThrows;   // JUnit 4.13+ (this project has it)
+import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.PublicKey;
+import java.security.cert.X509Certificate;
+import java.security.interfaces.RSAPrivateKey;
+import java.security.interfaces.RSAPublicKey;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.junit.Before;
+import org.junit.Test;
+import org.springframework.test.util.ReflectionTestUtils;
+
+import com.auth0.jwt.JWT;
+import com.auth0.jwt.algorithms.Algorithm;
+import com.auth0.jwt.exceptions.JWTVerificationException;
+
+public class StargateJWTValidatorTest {
+
+    private StargateJWTValidator validator;
+    private RSAPublicKey rsaPublicKey;
+    private RSAPrivateKey rsaPrivateKey;
+
+    @Before
+    public void setUp() throws Exception {
+        validator = new StargateJWTValidator();
+        // Generate a real RSA keypair so we can sign and verify tokens without any cert file.
+        KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA");
+        kpg.initialize(2048);
+        KeyPair kp = kpg.generateKeyPair();
+        rsaPublicKey = (RSAPublicKey) kp.getPublic();
+        rsaPrivateKey = (RSAPrivateKey) kp.getPrivate();
+    }
+
+    // Helper: injects a mocked cached certificate whose getPublicKey() returns the given key.
+    private void injectCertificateWithKey(PublicKey key) {
+        X509Certificate cert = mock(X509Certificate.class);
+        when(cert.getPublicKey()).thenReturn(key);
+        ReflectionTestUtils.setField(validator, "cachedCertificate", cert);
+    }
+
+    // Helper: builds a token with a chosen x5c header value, signed by the given algorithm.
+    private String tokenWithX5c(Object x5cValue, Algorithm signingAlg) {
+        Map<String, Object> header = new HashMap<>();
+        if (x5cValue != null) {
+            header.put("x5c", x5cValue);
+        }
+        return JWT.create().withHeader(header).sign(signingAlg);
+    }
+
+    // ============================== init() ==============================
+
+    @Test
+    public void init_certFileNotFound_throwsException() {
+        // Point at a path that does not exist -> FileInputStream throws ->
+        // caught by the generic catch (lines 45-47) -> rethrown as Exception.
+        ReflectionTestUtils.setField(validator, "stargateCert", "/no/such/path/cert.pem");
+        assertThrows(Exception.class, () -> validator.init());
+    }
+
+    // =========================== validateJWT() ==========================
+
+    @Test
+    public void validateJWT_nullToken_throwsIllegalArgument() {
+        // Hits the null/empty guard (lines 54-56) -> IllegalArgumentException.
+        assertThrows(IllegalArgumentException.class, () -> validator.validateJWT(null));
+    }
+
+    @Test
+    public void validateJWT_emptyToken_throwsIllegalArgument() {
+        // Same guard, empty-string side of the OR.
+        assertThrows(IllegalArgumentException.class, () -> validator.validateJWT(""));
+    }
+
+    @Test
+    public void validateJWT_malformedToken_throwsJWTVerification() {
+        // JWT.decode("garbage") throws JWTDecodeException (a JWTVerificationException) ->
+        // caught and rethrown by the outer catch at lines 104-106.
+        assertThrows(JWTVerificationException.class, () -> validator.validateJWT("not-a-real-jwt"));
+    }
+
+    @Test
+    public void validateJWT_missingX5cHeader_throwsIllegalArgument() {
+        // Token has no x5c header -> x5c list is null (lines 63-65) -> IllegalArgumentException.
+        String token = tokenWithX5c(null, Algorithm.none());
+        assertThrows(IllegalArgumentException.class, () -> validator.validateJWT(token));
+    }
+
+    @Test
+    public void validateJWT_emptyX5cList_throwsIllegalArgument() {
+        // x5c present but empty -> the x5c.isEmpty() branch (line 63) -> IllegalArgumentException.
+        String token = tokenWithX5c(List.of(), Algorithm.none());
+        assertThrows(IllegalArgumentException.class, () -> validator.validateJWT(token));
+    }
+
+    @Test
+    public void validateJWT_emptyCertString_throwsIllegalArgument() {
+        // x5c = [""] -> derEncodedCert is empty (lines 70-72) -> IllegalArgumentException.
+        String token = tokenWithX5c(List.of(""), Algorithm.none());
+        assertThrows(IllegalArgumentException.class, () -> validator.validateJWT(token));
+    }
+
+    @Test
+    public void validateJWT_invalidBase64Cert_throwsIllegalArgument() {
+        // x5c contains characters that are not valid Base64 -> the inner decode at line 84
+        // throws -> caught at 85-88 -> IllegalArgumentException ("not a valid Base64 string").
+        String token = tokenWithX5c(List.of("@@@not-base64@@@"), Algorithm.none());
+        assertThrows(IllegalArgumentException.class, () -> validator.validateJWT(token));
+    }
+
+    @Test
+    public void validateJWT_pemFormatCert_isStripped_thenFailsOnNonRsaKey() {
+        // x5c wrapped in PEM markers -> exercises the PEM-stripping branch (lines 76-81),
+        // then the (mocked) cert returns a non-RSA key -> IllegalArgumentException (95).
+        String pem = "-----BEGIN CERTIFICATE-----\ndGVzdA\n-----END CERTIFICATE-----";
+        injectCertificateWithKey(mock(PublicKey.class)); // not an RSAPublicKey
+        String token = tokenWithX5c(List.of(pem), Algorithm.none());
+        assertThrows(IllegalArgumentException.class, () -> validator.validateJWT(token));
+    }
+
+    @Test
+    public void validateJWT_nonRsaPublicKey_throwsIllegalArgument() {
+        // Valid base64 x5c, but cached cert's key is not RSA -> lines 93-95 -> IllegalArgumentException.
+        injectCertificateWithKey(mock(PublicKey.class));
+        String token = tokenWithX5c(List.of("dGVzdA"), Algorithm.none()); // "dGVzdA" = valid base64
+        assertThrows(IllegalArgumentException.class, () -> validator.validateJWT(token));
+    }
+
+    @Test
+    public void validateJWT_signatureMismatch_throwsWrappedException() throws Exception {
+        // Cached cert holds our RSA public key, but the token is signed by a DIFFERENT key.
+        injectCertificateWithKey(rsaPublicKey);
+
+        KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA");
+        kpg.initialize(2048);
+        KeyPair other = kpg.generateKeyPair();
+        String token = tokenWithX5c(List.of("dGVzdA"),
+                Algorithm.RSA256((RSAPublicKey) other.getPublic(), (RSAPrivateKey) other.getPrivate()));
+
+        // verify() fails at line 98 -> inner catch (100-102) wraps it as a plain Exception.
+        Exception ex = assertThrows(Exception.class, () -> validator.validateJWT(token));
+        assertTrue(ex.getMessage().contains("signature verification failed"));
+    }
+
+    @Test
+    public void validateJWT_validSignature_succeeds() throws Exception {
+        // Cached cert holds the SAME public key that signed the token -> full happy path,
+        // reaching the success log at line 99 with no exception thrown.
+        injectCertificateWithKey(rsaPublicKey);
+        String token = tokenWithX5c(List.of("dGVzdA"),
+                Algorithm.RSA256(rsaPublicKey, rsaPrivateKey));
+
+        validator.validateJWT(token); // must NOT throw
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+package com.optum.fds.paperless;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import org.junit.Before;
+import org.junit.Test;
+import org.springframework.test.util.ReflectionTestUtils;
+
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+
+public class StargateJWTFilterTest {
+
+    private StargateJWTValidator validator;   // the mocked collaborator
+    private StargateJWTFilter filter;
+    private HttpServletRequest request;
+    private HttpServletResponse response;
+    private FilterChain chain;
+
+    @Before
+    public void setUp() {
+        validator = mock(StargateJWTValidator.class);
+        filter = new StargateJWTFilter(validator);
+        request = mock(HttpServletRequest.class);
+        response = mock(HttpServletResponse.class);
+        chain = mock(FilterChain.class);
+        // By default, ENABLE the filter for all tests (overridden where needed).
+        // Direct `new` leaves the boolean at false, so we must set it true explicitly.
+        ReflectionTestUtils.setField(filter, "isFilterEnabled", true);
+    }
+
+    @Test
+    public void doFilter_filterDisabled_passesThroughWithoutValidation() throws Exception {
+        // Disable the filter -> takes the early return at lines 34-37.
+        ReflectionTestUtils.setField(filter, "isFilterEnabled", false);
+
+        filter.doFilter(request, response, chain);
+
+        verify(chain).doFilter(request, response);               // request was passed through
+        verify(validator, never()).validateJWT(anyString());     // and validation was skipped
+    }
+
+    @Test
+    public void doFilter_loggerUri_skipsValidationAndPassesThrough() throws Exception {
+        // Enabled, but the URI is on the logger allowlist -> lines 45-48.
+        when(request.getRequestURI()).thenReturn("/api/loggers/v1/level");
+
+        filter.doFilter(request, response, chain);
+
+        verify(chain).doFilter(request, response);
+        verify(validator, never()).validateJWT(anyString());
+    }
+
+    @Test
+    public void doFilter_missingJwtHeader_returnsUnauthorized() throws Exception {
+        // Enabled, normal URI, but no JWT header -> lines 54-57 -> 401.
+        when(request.getRequestURI()).thenReturn("/api/services/v1/filestore/sendFile/123");
+        when(request.getHeader("JWT")).thenReturn(null);
+
+        filter.doFilter(request, response, chain);
+
+        verify(response).sendError(eq(HttpServletResponse.SC_UNAUTHORIZED), anyString());
+        verify(chain, never()).doFilter(any(), any());           // request must NOT proceed
+    }
+
+    @Test
+    public void doFilter_emptyJwtHeader_returnsUnauthorized() throws Exception {
+        // Same guard, the empty-string side of the OR (line 54).
+        when(request.getRequestURI()).thenReturn("/api/services/v1/filestore/sendFile/123");
+        when(request.getHeader("JWT")).thenReturn("");
+
+        filter.doFilter(request, response, chain);
+
+        verify(response).sendError(eq(HttpServletResponse.SC_UNAUTHORIZED), anyString());
+        verify(chain, never()).doFilter(any(), any());
+    }
+
+    @Test
+    public void doFilter_validJwt_passesThroughChain() throws Exception {
+        // Enabled, normal URI, JWT present, validator does NOT throw -> lines 60-62.
+        when(request.getRequestURI()).thenReturn("/api/services/v1/filestore/sendFile/123");
+        when(request.getHeader("JWT")).thenReturn("a.valid.jwt");
+        // void mock does nothing by default -> simulates successful validation.
+
+        filter.doFilter(request, response, chain);
+
+        verify(validator).validateJWT("a.valid.jwt");
+        verify(chain).doFilter(request, response);               // request proceeds
+        verify(response, never()).sendError(anyInt(), anyString());
+    }
+
+    @Test
+    public void doFilter_validatorThrowsIllegalArgument_returnsUnauthorized() throws Exception {
+        // Validator rejects the token as malformed -> catch at lines 63-65 -> 401.
+        when(request.getRequestURI()).thenReturn("/api/services/v1/filestore/sendFile/123");
+        when(request.getHeader("JWT")).thenReturn("bad.jwt");
+        doThrow(new IllegalArgumentException("x5c claim is missing"))
+                .when(validator).validateJWT("bad.jwt");
+
+        filter.doFilter(request, response, chain);
+
+        verify(response).sendError(eq(HttpServletResponse.SC_UNAUTHORIZED), anyString());
+        verify(chain, never()).doFilter(any(), any());
+    }
+
+    @Test
+    public void doFilter_validatorThrowsGenericException_returnsInternalServerError() throws Exception {
+        // Validator fails unexpectedly -> catch at lines 66-68 -> 500.
+        when(request.getRequestURI()).thenReturn("/api/services/v1/filestore/sendFile/123");
+        when(request.getHeader("JWT")).thenReturn("some.jwt");
+        doThrow(new Exception("signature verification failed"))
+                .when(validator).validateJWT("some.jwt");
+
+        filter.doFilter(request, response, chain);
+
+        verify(response).sendError(eq(HttpServletResponse.SC_INTERNAL_SERVER_ERROR), anyString());
+        verify(chain, never()).doFilter(any(), any());
+    }
+}
+
+
+
+
+
+
+
