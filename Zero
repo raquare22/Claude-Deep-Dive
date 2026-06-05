@@ -1,353 +1,368 @@
-SECURE REQUEST’S REQUIRED 
+package com.fds.paperless.model;
+
+import org.junit.Test;
+import org.mockito.Mockito;
+
+import java.util.UUID;
+
+import com.fds.paperless.mongo.ErrorMetaData;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+
+/**
+ * Unit tests for {@link Message} — covers both constructors (including the
+ * spaceId null-default branch), accessors, and the four toString* variants.
+ * ErrorMetaData is mocked so this stays a pure unit test with no I/O.
+ */
+public class MessageTest {
+
+    @Test
+    public void jsonCreatorConstructor_withSpaceId_populatesAllFields() {
+        Message message = new Message("HighPriorityQueue", "http://reply", "idx",
+                "id1", "t1", 5, "{\"k\":\"v\"}");
+
+        assertEquals("HighPriorityQueue", message.getQueue());
+        assertEquals("http://reply", message.getReplyTo());
+        assertEquals("idx", message.getReplyToIndex());
+        assertEquals("id1", message.getIdentifier());
+        assertEquals("t1", message.getTargetId());
+        assertEquals(Integer.valueOf(5), message.getSpaceId());
+        assertEquals("{\"k\":\"v\"}", message.getBody());
+        assertEquals(Integer.valueOf(0), message.getRetryCount());
+        assertEquals(Long.valueOf(0L), message.getDeliveryCount());
+        assertNull(message.getMetadataId());
+
+        // subject is built from CommonConstants and must embed identifier + targetId
+        assertTrue(message.getSubject().contains("\"identifier\":\"id1\""));
+        assertTrue(message.getSubject().contains("\"targetId\":\"t1\""));
+
+        // messageId is a generated UUID
+        assertNotNull(message.getMessageId());
+        assertEquals(message.getMessageId(), UUID.fromString(message.getMessageId()).toString());
+    }
+
+    @Test
+    public void jsonCreatorConstructor_withNullSpaceId_defaultsToMinusOne() {
+        Message message = new Message("q", "r", "idx", "id", "t", null, "body");
+
+        assertEquals(Integer.valueOf(-1), message.getSpaceId());
+    }
+
+    @Test
+    public void errorMetaDataConstructor_mapsAllFields() {
+        ErrorMetaData meta = Mockito.mock(ErrorMetaData.class);
+        Mockito.when(meta.getQueue()).thenReturn("q");
+        Mockito.when(meta.getReplyTo()).thenReturn("rt");
+        Mockito.when(meta.getReplyToIndex()).thenReturn("rti");
+        Mockito.when(meta.getIdentifier()).thenReturn("id");
+        Mockito.when(meta.getTargetId()).thenReturn("tid");
+        Mockito.when(meta.getSpaceId()).thenReturn(7);
+        Mockito.when(meta.getMetadataAsJsonString()).thenReturn("{}");
+        Mockito.when(meta.getSubject()).thenReturn("subj");
+        Mockito.when(meta.getRetryCount()).thenReturn(3);
+        Mockito.when(meta.getMessageId()).thenReturn("mid");
+        Mockito.when(meta.getDeliveryCount()).thenReturn(5L);
+        Mockito.when(meta.getId()).thenReturn("metaId");
 
-  
+        Message message = new Message(meta);
 
-These three accesses are required- 
+        assertEquals("q", message.getQueue());
+        assertEquals("rt", message.getReplyTo());
+        assertEquals("rti", message.getReplyToIndex());
+        assertEquals("id", message.getIdentifier());
+        assertEquals("tid", message.getTargetId());
+        assertEquals(Integer.valueOf(7), message.getSpaceId());
+        assertEquals("{}", message.getBody());
+        assertEquals("subj", message.getSubject());
+        assertEquals(Integer.valueOf(3), message.getRetryCount());
+        assertEquals("mid", message.getMessageId());
+        assertEquals(Long.valueOf(5L), message.getDeliveryCount());
+        assertEquals("metaId", message.getMetadataId());
+    }
 
-  
+    @Test
+    public void errorMetaDataConstructor_withNullSpaceId_defaultsToMinusOne() {
+        ErrorMetaData meta = Mockito.mock(ErrorMetaData.class);
+        Mockito.when(meta.getSpaceId()).thenReturn(null);
 
-GCP_Access_CloudNative 
+        Message message = new Message(meta);
 
-GCP_FDS_PAPERLESS_admin 
+        assertEquals(Integer.valueOf(-1), message.getSpaceId());
+    }
 
-GCP_hcck8s_console_access 
+    @Test
+    public void settersAndGetters_roundTrip() {
+        Message message = new Message("q", "r", "idx", "id", "t", 1, "body");
 
-  
+        message.setQueue("q2");
+        message.setReplyTo("r2");
+        message.setReplyToIndex("idx2");
+        message.setIdentifier("id2");
+        message.setTargetId("t2");
+        message.setBody("body2");
+        message.setSubject("subj2");
+        message.setRetryCount(9);
+        message.setDeliveryCount(4L);
+        message.setMetadataId("meta2");
 
-These request can be raised as follows : 
+        assertEquals("q2", message.getQueue());
+        assertEquals("r2", message.getReplyTo());
+        assertEquals("idx2", message.getReplyToIndex());
+        assertEquals("id2", message.getIdentifier());
+        assertEquals("t2", message.getTargetId());
+        assertEquals("body2", message.getBody());
+        assertEquals("subj2", message.getSubject());
+        assertEquals(Integer.valueOf(9), message.getRetryCount());
+        assertEquals(Long.valueOf(4L), message.getDeliveryCount());
+        assertEquals("meta2", message.getMetadataId());
+    }
 
- 
+    @Test
+    public void setTargetIdInteger_actuallySetsSpaceId_knownNamingQuirk() {
+        // setTargetId(Integer) is mis-named in production: it writes spaceId, not targetId.
+        // This pins current behavior; the proper fix is to rename it setSpaceId(Integer).
+        Message message = new Message("q", "r", "idx", "id", "t", 1, "body");
 
-  
+        message.setTargetId(99);  // Integer overload
 
- 
+        assertEquals(Integer.valueOf(99), message.getSpaceId());
+        assertEquals("t", message.getTargetId());  // String targetId unchanged
+    }
 
-  
+    @Test
+    public void toStringVariants_containExpectedContent() {
+        Message message = new Message("q", "r", "idx", "myId", "myTarget", 2, "myBody");
 
-NOTE : You would need an optum cloud id for this, but if u don’t have this option the first thing you need is a new cloud id. Follow this link for instructions: https://cloud.optum.com/docs/getting-started/access-azure-portal/#request-new-cloud-native-id 
+        String toString = message.toString();
+        assertTrue(toString.contains("Message [queue=q"));
+        assertTrue(toString.contains("identifier=myId"));
+        assertTrue(toString.contains("targetId=myTarget"));
+        assertTrue(toString.contains("replyToIndex=idx"));
 
-INSTALLING KUBECTL 
+        // verbose variants additionally include the body
+        assertTrue(message.toStringVerbose().contains("body=myBody"));
+        assertTrue(message.toStringCompositeKeyVerbose().contains("body=myBody"));
 
-  
+        // composite-key (non-verbose) excludes the body
+        assertTrue(message.toStringCompositeKey().contains("Message [queue=q"));
+        assertTrue(!message.toStringCompositeKey().contains("body="));
+    }
+}
 
-Use this command to install the Kubernetes command line on mac os using homebrew: 
 
-  
 
-brew install kubectl 
 
-  
 
-kubectl get sa -n provider-email-notifications-stage-ctc 
 
-  
 
-  
 
-INSTALLING GOOGLE CLOUD CLI 
 
-  
 
-Follow this link(https://cloud.google.com/sdk/docs/install) and find the tar.gz package that needs to be downloaded in the step 2 of that documentation. 
 
-  
 
-After downloading the required package, extract it to any location on your file system. The extracted folder will be named as “google-cloud-sdk”. 
 
-  
 
-Open an instance of the terminal on that location where the sdk folder exists and run the following command:  
 
-./google-cloud-sdk/install.sh  
 
-  
 
-After doing this follow this link for further cloud cli setup steps: https://k8s.optum.com/documentation/management_tools/kubectl_cli/#kubectl-cloud-native-id-configuration 
 
-  
 
-FURTHER STEPS ON THIS ARE REMAINING FROM MY SIDE 
 
-  
 
-cd $HOME/Library/Preferences/ 
 
-mkdir google 
 
-cd google 
 
-mkdir Anthos 
 
-cd Anthos 
 
-touch kubectl-anthos-config.yaml 
 
-copy the contents of this yaml file : https://k8s.optum.com/documentation/kubectl-anthos-config.yaml 
 
-nano kubectl-anthos-config.yaml 
 
-Now paste the copied content inside this file and save. 
 
-Ctrl+o then ctrl+x 
 
-gcloud anthos auth login --cluster ctcprdusr001 
 
-  
 
-  
 
-  
 
-  
 
-  
 
-kubectl get sa -n provider-email-notifications-stage-ctc 
 
-before setting up context u need to use -n wioth every command 
 
-  
 
-  
 
-  
 
-  
 
-  
 
-  
 
-  
 
-  
 
-  
 
-  
 
-  
 
-  
 
-  
 
-  
 
-  
 
-  
+package com.fds.paperless.mongo;
 
-  
+import org.junit.Test;
 
-  
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
 
-LOGGING INTO GCP CONSOLE 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
 
-  
+/**
+ * Unit tests for {@link MetaData} — default constructor, accessors, the
+ * setVersion() branch logic, incrementVersion(), both setStatus overloads,
+ * and toString. No production code is modified.
+ */
+public class MetaDataTest {
 
-https://k8s.optum.com/documentation/management_tools/gcp_console/ 
+    @Test
+    public void defaultConstructor_stampsCreatedAndModifiedDates() {
+        MetaData meta = new MetaData();
 
-  
+        assertNotNull(meta.getDateCreated());
+        assertNotNull(meta.getDateModified());
+    }
 
-Microsoft authenticator setup is required for logging in the GCP console. 
+    @Test
+    public void idDatesAndName_roundTrip() {
+        MetaData meta = new MetaData();
+        Date created = new Date(1000L);
+        Date modified = new Date(2000L);
 
-  
+        meta.setId("abc123");
+        meta.setDateCreated(created);
+        meta.setDateModified(modified);
+        meta.setName("metaName");
 
-NOTE : Remove your current default web browser and make some other browser your default web browser because if you try to login the gcp console online it will use your main email id as the username rather than the optum cloud id, and will display this error : 
+        assertEquals("abc123", meta.getId());
+        assertEquals(created, meta.getDateCreated());
+        assertEquals(modified, meta.getDateModified());
+        assertEquals("metaName", meta.getName());
+    }
 
-  
+    @Test
+    public void revisions_roundTrip() {
+        MetaData meta = new MetaData();
+        List<ErrorRevision> revisions = new ArrayList<>();
 
-  
+        meta.setRevisions(revisions);
 
-  
+        assertSame(revisions, meta.getRevisions());
+    }
 
-DOCKER REPO  
+    @Test
+    public void setStatus_withEnum_setsValue() {
+        MetaData meta = new MetaData();
+        meta.setStatus(MetaDataStatus.AUTOMATIC);
 
- 
+        assertEquals(MetaDataStatus.AUTOMATIC, meta.getStatus());
+    }
 
-  
+    @Test
+    public void setStatus_withString_setsValue() {
+        MetaData meta = new MetaData();
+        meta.setStatus("AUTOMATIC");
 
-So after changing your web browser try to login in the new default browser with the optum cloud id. 
+        assertEquals(MetaDataStatus.AUTOMATIC, meta.getStatus());
+    }
 
-  
+    @Test(expected = IllegalArgumentException.class)
+    public void setStatus_withInvalidString_throws() {
+        new MetaData().setStatus("NOT_A_STATUS");
+    }
 
-  
+    @Test
+    public void setVersion_withNull_defaultsToOne() {
+        MetaData meta = new MetaData();
+        meta.setVersion(null);
 
-  
+        assertEquals("1", meta.getVersion());
+    }
 
-  
+    @Test
+    public void setVersion_withEmpty_defaultsToOne() {
+        MetaData meta = new MetaData();
+        meta.setVersion("");
 
-  
+        assertEquals("1", meta.getVersion());
+    }
 
-  
+    @Test
+    public void setVersion_withPositiveNumber_setsValue() {
+        MetaData meta = new MetaData();
+        meta.setVersion("5");
 
-  
+        assertEquals("5", meta.getVersion());
+    }
 
-  
+    @Test
+    public void setVersion_withZero_isNotSet() {
+        MetaData meta = new MetaData();
+        meta.setVersion("0");   // parseInt("0") > 0 is false -> guard skips assignment
 
-  
+        assertNull(meta.getVersion());
+    }
 
-  
+    @Test(expected = NumberFormatException.class)
+    public void setVersion_withNonNumeric_throws() {
+        new MetaData().setVersion("abc");
+    }
 
-  
+    @Test
+    public void incrementVersion_incrementsByOne() {
+        MetaData meta = new MetaData();
+        meta.setVersion("5");
 
-  
+        meta.incrementVersion();
 
-INSTALLING TECHCTL AND HCPCTL 
+        assertEquals("6", meta.getVersion());
+    }
 
-  
+    @Test
+    public void toString_containsKeyFields() {
+        MetaData meta = new MetaData();
+        meta.setId("id1");
+        meta.setName("n1");
+        meta.setVersion("3");
 
-brew tap prm/homebrew https://github.optum.com/prm/homebrew.git 
+        String result = meta.toString();
+        assertTrue(result.contains("MetaData [id=id1"));
+        assertTrue(result.contains("version=3"));
+        assertTrue(result.contains("name=n1"));
+    }
+}
 
-  
 
-brew install hcpctl 
 
-hcpctl context create --uri https://prm.optum.com prm-prod 
 
-hcpctl env 
 
-hcpctl login -m username 
 
-  
 
-brew install techctl 
 
-techctl context create --uri https://prm.optum.com prm-prod 
 
-techctl login -m username 
 
-techctl env 
 
-curl -sSL https://github.optum.com/raw/rjury/hcck8s_prm_demo/master/setup-kubeconfig.sh | bash -s -- fds-paperless/naas-v1/provider-email-notifications-stage-ctc 
 
- 
 
-After running the curl command above this will be the output on the screen and copy the highlighted command in the screenshot to set your context and then execute it. 
 
-  
 
-Commands  
 
-  
 
-Kubectl get pods 
 
-Kubectl get sa 
 
-Hcpctl ls 
 
-  
 
-  
 
-  
 
-  
 
-  
-
-  
-
-  
-
-  
-
-UHC DOCKER REPO : https://repo1.uhc.com/ui/ 
-
-Search fds-paperless 
-
-  
-
-  
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
- 
-
-Now that the HCC K8S team migrated our stage namespaces to the nonprod cluster ctcnonprdusr001, I have updated the CICD for the new namespaces. I have also shutdown the pods in the old namespaces.  
-
-  
-
-Here are the details to access the new namespaces on your local machines and in Lens. The documentation is linked below for more details if needed.  
-
-https://k8s.optum.com/documentation/getting-started/ 
-
-  
-
-Login to https://myworkaccount.microsoft.com/ using your cloud native id (i.e. jwang49@optumcloud.com) in your default browser 
-In your terminal: 
-cd $HOME/Library/Preferences/google/anthos/ 
-Copy this file to the above location: 
-i.      https://k8s.optum.com/documentation/kubectl-anthos-config.yaml 
-
-If you already have a file kubectl-anthos-config.yaml, you will need to delete it and copy the latest version from the above link 
-Login to google cloud in your terminal using your cloud native id (i.e. jwang49@optumcloud.com) : 
-gcloud anthos auth login --cluster ctcnonprdusr001 
-Run this command: 
-kubectl config use-context <cluster_name>-<cloud_native_id> 
-i.e. kubectl config use-context ctcnonprdusr001-jwang49@optumcloud.com 
-Switch to the new namespace: 
-hcpctl login 
-For PRUN stage: 
-                        i.   curl -sSL https://github.optum.com/raw/rjury/hcck8s_prm_demo/master/setup-kubeconfig.sh | bash -s -- fds-paperless/naas-v1/ctcnonprdusr001-provider-paperless-stage 
-
-                       ii.   kubectl config use-context ctcnonprdusr001_provider-paperless-stage_provider-paperless-stage-hcc-naas-admin 
-
-For PEN stage: 
-                        i.   curl -sSL https://github.optum.com/raw/rjury/hcck8s_prm_demo/master/setup-kubeconfig.sh | bash -s -- fds-paperless/naas-v1/ctcnonprdusr001-provider-email-notifications-stage-ctc 
-
-                       ii.   kubectl config use-context ctcnonprdusr001_provider-email-notifications-stage-ctc_provider-email-notifications-stage-ctc-hcc-naas-admin 
-
- 
-
- 
-
- 
-
- 
-
- 
-
-Test everything is working: 
-kubectl get pods 
-Now when you go to Lens, the 2 new namespaces should appear 
- 
- 
- 
-There are new service endpoints. I have already updated the config store, hooks and processor scripts, and mongodb with these new endpoints. You will need to update your Stage postman collections with the new service endpoints: 
-
-  
-
-PRUN 
-
-config-server-nonprod.hcck8s-ctc-np1.optum.com 
-
-fds-paperless-activiti-nonprod.hcck8s-ctc-np1.optum.com 
-
-fds-paperless-message-service-non-prod.hcck8s-ctc-np1.optum.com 
-
-prun-filestore-nonprod.hcck8s-ctc-np1.optum.com 
-
-ppl-prun-services-nonprod.hcck8s-ctc-np1.optum.com 
-
-  
-
-PEN 
-
-fds-pen-service-nonprod.hcck8s-ctc-np1.optum.com 
-
- 
-
- 
