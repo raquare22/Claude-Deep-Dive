@@ -1,154 +1,637 @@
-package com.fds.paperless.model;
+>>> RealTimeServiceControllerTest
 
+    // ===================================================================
+    // Additional coverage — added without modifying the production class.
+    // Bucket-sensitive endpoints use a freshly-built controller so they are
+    // independent of the shared instance's rate-limit state / test order.
+    // ===================================================================
+
+    private static final String COV_PDF =
+            "src/test/resources/files/1412123657_1412123660.pdf";
+
+    /** Fresh controller with generous limits + the existing mocks wired in. */
+    private RealTimeServiceController newController(long limit) {
+        RealTimeServiceController c = new RealTimeServiceController(limit, limit);
+        ReflectionTestUtils.setField(c, "processDocumentUtil", processDocumentUtil);
+        ReflectionTestUtils.setField(c, "config", config);
+        ReflectionTestUtils.setField(c, "documentMetaDataService", documentMetaDataService);
+        ReflectionTestUtils.setField(c, "objectMapper", objectMapper);
+        return c;
+    }
+
+    private MultipartFile covPdf(String originalFilename) throws Exception {
+        byte[] bytes = java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(COV_PDF));
+        return new MockMultipartFile("file", originalFilename, "application/pdf", bytes);
+    }
+
+    // ---------- processFileUpload ----------
+
+    @Test
+    public void processFileUpload_validPdf_returnsCreated() throws Exception {
+        Map<String, Object> responseMap = new HashMap<>();
+        responseMap.put("documentStatus", MetaDataStatus.OK);
+        when(processDocumentUtil.processFileUpload(anyString(), any(MultipartFile.class), any(org.bson.Document.class), anyInt(), anyString()))
+                .thenReturn(responseMap);
+
+        ResponseEntity<Map<String, Object>> response =
+                newController(1000).processFileUpload(headers, covPdf("1412123657_1412123660.pdf"), "{\"key\":\"value\"}", "123", "cid");
+
+        assertNotNull(response);
+        assertEquals(HttpStatus.CREATED, response.getStatusCode());
+        assertEquals(responseMap, response.getBody());
+    }
+
+    @Test
+    public void processFileUpload_severeError_returnsBadRequest() throws Exception {
+        Map<String, Object> responseMap = new HashMap<>();
+        responseMap.put("documentStatus", MetaDataStatus.SEVERE_ERROR);
+        when(processDocumentUtil.processFileUpload(anyString(), any(MultipartFile.class), any(org.bson.Document.class), anyInt(), anyString()))
+                .thenReturn(responseMap);
+
+        ResponseEntity<Map<String, Object>> response =
+                newController(1000).processFileUpload(headers, covPdf("1412123657_1412123660.pdf"), "{\"key\":\"value\"}", "123", "cid");
+
+        assertNotNull(response);
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+    }
+
+    @Test
+    public void processFileUpload_fatalError_returnsInternalServerError() throws Exception {
+        Map<String, Object> responseMap = new HashMap<>();
+        responseMap.put("documentStatus", MetaDataStatus.FATAL_ERROR);
+        when(processDocumentUtil.processFileUpload(anyString(), any(MultipartFile.class), any(org.bson.Document.class), anyInt(), anyString()))
+                .thenReturn(responseMap);
+
+        ResponseEntity<Map<String, Object>> response =
+                newController(1000).processFileUpload(headers, covPdf("1412123657_1412123660.pdf"), "{\"key\":\"value\"}", "123", "cid");
+
+        assertNotNull(response);
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
+    }
+
+    @Test
+    public void processFileUpload_storageError_returnsInternalServerError() throws Exception {
+        Map<String, Object> responseMap = new HashMap<>();
+        responseMap.put("documentStatus", MetaDataStatus.STORAGE_ERROR);
+        when(processDocumentUtil.processFileUpload(anyString(), any(MultipartFile.class), any(org.bson.Document.class), anyInt(), anyString()))
+                .thenReturn(responseMap);
+
+        ResponseEntity<Map<String, Object>> response =
+                newController(1000).processFileUpload(headers, covPdf("1412123657_1412123660.pdf"), "{\"key\":\"value\"}", "123", "cid");
+
+        assertNotNull(response);
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
+    }
+
+    @Test
+    public void processFileUpload_emptyMetadataJson_returnsBadRequest() throws Exception {
+        // "{}" passes the null/empty String guard but parses to an empty bson Document.
+        ResponseEntity<Map<String, Object>> response =
+                newController(1000).processFileUpload(headers, covPdf("1412123657_1412123660.pdf"), "{}", "123", "cid");
+
+        assertNotNull(response);
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertEquals("Metadata must be in json format", response.getBody().get("error"));
+    }
+
+    @Test
+    public void processFileUpload_invalidSpaceId_returnsBadRequest() throws Exception {
+        ResponseEntity<Map<String, Object>> response =
+                newController(1000).processFileUpload(headers, covPdf("1412123657_1412123660.pdf"), "{\"key\":\"value\"}", "abc", "cid");
+
+        assertNotNull(response);
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertEquals("Null or invalid request", response.getBody().get("error"));
+    }
+
+    @Test
+    public void processFileUpload_pathTraversalFilename_returnsUnsupportedMediaType() throws Exception {
+        // Filename retains ".." after Paths.getFileName(), tripping the traversal guard.
+        ResponseEntity<Map<String, Object>> response =
+                newController(1000).processFileUpload(headers, covPdf("foo..pdf"), "{\"key\":\"value\"}", "123", "cid");
+
+        assertNotNull(response);
+        assertEquals(HttpStatus.UNSUPPORTED_MEDIA_TYPE, response.getStatusCode());
+        assertEquals("Invalid file type", response.getBody().get("error"));
+    }
+
+    @Test
+    public void processFileUpload_nonPdfExtension_returnsUnsupportedMediaType() throws Exception {
+        ResponseEntity<Map<String, Object>> response =
+                newController(1000).processFileUpload(headers, covPdf("document.txt"), "{\"key\":\"value\"}", "123", "cid");
+
+        assertNotNull(response);
+        assertEquals(HttpStatus.UNSUPPORTED_MEDIA_TYPE, response.getStatusCode());
+        assertEquals("Invalid file type", response.getBody().get("error"));
+    }
+
+    @Test
+    public void processFileUpload_utilThrows_returnsInternalServerError() throws Exception {
+        when(processDocumentUtil.processFileUpload(anyString(), any(MultipartFile.class), any(org.bson.Document.class), anyInt(), anyString()))
+                .thenThrow(new RuntimeException("downstream failure"));
+
+        ResponseEntity<Map<String, Object>> response =
+                newController(1000).processFileUpload(headers, covPdf("1412123657_1412123660.pdf"), "{\"key\":\"value\"}", "123", "cid");
+
+        assertNotNull(response);
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
+        assertEquals("Internal server error", response.getBody().get("error"));
+    }
+
+    // ---------- processDocument ----------
+
+    @Test
+    public void processDocument_missingRequiredVariable_returnsBadRequest() throws Exception {
+        String requestBody = "{\"fdsCloudDocumentId\":\"123\"}"; // missing fdsCloudSpaceId
+        Map<String, String> requestMap = new HashMap<>();
+        requestMap.put("fdsCloudDocumentId", "123");
+        when(objectMapper.readValue(requestBody, HashMap.class)).thenReturn(requestMap);
+
+        ResponseEntity<Map<String, Object>> response =
+                newController(1000).processDocument(headers, requestBody, "cid");
+
+        assertNotNull(response);
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertEquals("Missing required variable", response.getBody().get("error"));
+    }
+
+    // ---------- insertDocumentForBouncedEmail ----------
+
+    @Test
+    public void insertDocumentForBouncedEmail_rateLimited_returnsTooManyRequests() {
+        RealTimeServiceController limited = new RealTimeServiceController(1, 1);
+
+        ResponseEntity<GenericResponse> first = limited.insertDocumentForBouncedEmail(headers, "", "cid");
+        assertEquals(HttpStatus.BAD_REQUEST, first.getStatusCode());
+
+        ResponseEntity<GenericResponse> second = limited.insertDocumentForBouncedEmail(headers, "", "cid");
+        assertNotNull(second);
+        assertEquals(HttpStatus.TOO_MANY_REQUESTS, second.getStatusCode());
+    }
+
+    @Test
+    public void insertDocumentForBouncedEmail_spaceIdZero_returnsInternalServerError() throws Exception {
+        String jsonStr = "{\"spaceId\":0}";
+        DocumentMetaData metaData = new DocumentMetaData();
+        metaData.setSpaceId(0); // appendDefaultValues throws NullPointerException for spaceId == 0
+        when(objectMapper.readValue(jsonStr, DocumentMetaData.class)).thenReturn(metaData);
+
+        ResponseEntity<GenericResponse> response =
+                newController(1000).insertDocumentForBouncedEmail(headers, jsonStr, "cid");
+
+        assertNotNull(response);
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
+    }
+
+    // ---------- putMultiDocument (no rate limiting; shared instance is safe) ----------
+
+    @Test
+    public void putMultiDocument_emptyMap_returnsBadRequest() {
+        ResponseEntity<GenericResponse> response =
+                realTimeServiceController.putMultiDocument(new HashMap<>(), "cid");
+
+        assertNotNull(response);
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+    }
+
+    @Test
+    public void putMultiDocument_nullDocumentIds_returnsBadRequest() {
+        Map<String, Object> requestMap = new HashMap<>();
+        requestMap.put("document", new HashMap<String, Object>());
+        when(objectMapper.convertValue(any(), eq(DocumentMetaData.class))).thenReturn(null);
+
+        ResponseEntity<GenericResponse> response =
+                realTimeServiceController.putMultiDocument(requestMap, "cid");
+
+        assertNotNull(response);
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+    }
+
+    @Test
+    public void putMultiDocument_success_returnsOk() {
+        Map<String, Object> requestMap = new HashMap<>();
+        List<String> documentIds = Arrays.asList("doc1", "doc2");
+        requestMap.put("documentIds", documentIds);
+        requestMap.put("document", new HashMap<String, Object>());
+
+        DocumentMetaData metaData = new DocumentMetaData();
+        when(objectMapper.convertValue(any(), eq(DocumentMetaData.class))).thenReturn(metaData);
+        when(documentMetaDataService.updateMultiDocuments(anyList(), any(DocumentMetaData.class)))
+                .thenReturn(new MultiPutResponse(documentIds, Collections.emptyList()));
+
+        ResponseEntity<GenericResponse> response =
+                realTimeServiceController.putMultiDocument(requestMap, "cid");
+
+        assertNotNull(response);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+    }
+
+    @Test
+    public void putMultiDocument_jwtFailure_returnsUnauthorized() {
+        Map<String, Object> requestMap = new HashMap<>();
+        requestMap.put("documentIds", Arrays.asList("doc1"));
+        requestMap.put("document", new HashMap<String, Object>());
+
+        when(objectMapper.convertValue(any(), eq(DocumentMetaData.class))).thenReturn(new DocumentMetaData());
+        when(documentMetaDataService.updateMultiDocuments(anyList(), any(DocumentMetaData.class)))
+                .thenThrow(new RuntimeException("JWT signature verification failed"));
+
+        ResponseEntity<GenericResponse> response =
+                realTimeServiceController.putMultiDocument(requestMap, "cid");
+
+        assertNotNull(response);
+        assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
+    }
+
+    @Test
+    public void putMultiDocument_genericException_returnsInternalServerError() {
+        Map<String, Object> requestMap = new HashMap<>();
+        requestMap.put("documentIds", Arrays.asList("doc1"));
+        requestMap.put("document", new HashMap<String, Object>());
+
+        when(objectMapper.convertValue(any(), eq(DocumentMetaData.class))).thenReturn(new DocumentMetaData());
+        when(documentMetaDataService.updateMultiDocuments(anyList(), any(DocumentMetaData.class)))
+                .thenThrow(new RuntimeException("unexpected failure"));
+
+        ResponseEntity<GenericResponse> response =
+                realTimeServiceController.putMultiDocument(requestMap, "cid");
+
+        assertNotNull(response);
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
+    }
+
+    // ---------- public PDF-validation helpers ----------
+
+    @Test
+    public void isValidFileType_pdf_returnsTrue() {
+        assertTrue(realTimeServiceController.isValidFileType("application/pdf"));
+    }
+
+    @Test
+    public void isValidFileType_nonPdf_returnsFalse() {
+        assertFalse(realTimeServiceController.isValidFileType("text/plain"));
+    }
+
+    @Test
+    public void isValidFileContent_validPdf_returnsTrue() throws Exception {
+        byte[] bytes = java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(COV_PDF));
+        assertTrue(realTimeServiceController.isValidFileContent(new ByteArrayInputStream(bytes)));
+    }
+
+    @Test
+    public void isValidFileContent_invalidContent_returnsFalse() {
+        assertFalse(realTimeServiceController.isValidFileContent(
+                new ByteArrayInputStream("this is not a pdf".getBytes())));
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+stargareJWTValidator
+
+
+
+
+    // ===================================================================
+    // Added coverage — production class unchanged. Static global state
+    // (KafkaConfig.enableNess, RealTimeServiceApplication.shutdown) is
+    // saved and restored so the shared suite run is not affected.
+    // ===================================================================
+
+    @Test
+    public void objectMapper_isConfiguredStrictAndIsoDates() {
+        ObjectMapper mapper = realTimeServiceApplication.objectMapper();
+
+        assertNotNull(mapper);
+        assertTrue("FAIL_ON_UNKNOWN_PROPERTIES should be enabled",
+                mapper.getDeserializationConfig().isEnabled(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES));
+        assertFalse("WRITE_DATES_AS_TIMESTAMPS should be disabled",
+                mapper.getSerializationConfig().isEnabled(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS));
+    }
+
+    @Test
+    public void webClientBuilder_returnsNonNullBuilder() {
+        WebClient.Builder builder = realTimeServiceApplication.webClientBuilder();
+
+        assertNotNull(builder);
+        assertNotNull(builder.build());
+    }
+
+    @Test
+    public void shutdown_nessDisabled_isNoOp() {
+        boolean origEnable = KafkaConfig.enableNess;
+        Object origShutdown = ReflectionTestUtils.getField(RealTimeServiceApplication.class, "shutdown");
+        try {
+            KafkaConfig.enableNess = false;
+            try (MockedStatic<RealTimeNessConfig> ness = mockStatic(RealTimeNessConfig.class)) {
+                RealTimeServiceApplication.shutdown();
+                ness.verify(RealTimeNessConfig::shutdown, never());
+            }
+        } finally {
+            KafkaConfig.enableNess = origEnable;
+            ReflectionTestUtils.setField(RealTimeServiceApplication.class, "shutdown", origShutdown);
+        }
+    }
+
+    @Test
+    public void shutdown_nessEnabled_runsOnceThenGuardsRepeatCall() {
+        boolean origEnable = KafkaConfig.enableNess;
+        Object origShutdown = ReflectionTestUtils.getField(RealTimeServiceApplication.class, "shutdown");
+        try {
+            KafkaConfig.enableNess = true;
+            ReflectionTestUtils.setField(RealTimeServiceApplication.class, "shutdown", false);
+
+            try (MockedStatic<RealTimeNessConfig> ness = mockStatic(RealTimeNessConfig.class)) {
+                RealTimeServiceApplication.shutdown();   // first call performs shutdown
+                RealTimeServiceApplication.shutdown();   // second call hits the "already performed" guard
+
+                ness.verify(RealTimeNessConfig::shutdown, times(1));
+            }
+            assertEquals(Boolean.TRUE, ReflectionTestUtils.getField(RealTimeServiceApplication.class, "shutdown"));
+        } finally {
+            KafkaConfig.enableNess = origEnable;
+            ReflectionTestUtils.setField(RealTimeServiceApplication.class, "shutdown", origShutdown);
+        }
+    }
+
+    @Test
+    public void main_buildsApplicationAndInvokesRun() {
+        boolean origEnable = KafkaConfig.enableNess;
+        try {
+            KafkaConfig.enableNess = false; // skip RealTimeNessConfig.startup()
+
+            try (MockedConstruction<SpringApplication> mocked = mockConstruction(SpringApplication.class)) {
+                String[] args = new String[]{"--server.port=0"};
+
+                RealTimeServiceApplication.main(args);
+
+                List<SpringApplication> constructed = mocked.constructed();
+                assertEquals(1, constructed.size());
+                SpringApplication app = constructed.get(0);
+                verify(app).addListeners(any());
+                verify(app).run(args);
+            }
+        } finally {
+            KafkaConfig.enableNess = origEnable;
+        }
+    }
+
+    @Test
+    public void main_nessEnabled_invokesNessStartup() {
+        boolean origEnable = KafkaConfig.enableNess;
+        try {
+            KafkaConfig.enableNess = true;
+
+            try (MockedConstruction<SpringApplication> mocked = mockConstruction(SpringApplication.class);
+                 MockedStatic<RealTimeNessConfig> ness = mockStatic(RealTimeNessConfig.class)) {
+
+                RealTimeServiceApplication.main(new String[]{});
+
+                ness.verify(RealTimeNessConfig::startup, times(1));
+            }
+        } finally {
+            KafkaConfig.enableNess = origEnable;
+        }
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ src/test/java/real/time/service/StargateJWTFilterTest.java
+
+
+
+package real.time.service;
+
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import org.junit.Before;
 import org.junit.Test;
-import org.mockito.Mockito;
+import org.springframework.test.util.ReflectionTestUtils;
 
-import java.util.UUID;
-
-import com.fds.paperless.mongo.ErrorMetaData;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
- * Unit tests for {@link Message} — covers both constructors (including the
- * spaceId null-default branch), accessors, and the four toString* variants.
- * ErrorMetaData is mocked so this stays a pure unit test with no I/O.
+ * Coverage tests for {@link StargateJWTFilter}. Production class is NOT modified.
+ *
+ * <p>The servlet contract is mocked (request / response / chain) and the validator is
+ * stubbed, so every branch of {@code doFilter} is exercised without a servlet container.
+ * {@code isFilterEnabled} is a {@code @Value} field that defaults to {@code false} in a
+ * plain unit test, so it is set explicitly per scenario via reflection.</p>
  */
-public class MessageTest {
+public class StargateJWTFilterTest {
 
-    @Test
-    public void jsonCreatorConstructor_withSpaceId_populatesAllFields() {
-        Message message = new Message("HighPriorityQueue", "http://reply", "idx",
-                "id1", "t1", 5, "{\"k\":\"v\"}");
+    private StargateJWTValidator validator;
+    private StargateJWTFilter filter;
+    private HttpServletRequest request;
+    private HttpServletResponse response;
+    private FilterChain chain;
 
-        assertEquals("HighPriorityQueue", message.getQueue());
-        assertEquals("http://reply", message.getReplyTo());
-        assertEquals("idx", message.getReplyToIndex());
-        assertEquals("id1", message.getIdentifier());
-        assertEquals("t1", message.getTargetId());
-        assertEquals(Integer.valueOf(5), message.getSpaceId());
-        assertEquals("{\"k\":\"v\"}", message.getBody());
-        assertEquals(Integer.valueOf(0), message.getRetryCount());
-        assertEquals(Long.valueOf(0L), message.getDeliveryCount());
-        assertNull(message.getMetadataId());
-
-        // subject is built from CommonConstants and must embed identifier + targetId
-        assertTrue(message.getSubject().contains("\"identifier\":\"id1\""));
-        assertTrue(message.getSubject().contains("\"targetId\":\"t1\""));
-
-        // messageId is a generated UUID
-        assertNotNull(message.getMessageId());
-        assertEquals(message.getMessageId(), UUID.fromString(message.getMessageId()).toString());
+    @Before
+    public void setUp() {
+        validator = mock(StargateJWTValidator.class);
+        request = mock(HttpServletRequest.class);
+        response = mock(HttpServletResponse.class);
+        chain = mock(FilterChain.class);
+        filter = new StargateJWTFilter(validator);
+        // Production default (@Value "${STARGATE_FILTER_ENABLED:true}") is enabled; mirror that.
+        ReflectionTestUtils.setField(filter, "isFilterEnabled", true);
     }
 
     @Test
-    public void jsonCreatorConstructor_withNullSpaceId_defaultsToMinusOne() {
-        Message message = new Message("q", "r", "idx", "id", "t", null, "body");
+    public void doFilter_filterDisabled_skipsValidationAndContinues() throws Exception {
+        ReflectionTestUtils.setField(filter, "isFilterEnabled", false);
 
-        assertEquals(Integer.valueOf(-1), message.getSpaceId());
+        filter.doFilter(request, response, chain);
+
+        verify(chain).doFilter(request, response);
+        verify(validator, never()).validateJWT(anyString());
+        verify(response, never()).sendError(anyInt(), anyString());
     }
 
     @Test
-    public void errorMetaDataConstructor_mapsAllFields() {
-        ErrorMetaData meta = Mockito.mock(ErrorMetaData.class);
-        Mockito.when(meta.getQueue()).thenReturn("q");
-        Mockito.when(meta.getReplyTo()).thenReturn("rt");
-        Mockito.when(meta.getReplyToIndex()).thenReturn("rti");
-        Mockito.when(meta.getIdentifier()).thenReturn("id");
-        Mockito.when(meta.getTargetId()).thenReturn("tid");
-        Mockito.when(meta.getSpaceId()).thenReturn(7);
-        Mockito.when(meta.getMetadataAsJsonString()).thenReturn("{}");
-        Mockito.when(meta.getSubject()).thenReturn("subj");
-        Mockito.when(meta.getRetryCount()).thenReturn(3);
-        Mockito.when(meta.getMessageId()).thenReturn("mid");
-        Mockito.when(meta.getDeliveryCount()).thenReturn(5L);
-        Mockito.when(meta.getId()).thenReturn("metaId");
+    public void doFilter_loggersUri_skipsValidationAndContinues() throws Exception {
+        when(request.getRequestURI()).thenReturn("/api/loggers/v1/level");
 
-        Message message = new Message(meta);
+        filter.doFilter(request, response, chain);
 
-        assertEquals("q", message.getQueue());
-        assertEquals("rt", message.getReplyTo());
-        assertEquals("rti", message.getReplyToIndex());
-        assertEquals("id", message.getIdentifier());
-        assertEquals("tid", message.getTargetId());
-        assertEquals(Integer.valueOf(7), message.getSpaceId());
-        assertEquals("{}", message.getBody());
-        assertEquals("subj", message.getSubject());
-        assertEquals(Integer.valueOf(3), message.getRetryCount());
-        assertEquals("mid", message.getMessageId());
-        assertEquals(Long.valueOf(5L), message.getDeliveryCount());
-        assertEquals("metaId", message.getMetadataId());
+        verify(chain).doFilter(request, response);
+        verify(validator, never()).validateJWT(anyString());
     }
 
     @Test
-    public void errorMetaDataConstructor_withNullSpaceId_defaultsToMinusOne() {
-        ErrorMetaData meta = Mockito.mock(ErrorMetaData.class);
-        Mockito.when(meta.getSpaceId()).thenReturn(null);
+    public void doFilter_missingJwtHeader_returnsUnauthorized() throws Exception {
+        when(request.getRequestURI()).thenReturn("/api/services/process/document");
+        when(request.getHeader("JWT")).thenReturn(null);
 
-        Message message = new Message(meta);
+        filter.doFilter(request, response, chain);
 
-        assertEquals(Integer.valueOf(-1), message.getSpaceId());
+        verify(response).sendError(HttpServletResponse.SC_UNAUTHORIZED, "JWT missing in request header.");
+        verify(chain, never()).doFilter(any(), any());
+        verify(validator, never()).validateJWT(anyString());
     }
 
     @Test
-    public void settersAndGetters_roundTrip() {
-        Message message = new Message("q", "r", "idx", "id", "t", 1, "body");
+    public void doFilter_emptyJwtHeader_returnsUnauthorized() throws Exception {
+        when(request.getRequestURI()).thenReturn("/api/services/process/document");
+        when(request.getHeader("JWT")).thenReturn("");
 
-        message.setQueue("q2");
-        message.setReplyTo("r2");
-        message.setReplyToIndex("idx2");
-        message.setIdentifier("id2");
-        message.setTargetId("t2");
-        message.setBody("body2");
-        message.setSubject("subj2");
-        message.setRetryCount(9);
-        message.setDeliveryCount(4L);
-        message.setMetadataId("meta2");
+        filter.doFilter(request, response, chain);
 
-        assertEquals("q2", message.getQueue());
-        assertEquals("r2", message.getReplyTo());
-        assertEquals("idx2", message.getReplyToIndex());
-        assertEquals("id2", message.getIdentifier());
-        assertEquals("t2", message.getTargetId());
-        assertEquals("body2", message.getBody());
-        assertEquals("subj2", message.getSubject());
-        assertEquals(Integer.valueOf(9), message.getRetryCount());
-        assertEquals(Long.valueOf(4L), message.getDeliveryCount());
-        assertEquals("meta2", message.getMetadataId());
+        verify(response).sendError(HttpServletResponse.SC_UNAUTHORIZED, "JWT missing in request header.");
+        verify(chain, never()).doFilter(any(), any());
     }
 
     @Test
-    public void setTargetIdInteger_actuallySetsSpaceId_knownNamingQuirk() {
-        // setTargetId(Integer) is mis-named in production: it writes spaceId, not targetId.
-        // This pins current behavior; the proper fix is to rename it setSpaceId(Integer).
-        Message message = new Message("q", "r", "idx", "id", "t", 1, "body");
+    public void doFilter_validJwt_continuesChain() throws Exception {
+        when(request.getRequestURI()).thenReturn("/api/services/process/document");
+        when(request.getHeader("JWT")).thenReturn("valid.jwt.token");
+        doNothing().when(validator).validateJWT("valid.jwt.token");
 
-        message.setTargetId(99);  // Integer overload
+        filter.doFilter(request, response, chain);
 
-        assertEquals(Integer.valueOf(99), message.getSpaceId());
-        assertEquals("t", message.getTargetId());  // String targetId unchanged
+        verify(validator).validateJWT("valid.jwt.token");
+        verify(chain).doFilter(request, response);
+        verify(response, never()).sendError(anyInt(), anyString());
     }
 
     @Test
-    public void toStringVariants_containExpectedContent() {
-        Message message = new Message("q", "r", "idx", "myId", "myTarget", 2, "myBody");
+    public void doFilter_illegalArgument_returnsUnauthorized() throws Exception {
+        when(request.getRequestURI()).thenReturn("/api/services/process/document");
+        when(request.getHeader("JWT")).thenReturn("bad.jwt.token");
+        doThrow(new IllegalArgumentException("x5c claim is missing"))
+                .when(validator).validateJWT("bad.jwt.token");
 
-        String toString = message.toString();
-        assertTrue(toString.contains("Message [queue=q"));
-        assertTrue(toString.contains("identifier=myId"));
-        assertTrue(toString.contains("targetId=myTarget"));
-        assertTrue(toString.contains("replyToIndex=idx"));
+        filter.doFilter(request, response, chain);
 
-        // verbose variants additionally include the body
-        assertTrue(message.toStringVerbose().contains("body=myBody"));
-        assertTrue(message.toStringCompositeKeyVerbose().contains("body=myBody"));
+        verify(response).sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid JWT: x5c claim is missing");
+        verify(chain, never()).doFilter(any(), any());
+    }
 
-        // composite-key (non-verbose) excludes the body
-        assertTrue(message.toStringCompositeKey().contains("Message [queue=q"));
-        assertTrue(!message.toStringCompositeKey().contains("body="));
+    @Test
+    public void doFilter_validationThrowsGenericException_returnsInternalServerError() throws Exception {
+        when(request.getRequestURI()).thenReturn("/api/services/process/document");
+        when(request.getHeader("JWT")).thenReturn("error.jwt.token");
+        doThrow(new Exception("JWT signature verification failed."))
+                .when(validator).validateJWT("error.jwt.token");
+
+        filter.doFilter(request, response, chain);
+
+        verify(response).sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "An unexpected error occurred.");
+        verify(chain, never()).doFilter(any(), any());
     }
 }
 
@@ -190,156 +673,93 @@ public class MessageTest {
 
 
 
+src/test/java/real/time/service/HeaderFilterTest.java
 
 
 
 
+package real.time.service;
 
-
-
-
-
-
-
-
-
-
-
-package com.fds.paperless.mongo;
-
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.ServletRequest;
+import jakarta.servlet.ServletResponse;
+import jakarta.servlet.http.HttpServletResponse;
+import org.junit.Before;
 import org.junit.Test;
 
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
+import java.io.IOException;
+import java.io.PrintWriter;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
- * Unit tests for {@link MetaData} — default constructor, accessors, the
- * setVersion() branch logic, incrementVersion(), both setStatus overloads,
- * and toString. No production code is modified.
+ * Coverage tests for {@link HeaderFilter}. Production class is NOT modified.
+ *
+ * <p>Exercises the happy path (security + cache headers are applied and the chain
+ * continues) and both error branches (chain failure with the response not yet
+ * committed -> 500 JSON body; and response already committed -> log only).</p>
  */
-public class MetaDataTest {
+public class HeaderFilterTest {
 
-    @Test
-    public void defaultConstructor_stampsCreatedAndModifiedDates() {
-        MetaData meta = new MetaData();
+    private HeaderFilter filter;
+    private ServletRequest request;
+    private HttpServletResponse response;
+    private FilterChain chain;
 
-        assertNotNull(meta.getDateCreated());
-        assertNotNull(meta.getDateModified());
+    @Before
+    public void setUp() {
+        filter = new HeaderFilter();
+        request = mock(ServletRequest.class);
+        response = mock(HttpServletResponse.class);
+        chain = mock(FilterChain.class);
     }
 
     @Test
-    public void idDatesAndName_roundTrip() {
-        MetaData meta = new MetaData();
-        Date created = new Date(1000L);
-        Date modified = new Date(2000L);
+    public void doFilter_appliesSecurityHeadersAndContinuesChain() throws Exception {
+        filter.doFilter(request, response, chain);
 
-        meta.setId("abc123");
-        meta.setDateCreated(created);
-        meta.setDateModified(modified);
-        meta.setName("metaName");
-
-        assertEquals("abc123", meta.getId());
-        assertEquals(created, meta.getDateCreated());
-        assertEquals(modified, meta.getDateModified());
-        assertEquals("metaName", meta.getName());
+        verify(response).setHeader("X-Frame-Options", "DENY");
+        verify(response).setHeader("X-XSS-Protection", "1; mode=block");
+        verify(response).setHeader("X-Content-Type-Options", "nosniff");
+        verify(response).setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");
+        verify(response).setHeader("Referrer-Policy", "no-referrer");
+        verify(response).setHeader("Permissions-Policy", "geolocation=(self)");
+        verify(response).setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        verify(response).setHeader("Pragma", "no-cache");
+        verify(response).setHeader("Expires", "0");
+        verify(chain).doFilter(request, response);
     }
 
     @Test
-    public void revisions_roundTrip() {
-        MetaData meta = new MetaData();
-        List<ErrorRevision> revisions = new ArrayList<>();
+    public void doFilter_chainThrowsAndResponseNotCommitted_writesErrorJson() throws Exception {
+        PrintWriter writer = mock(PrintWriter.class);
+        when(response.getWriter()).thenReturn(writer);
+        when(response.isCommitted()).thenReturn(false);
+        doThrow(new ServletException("downstream failure")).when(chain).doFilter(any(), any());
 
-        meta.setRevisions(revisions);
+        filter.doFilter(request, response, chain);
 
-        assertSame(revisions, meta.getRevisions());
+        verify(response).setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+        verify(response).setContentType("application/json");
+        verify(writer).write("{\"error\": \"An unexpected error occurred while processing the request.\"}");
     }
 
     @Test
-    public void setStatus_withEnum_setsValue() {
-        MetaData meta = new MetaData();
-        meta.setStatus(MetaDataStatus.AUTOMATIC);
+    public void doFilter_chainThrowsAndResponseCommitted_doesNotModifyResponse() throws Exception {
+        when(response.isCommitted()).thenReturn(true);
+        doThrow(new IOException("downstream failure")).when(chain).doFilter(any(), any());
 
-        assertEquals(MetaDataStatus.AUTOMATIC, meta.getStatus());
-    }
+        filter.doFilter(request, response, chain);
 
-    @Test
-    public void setStatus_withString_setsValue() {
-        MetaData meta = new MetaData();
-        meta.setStatus("AUTOMATIC");
-
-        assertEquals(MetaDataStatus.AUTOMATIC, meta.getStatus());
-    }
-
-    @Test(expected = IllegalArgumentException.class)
-    public void setStatus_withInvalidString_throws() {
-        new MetaData().setStatus("NOT_A_STATUS");
-    }
-
-    @Test
-    public void setVersion_withNull_defaultsToOne() {
-        MetaData meta = new MetaData();
-        meta.setVersion(null);
-
-        assertEquals("1", meta.getVersion());
-    }
-
-    @Test
-    public void setVersion_withEmpty_defaultsToOne() {
-        MetaData meta = new MetaData();
-        meta.setVersion("");
-
-        assertEquals("1", meta.getVersion());
-    }
-
-    @Test
-    public void setVersion_withPositiveNumber_setsValue() {
-        MetaData meta = new MetaData();
-        meta.setVersion("5");
-
-        assertEquals("5", meta.getVersion());
-    }
-
-    @Test
-    public void setVersion_withZero_isNotSet() {
-        MetaData meta = new MetaData();
-        meta.setVersion("0");   // parseInt("0") > 0 is false -> guard skips assignment
-
-        assertNull(meta.getVersion());
-    }
-
-    @Test(expected = NumberFormatException.class)
-    public void setVersion_withNonNumeric_throws() {
-        new MetaData().setVersion("abc");
-    }
-
-    @Test
-    public void incrementVersion_incrementsByOne() {
-        MetaData meta = new MetaData();
-        meta.setVersion("5");
-
-        meta.incrementVersion();
-
-        assertEquals("6", meta.getVersion());
-    }
-
-    @Test
-    public void toString_containsKeyFields() {
-        MetaData meta = new MetaData();
-        meta.setId("id1");
-        meta.setName("n1");
-        meta.setVersion("3");
-
-        String result = meta.toString();
-        assertTrue(result.contains("MetaData [id=id1"));
-        assertTrue(result.contains("version=3"));
-        assertTrue(result.contains("name=n1"));
+        verify(response, never()).setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+        verify(response, never()).setContentType("application/json");
+        verify(response, never()).getWriter();
     }
 }
 
@@ -353,6 +773,455 @@ public class MetaDataTest {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+WebClientSyncTest.java
+
+    // ===================================================================
+    // Added coverage — production class unchanged. Reactive chain is mocked
+    // exactly like the existing testSendMultiPartData_Failure; only the
+    // terminal operator behaviour changes per scenario.
+    // ===================================================================
+
+    private WebClient.ResponseSpec stubChain(WebClient client, URI uri) {
+        WebClient.RequestBodyUriSpec reqBody = mock(WebClient.RequestBodyUriSpec.class);
+        WebClient.RequestHeadersSpec headersSpec = mock(WebClient.RequestHeadersSpec.class);
+        WebClient.ResponseSpec responseSpec = mock(WebClient.ResponseSpec.class);
+
+        when(client.post()).thenReturn(reqBody);
+        when(reqBody.uri(uri)).thenReturn(reqBody);
+        when(reqBody.contentType(MediaType.MULTIPART_FORM_DATA)).thenReturn(reqBody);
+        when(reqBody.header(anyString(), anyString())).thenReturn(reqBody);
+        when(reqBody.body(any(BodyInserters.MultipartInserter.class))).thenReturn(headersSpec);
+        when(headersSpec.retrieve()).thenReturn(responseSpec);
+        return responseSpec;
+    }
+
+    // ---------- sendMultiPartData ----------
+
+    @Test
+    public void sendMultiPartData_success_returnsCreated() throws Exception {
+        URI uri = new URI("http://example.com");
+        WebClient client = mock(WebClient.class);
+        ReflectionTestUtils.setField(webClientSync, "webClientSingleton", client);
+
+        FDSCloudDocument doc = new FDSCloudDocument();
+        WebClient.ResponseSpec responseSpec = stubChain(client, uri);
+        when(responseSpec.bodyToMono(FDSCloudDocument.class)).thenReturn(Mono.just(doc));
+
+        var response = webClientSync.sendMultiPartData(uri, "token",
+                new File("test.txt"), "doc", "terms", "cid");
+
+        assertNotNull(response);
+        assertEquals(HttpStatus.CREATED, response.getStatusCode());
+        assertEquals(doc, response.getBody());
+    }
+
+    @Test
+    public void sendMultiPartData_genericException_throwsHttpServerError() throws Exception {
+        URI uri = new URI("http://example.com");
+        WebClient client = mock(WebClient.class);
+        ReflectionTestUtils.setField(webClientSync, "webClientSingleton", client);
+
+        WebClient.ResponseSpec responseSpec = stubChain(client, uri);
+        when(responseSpec.bodyToMono(FDSCloudDocument.class)).thenThrow(new RuntimeException("boom"));
+
+        HttpServerException ex = assertThrows(HttpServerException.class, () ->
+                webClientSync.sendMultiPartData(uri, "token", new File("test.txt"), "doc", "terms", "cid"));
+
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, ex.getStatus());
+    }
+
+    // ---------- sendMultiPartDataWithRetry ----------
+
+    private void primeRetryFixture(WebClient client) {
+        ReflectionTestUtils.setField(webClientSync, "webClientSingleton", client);
+        ReflectionTestUtils.setField(webClientSync, "fdsOauthUrl", "http://oauth");
+        ReflectionTestUtils.setField(webClientSync, "fdsCloudAppId", "appId");
+        ReflectionTestUtils.setField(webClientSync, "fdsCloudAppSecret", "secret");
+        when(oauthManagerUtil.getOauthToken(anyString(), anyString(), anyString(),
+                anyString(), anyString(), anyBoolean(), nullable(String.class))).thenReturn("token");
+    }
+
+    @Test
+    public void sendMultiPartDataWithRetry_success_returnsResponse() throws Exception {
+        URI uri = new URI("http://example.com");
+        WebClient client = mock(WebClient.class);
+        primeRetryFixture(client);
+
+        FDSCloudDocument doc = new FDSCloudDocument();
+        WebClient.ResponseSpec responseSpec = stubChain(client, uri);
+        when(responseSpec.toEntity(FDSCloudDocument.class)).thenReturn(Mono.just(ResponseEntity.ok(doc)));
+
+        var response = webClientSync.sendMultiPartDataWithRetry("http://example.com/post",
+                uri, new File("test.txt"), "doc", "terms", "cid");
+
+        assertNotNull(response);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+    }
+
+    @Test
+    public void sendMultiPartDataWithRetry_nonRetryableStatus_returnsErrorResponse() throws Exception {
+        URI uri = new URI("http://example.com");
+        WebClient client = mock(WebClient.class);
+        primeRetryFixture(client);
+
+        WebClient.ResponseSpec responseSpec = stubChain(client, uri);
+        // 400 is NOT in HttpUtils.validateStatusCode -> returned immediately, no retry.
+        when(responseSpec.toEntity(FDSCloudDocument.class)).thenReturn(
+                Mono.error(new WebClientResponseException(400, "Bad Request", null, null, null)));
+
+        var response = webClientSync.sendMultiPartDataWithRetry("http://example.com/post",
+                uri, new File("test.txt"), "doc", "terms", "cid");
+
+        assertNotNull(response);
+        assertEquals(400, response.getStatusCode().value());
+    }
+
+    @Test
+    public void sendMultiPartDataWithRetry_retryableExhausted_returnsInternalServerError() throws Exception {
+        URI uri = new URI("http://example.com");
+        WebClient client = mock(WebClient.class);
+        primeRetryFixture(client);
+
+        WebClient.ResponseSpec responseSpec = stubChain(client, uri);
+        // 500 IS retryable -> retries until OutOfRetriesException -> 500 returned.
+        when(responseSpec.toEntity(FDSCloudDocument.class)).thenReturn(
+                Mono.error(new WebClientResponseException(500, "Server Error", null, null, null)));
+
+        var response = webClientSync.sendMultiPartDataWithRetry("http://example.com/post",
+                uri, new File("test.txt"), "doc", "terms", "cid");
+
+        assertNotNull(response);
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
+    }
+
+    // ---------- getWebClient (cached) ----------
+
+    @Test
+    public void getWebClient_returnsCachedSingleton() {
+        WebClient cached = mock(WebClient.class);
+        ReflectionTestUtils.setField(webClientSync, "webClientSingleton", cached);
+
+        assertSame(cached, webClientSync.getWebClient());
+    }
+
+    // ---------- responseFilter ----------
+
+    @Test
+    public void responseFilter_errorStatus_emitsHttpServerException() {
+        ClientResponse clientResponse = mock(ClientResponse.class);
+        ClientResponse.Headers headers = mock(ClientResponse.Headers.class);
+        when(clientResponse.statusCode()).thenReturn(HttpStatus.INTERNAL_SERVER_ERROR);
+        when(clientResponse.bodyToMono(String.class)).thenReturn(Mono.just("error body"));
+        when(clientResponse.headers()).thenReturn(headers);
+        when(headers.asHttpHeaders()).thenReturn(new HttpHeaders());
+
+        Mono<ClientResponse> result = WebClientSync.responseFilter(clientResponse);
+
+        assertThrows(HttpServerException.class, result::block);
+    }
+
+    @Test
+    public void responseFilter_successStatus_passesResponseThrough() {
+        ClientResponse clientResponse = mock(ClientResponse.class);
+        ClientResponse.Headers headers = mock(ClientResponse.Headers.class);
+        when(clientResponse.statusCode()).thenReturn(HttpStatus.OK);
+        when(clientResponse.bodyToMono(String.class)).thenReturn(Mono.just("ok"));
+        when(clientResponse.headers()).thenReturn(headers);
+        when(headers.asHttpHeaders()).thenReturn(new HttpHeaders());
+
+        ClientResponse result = WebClientSync.responseFilter(clientResponse).block();
+
+        assertSame(clientResponse, result);
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    // ===================================================================
+    // Added coverage — production class unchanged. Uses the existing spy +
+    // setField helper. Typed HTTP exceptions are built via *.create(...) so
+    // the instanceof-based catch branches are actually exercised.
+    // ===================================================================
+
+    private HttpClientErrorException unauthorized() {
+        return (HttpClientErrorException) HttpClientErrorException.create(
+                HttpStatus.UNAUTHORIZED, "Unauthorized", new HttpHeaders(), new byte[0], null);
+    }
+
+    private HttpClientErrorException badRequest() {
+        return (HttpClientErrorException) HttpClientErrorException.create(
+                HttpStatus.BAD_REQUEST, "Bad Request", new HttpHeaders(), "bad".getBytes(), null);
+    }
+
+    private HttpServerErrorException gatewayTimeout() {
+        return (HttpServerErrorException) HttpServerErrorException.create(
+                HttpStatus.GATEWAY_TIMEOUT, "Gateway Timeout", new HttpHeaders(), new byte[0], null);
+    }
+
+    private HttpServerErrorException internalServerError() {
+        return (HttpServerErrorException) HttpServerErrorException.create(
+                HttpStatus.INTERNAL_SERVER_ERROR, "Server Error", new HttpHeaders(), "err".getBytes(), null);
+    }
+
+    // ---------- sendEmailNotificationELGS error branch ----------
+
+    @Test
+    public void sendEmailNotificationELGS_emailServiceThrows_isHandledGracefully() {
+        when(emailService.sendEmail(anyString(), anyString(), anyString(), anyString()))
+                .thenThrow(new RuntimeException("smtp down"));
+
+        // Must not propagate — method swallows and logs.
+        serviceUtil.sendEmailNotificationELGS("requestJson", "docId", "cid");
+
+        verify(emailService, times(1)).sendEmail(anyString(), anyString(), anyString(), anyString());
+    }
+
+    // ---------- sendMetadataValidationNotificationELGS branches ----------
+
+    @Test
+    public void sendMetadataValidationNotificationELGS_success200_doesNotSendEmail() {
+        List<Map<String, String>> errorList = new ArrayList<>();
+        DocumentMetaData document = mock(DocumentMetaData.class);
+        org.bson.Document metadata = new org.bson.Document("key", "value");
+
+        doReturn(new ResponseEntity<>("OK", HttpStatus.OK))
+                .when(serviceUtil).postELGSWithRetry(nullable(String.class), anyString(), anyString(), anyString());
+
+        serviceUtil.sendMetadataValidationNotificationELGS(errorList, document, metadata, "spaceId", "docId", "cid");
+
+        verify(emailService, never()).sendEmail(anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    public void sendMetadataValidationNotificationELGS_retryThrows_sendsEmail() throws Exception {
+        List<Map<String, String>> errorList = new ArrayList<>();
+        DocumentMetaData document = mock(DocumentMetaData.class);
+        org.bson.Document metadata = new org.bson.Document("key", "value");
+
+        doThrow(new OutOfRetriesException("exhausted"))
+                .when(serviceUtil).postELGSWithRetry(nullable(String.class), anyString(), anyString(), anyString());
+
+        serviceUtil.sendMetadataValidationNotificationELGS(errorList, document, metadata, "spaceId", "docId", "cid");
+
+        verify(emailService, times(1)).sendEmail(anyString(), anyString(), anyString(), anyString());
+    }
+
+    // ---------- postELGSWithRetry branches ----------
+
+    @Test
+    public void postELGSWithRetry_unauthorizedThenSuccess_retriesWithNewToken() throws Exception {
+        String requestJson = "{\"k\":\"v\"}";
+        String cid = "cid";
+        when(oauthManagerUtil.getOauthToken(anyString(), nullable(String.class), nullable(String.class),
+                anyString(), nullable(String.class), anyBoolean(), nullable(String.class))).thenReturn("newToken");
+
+        doThrow(unauthorized())
+                .doReturn(new ResponseEntity<>("Success", HttpStatus.OK))
+                .when(serviceUtil).postELGSRequest(anyString(), eq(requestJson), eq(cid));
+
+        ResponseEntity<String> response = serviceUtil.postELGSWithRetry("Bearer t", requestJson, "docId", cid);
+
+        assertNotNull(response);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+    }
+
+    @Test
+    public void postELGSWithRetry_clientError_returnsErrorResponse() throws Exception {
+        String requestJson = "{\"k\":\"v\"}";
+        String cid = "cid";
+        doThrow(badRequest()).when(serviceUtil).postELGSRequest(anyString(), eq(requestJson), eq(cid));
+
+        ResponseEntity<String> response = serviceUtil.postELGSWithRetry("Bearer t", requestJson, "docId", cid);
+
+        assertNotNull(response);
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+    }
+
+    @Test
+    public void postELGSWithRetry_serverErrorNonGateway_returnsErrorResponse() throws Exception {
+        String requestJson = "{\"k\":\"v\"}";
+        String cid = "cid";
+        doThrow(internalServerError()).when(serviceUtil).postELGSRequest(anyString(), eq(requestJson), eq(cid));
+
+        ResponseEntity<String> response = serviceUtil.postELGSWithRetry("Bearer t", requestJson, "docId", cid);
+
+        assertNotNull(response);
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
+    }
+
+    @Test
+    public void postELGSWithRetry_gatewayTimeoutTyped_retriesThenSucceeds() throws Exception {
+        String requestJson = "{\"k\":\"v\"}";
+        String cid = "cid";
+        when(oauthManagerUtil.getOauthToken(anyString(), nullable(String.class), nullable(String.class),
+                anyString(), nullable(String.class), anyBoolean(), nullable(String.class))).thenReturn("newToken");
+
+        doThrow(gatewayTimeout())
+                .doReturn(new ResponseEntity<>("Success", HttpStatus.OK))
+                .when(serviceUtil).postELGSRequest(anyString(), eq(requestJson), eq(cid));
+
+        ResponseEntity<String> response = serviceUtil.postELGSWithRetry("Bearer t", requestJson, "docId", cid);
+
+        assertNotNull(response);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+    }
+
+    @Test
+    public void postELGSWithRetry_restClientException_retriesThenSucceeds() throws Exception {
+        String requestJson = "{\"k\":\"v\"}";
+        String cid = "cid";
+        when(oauthManagerUtil.getOauthToken(anyString(), nullable(String.class), nullable(String.class),
+                anyString(), nullable(String.class), anyBoolean(), nullable(String.class))).thenReturn("newToken");
+
+        doThrow(new RestClientException("connection reset"))
+                .doReturn(new ResponseEntity<>("Success", HttpStatus.OK))
+                .when(serviceUtil).postELGSRequest(anyString(), eq(requestJson), eq(cid));
+
+        ResponseEntity<String> response = serviceUtil.postELGSWithRetry("Bearer t", requestJson, "docId", cid);
+
+        assertNotNull(response);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+    }
+
+    @Test
+    public void postELGSWithRetry_retriesExhausted_throwsOutOfRetries() throws Exception {
+        String requestJson = "{\"k\":\"v\"}";
+        String cid = "cid";
+        when(oauthManagerUtil.getOauthToken(anyString(), nullable(String.class), nullable(String.class),
+                anyString(), nullable(String.class), anyBoolean(), nullable(String.class))).thenReturn("newToken");
+
+        doThrow(gatewayTimeout()).when(serviceUtil).postELGSRequest(anyString(), eq(requestJson), eq(cid));
+
+        assertThrows(OutOfRetriesException.class,
+                () -> serviceUtil.postELGSWithRetry("Bearer t", requestJson, "docId", cid));
+    }
+
+    // ---------- getFDSCloudSearchTerms branches ----------
+
+    private void primeFdsCloudFields() throws Exception {
+        setField(serviceUtil, "fdsCloudGetDocumentUrl", "http://fds/{spaceId}/{documentId}");
+        setField(serviceUtil, "fdsCloudOauthUrl", "http://oauth");
+        setField(serviceUtil, "fdsCloudClientId", "clientId");
+        setField(serviceUtil, "fdsCloudClientSecret", "secret");
+        setField(serviceUtil, "fdsCloudGrantType", "client_credentials");
+        when(oauthManagerUtil.getOauthToken(anyString(), nullable(String.class), nullable(String.class),
+                nullable(String.class), nullable(String.class), anyBoolean(), nullable(String.class))).thenReturn("token");
+    }
+
+    @Test
+    public void getFDSCloudSearchTerms_success_returnsResponse() throws Exception {
+        primeFdsCloudFields();
+        ResponseEntity<FDSCloudDocument> ok = new ResponseEntity<>(new FDSCloudDocument(), HttpStatus.OK);
+        when(restTemplate.exchange(anyString(), eq(HttpMethod.GET), any(HttpEntity.class), eq(FDSCloudDocument.class)))
+                .thenReturn(ok);
+
+        ResponseEntity<FDSCloudDocument> response = serviceUtil.getFDSCloudSearchTerms("docId", "spaceId", "cid");
+
+        assertNotNull(response);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+    }
+
+    @Test
+    public void getFDSCloudSearchTerms_documentNotFound_returnsNullResponse() throws Exception {
+        primeFdsCloudFields();
+        HttpClientErrorException notFound = (HttpClientErrorException) HttpClientErrorException.create(
+                HttpStatus.NOT_FOUND, "Not Found", new HttpHeaders(), "Document not found".getBytes(), null);
+        when(restTemplate.exchange(anyString(), eq(HttpMethod.GET), any(HttpEntity.class), eq(FDSCloudDocument.class)))
+                .thenThrow(notFound);
+
+        ResponseEntity<FDSCloudDocument> response = serviceUtil.getFDSCloudSearchTerms("docId", "spaceId", "cid");
+
+        assertNull(response);
+    }
+
+    @Test
+    public void getFDSCloudSearchTerms_httpError_retriesViaRetryUtil() throws Exception {
+        primeFdsCloudFields();
+        RetryUtil retryUtil = mock(RetryUtil.class);
+        setField(serviceUtil, "retryUtil", retryUtil);
+
+        when(restTemplate.exchange(anyString(), eq(HttpMethod.GET), any(HttpEntity.class), eq(FDSCloudDocument.class)))
+                .thenThrow(internalServerError());
+        ResponseEntity<FDSCloudDocument> retried = new ResponseEntity<>(new FDSCloudDocument(), HttpStatus.OK);
+        when(retryUtil.retryFDSCloudGetCall(anyString(), nullable(String.class), any(RestTemplate.class),
+                anyString(), anyString())).thenReturn(retried);
+
+        ResponseEntity<FDSCloudDocument> response = serviceUtil.getFDSCloudSearchTerms("docId", "spaceId", "cid");
+
+        assertNotNull(response);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+    }
+
+    @Test
+    public void getFDSCloudSearchTerms_genericException_returnsNull() throws Exception {
+        primeFdsCloudFields();
+        when(restTemplate.exchange(anyString(), eq(HttpMethod.GET), any(HttpEntity.class), eq(FDSCloudDocument.class)))
+                .thenThrow(new RuntimeException("boom"));
+
+        ResponseEntity<FDSCloudDocument> response = serviceUtil.getFDSCloudSearchTerms("docId", "spaceId", "cid");
+
+        assertNull(response);
+    }
 
 
 
