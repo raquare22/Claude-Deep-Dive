@@ -1,303 +1,713 @@
+>> src/test/java/real/time/service/oauth/OauthTokenCacheExpiryPolicyTest.java
 
->> DocumentMetaDataServiceImplTest
 
+package real.time.service.oauth;
 
-    // ===================================================================
-    // Added coverage for updateDocumentMetaData (previously 0%).
-    // DocumentUtil helpers run for real — they only mutate the object
-    // in-memory, so no static mocking is needed.
-    // ===================================================================
-
-    @Test
-    public void updateDocumentMetaData_documentNotFound_returnsNull() {
-        DocumentMetaData doc = new DocumentMetaData();
-        when(mongoTemplate.findOne(any(Query.class), eq(DocumentMetaData.class), eq("document")))
-                .thenReturn(null);
-
-        DocumentMetaData result = documentMetaDataService.updateDocumentMetaData(doc, "missingId");
-
-        assertNull(result);
-        verify(mongoTemplate, never()).save(any(), eq("document"));
-    }
-
-    @Test
-    public void updateDocumentMetaData_existingMetadataNull_buildsNewMetadata() {
-        DocumentMetaData incoming = new DocumentMetaData();
-        incoming.setMetadata(new Document("newKey", "newValue"));
-
-        DocumentMetaData existing = new DocumentMetaData();
-        existing.setId("id1");
-        // existing.getMetadata() is null -> the "build new metadata" branch.
-        when(mongoTemplate.findOne(any(Query.class), eq(DocumentMetaData.class), eq("document")))
-                .thenReturn(existing);
-
-        DocumentMetaData result = documentMetaDataService.updateDocumentMetaData(incoming, "id1");
-
-        assertNotNull(result);
-        assertNotNull(result.getMetadata());
-        assertEquals("newValue", result.getMetadata().get("newKey"));
-        verify(mongoTemplate, times(1)).save(existing, "document");
-    }
-
-    @Test
-    public void updateDocumentMetaData_existingMetadataPresent_appendsMetadata() {
-        DocumentMetaData incoming = new DocumentMetaData();
-        incoming.setMetadata(new Document("addedKey", "addedValue"));
-
-        DocumentMetaData existing = new DocumentMetaData();
-        existing.setId("id1");
-        existing.setMetadata(new Document("existingKey", "existingValue")); // non-null -> append branch
-        when(mongoTemplate.findOne(any(Query.class), eq(DocumentMetaData.class), eq("document")))
-                .thenReturn(existing);
-
-        DocumentMetaData result = documentMetaDataService.updateDocumentMetaData(incoming, "id1");
-
-        assertNotNull(result);
-        assertEquals("existingValue", result.getMetadata().get("existingKey"));
-        assertEquals("addedValue", result.getMetadata().get("addedKey"));
-        verify(mongoTemplate, times(1)).save(existing, "document");
-    }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-DocumentMetaDataServiceImplTest
-
-
-    // ===================================================================
-    // Added coverage for updateDocumentMetaData (previously 0%).
-    // DocumentUtil helpers run for real — they only mutate the object
-    // in-memory, so no static mocking is needed.
-    // ===================================================================
-
-    @Test
-    public void updateDocumentMetaData_documentNotFound_returnsNull() {
-        DocumentMetaData doc = new DocumentMetaData();
-        when(mongoTemplate.findOne(any(Query.class), eq(DocumentMetaData.class), eq("document")))
-                .thenReturn(null);
-
-        DocumentMetaData result = documentMetaDataService.updateDocumentMetaData(doc, "missingId");
-
-        assertNull(result);
-        verify(mongoTemplate, never()).save(any(), eq("document"));
-    }
-
-    @Test
-    public void updateDocumentMetaData_existingMetadataNull_buildsNewMetadata() {
-        DocumentMetaData incoming = new DocumentMetaData();
-        incoming.setMetadata(new Document("newKey", "newValue"));
-
-        DocumentMetaData existing = new DocumentMetaData();
-        existing.setId("id1");
-        // existing.getMetadata() is null -> the "build new metadata" branch.
-        when(mongoTemplate.findOne(any(Query.class), eq(DocumentMetaData.class), eq("document")))
-                .thenReturn(existing);
-
-        DocumentMetaData result = documentMetaDataService.updateDocumentMetaData(incoming, "id1");
-
-        assertNotNull(result);
-        assertNotNull(result.getMetadata());
-        assertEquals("newValue", result.getMetadata().get("newKey"));
-        verify(mongoTemplate, times(1)).save(existing, "document");
-    }
-
-    @Test
-    public void updateDocumentMetaData_existingMetadataPresent_appendsMetadata() {
-        DocumentMetaData incoming = new DocumentMetaData();
-        incoming.setMetadata(new Document("addedKey", "addedValue"));
-
-        DocumentMetaData existing = new DocumentMetaData();
-        existing.setId("id1");
-        existing.setMetadata(new Document("existingKey", "existingValue")); // non-null -> append branch
-        when(mongoTemplate.findOne(any(Query.class), eq(DocumentMetaData.class), eq("document")))
-                .thenReturn(existing);
-
-        DocumentMetaData result = documentMetaDataService.updateDocumentMetaData(incoming, "id1");
-
-        assertNotNull(result);
-        assertEquals("existingValue", result.getMetadata().get("existingKey"));
-        assertEquals("addedValue", result.getMetadata().get("addedKey"));
-        verify(mongoTemplate, times(1)).save(existing, "document");
-    }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-//: src/test/java/real/time/service/config/SecurityHeadersFilterTest.java
-
-package real.time.service.config;
-
-import jakarta.servlet.FilterChain;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-import org.junit.Before;
 import org.junit.Test;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
+import java.time.Duration;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+
+/**
+ * Coverage tests for {@link OauthTokenCacheExpiryPolicy}. Production class is
+ * NOT modified. This is a pure ehcache {@link org.ehcache.expiry.ExpiryPolicy}
+ * with no I/O or shared state, so the tests are fully deterministic.
+ */
+public class OauthTokenCacheExpiryPolicyTest {
+
+    private final OauthTokenCacheExpiryPolicy policy = new OauthTokenCacheExpiryPolicy();
+
+    @Test
+    public void getExpiryForCreation_positiveExpiry_returnsTtlInMillis() {
+        OauthTokenExtended token = new OauthTokenExtended("token", 3600); // seconds
+
+        Duration ttl = policy.getExpiryForCreation("key", token);
+
+        assertEquals(Duration.ofMillis(3600L * 1000L), ttl);
+    }
+
+    @Test
+    public void getExpiryForCreation_zeroExpiry_returnsZero() {
+        OauthTokenExtended token = new OauthTokenExtended("token", 0);
+
+        Duration ttl = policy.getExpiryForCreation("key", token);
+
+        assertEquals(Duration.ZERO, ttl);
+    }
+
+    @Test
+    public void getExpiryForCreation_negativeExpiry_returnsZero() {
+        OauthTokenExtended token = new OauthTokenExtended("token", -5);
+
+        Duration ttl = policy.getExpiryForCreation("key", token);
+
+        assertEquals(Duration.ZERO, ttl);
+    }
+
+    @Test
+    public void getExpiryForAccess_alwaysReturnsNull() {
+        // Supplier is ignored by the policy; null is acceptable here.
+        assertNull(policy.getExpiryForAccess("key", null));
+    }
+
+    @Test
+    public void getExpiryForUpdate_delegatesToCreation() {
+        OauthTokenExtended newValue = new OauthTokenExtended("token", 120);
+
+        Duration ttl = policy.getExpiryForUpdate("key", null, newValue);
+
+        assertEquals(Duration.ofMillis(120L * 1000L), ttl);
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+OauthTokenExtendedTest is
+
+
+    // ===================================================================
+    // Added coverage — production class unchanged. Constructors, remaining
+    // accessors, isEmpty, and the populated isTokenGoingToExpire branches.
+    // Time-based asserts use a 50-minute margin to stay deterministic.
+    // ===================================================================
+
+    @Test
+    public void fiveArgConstructor_setsAllFields() {
+        OauthTokenExtended token =
+                new OauthTokenExtended("appId", "password", "http://url", "client_credentials", "scope-x");
+
+        Assert.assertEquals("appId", token.getApplicationId());
+        Assert.assertEquals("password", token.getPassword());
+        Assert.assertEquals("http://url", token.getUrl());
+        Assert.assertEquals("client_credentials", token.getGrantType());
+        Assert.assertEquals("scope-x", token.getScope());
+    }
+
+    @Test
+    public void copyConstructor_copiesIdentityAndConfigFields() {
+        OauthTokenExtended source =
+                new OauthTokenExtended("appId", "password", "http://url", "client_credentials", "scope-x");
+
+        OauthTokenExtended copy = new OauthTokenExtended(source);
+
+        Assert.assertEquals("appId", copy.getApplicationId());
+        Assert.assertEquals("password", copy.getPassword());
+        Assert.assertEquals("http://url", copy.getUrl());
+        Assert.assertEquals("client_credentials", copy.getGrantType());
+        Assert.assertEquals("scope-x", copy.getScope());
+    }
+
+    @Test
+    public void tokenAndExpiresInConstructor_setsTokenExpiresInAndExpiryTime() {
+        OauthTokenExtended token = new OauthTokenExtended("accessToken", 3600);
+
+        Assert.assertEquals("accessToken", token.getAccessToken());
+        Assert.assertEquals(Integer.valueOf(3600), token.getExpiresIn());
+        // expiryTime = now + expiresIn seconds -> strictly positive and in the future.
+        Assert.assertTrue(token.getExpiryTime() > 0L);
+    }
+
+    @Test
+    public void scope_roundTrips() {
+        OauthTokenExtended token = new OauthTokenExtended("appId", "password");
+        Assert.assertNull(token.getScope());
+
+        token.setScope("read");
+        Assert.assertEquals("read", token.getScope());
+    }
+
+    @Test
+    public void expiryTime_roundTrips() {
+        OauthTokenExtended token = new OauthTokenExtended("appId", "password");
+
+        token.setExpiryTime(123456789L);
+
+        Assert.assertEquals(Long.valueOf(123456789L), token.getExpiryTime());
+    }
+
+    @Test
+    public void obtainedOn_isStoredAndReturnedAsDefensiveCopy() {
+        OauthTokenExtended token = new OauthTokenExtended("appId", "password");
+        Date original = new Date(100000L);
+
+        token.setObtainedOn(original);
+        Date returned = token.getObtainedOn();
+
+        Assert.assertEquals(original, returned);
+        Assert.assertNotSame("getObtainedOn must return a defensive copy", original, returned);
+    }
+
+    @Test
+    public void isEmpty_nullAccessToken_returnsTrue() {
+        OauthTokenExtended token = new OauthTokenExtended("appId", "password");
+        Assert.assertTrue(token.isEmpty()); // accessToken not set
+    }
+
+    @Test
+    public void isEmpty_emptyAccessToken_returnsTrue() {
+        OauthTokenExtended token = new OauthTokenExtended("appId", "password");
+        token.setAccessToken("");
+        Assert.assertTrue(token.isEmpty());
+    }
+
+    @Test
+    public void isEmpty_nonEmptyAccessToken_returnsFalse() {
+        OauthTokenExtended token = new OauthTokenExtended("appId", "password");
+        token.setAccessToken("abc");
+        Assert.assertFalse(token.isEmpty());
+    }
+
+    @Test
+    public void isTokenGoingToExpire_freshToken_returnsFalse() {
+        OauthTokenExtended token = new OauthTokenExtended("appId", "password");
+        token.setExpiresIn(3600);             // 1h TTL
+        token.setObtainedOn(new Date());      // obtained now
+        // now < (3600s + now - 600s) by ~50 minutes -> not going to expire.
+        Assert.assertFalse(token.isTokenGoingToExpire());
+    }
+
+    @Test
+    public void isTokenGoingToExpire_oldToken_returnsTrue() {
+        OauthTokenExtended token = new OauthTokenExtended("appId", "password");
+        token.setExpiresIn(3600);
+        token.setObtainedOn(new Date(0L));    // obtained at epoch -> long expired
+        Assert.assertTrue(token.isTokenGoingToExpire());
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    @Mock
+    private EhCache ehCache;
+
+        ReflectionTestUtils.setField(oauthManagerUtil, "token_expiry_in_seconds", 60);
+
+
+
+
+
+
+
+
+    // ===================================================================
+    // Added coverage for getOauthToken(...) — the EhCache-backed method
+    // (previously 0%). Production class unchanged. token_expiry_in_seconds
+    // is set to 60 in setUp() so the expiry arithmetic is deterministic.
+    // ===================================================================
+
+    private Token providerToken(String accessToken, Integer expiresIn) {
+        Token token = new Token();
+        token.setAccessToken(accessToken);
+        token.setTokenType("bearer");
+        token.setExpiresIn(expiresIn);
+        return token;
+    }
+
+    @Test
+    public void getOauthToken_cacheHitNotForcingNew_returnsCachedToken() {
+        when(ehCache.getOauthTokenCache("type")).thenReturn("cachedToken");
+
+        String result = oauthManagerUtil.getOauthToken(
+                "type", "client", "secret", "client_credentials", "http://oauth", false, null);
+
+        assertEquals("cachedToken", result);
+        verify(authorizationProvider, never()).getOauth2Token(anyString(), any(OauthTokenExtended.class));
+        verify(ehCache, never()).putOauthTokenWithExpiry(anyString(), anyString(), any(Integer.class));
+    }
+
+    @Test
+    public void getOauthToken_cacheMiss_fetchesAndCachesWithReducedExpiry() {
+        when(ehCache.getOauthTokenCache("type")).thenReturn(null);
+        when(authorizationProvider.getOauth2Token(anyString(), any(OauthTokenExtended.class)))
+                .thenReturn(Optional.of(providerToken("newToken", 1800)));
+
+        String result = oauthManagerUtil.getOauthToken(
+                "type", "client", "secret", "client_credentials", "http://oauth", false, "scope");
+
+        assertEquals("newToken", result);
+        // 1800 > 60 -> cached with 1800 - 60 = 1740
+        verify(ehCache).putOauthTokenWithExpiry("type", "newToken", 1740);
+    }
+
+    @Test
+    public void getOauthToken_forceNewTokenDespiteCache_fetchesFresh() {
+        when(ehCache.getOauthTokenCache("type")).thenReturn("staleCached");
+        when(authorizationProvider.getOauth2Token(anyString(), any(OauthTokenExtended.class)))
+                .thenReturn(Optional.of(providerToken("freshToken", 1800)));
+
+        String result = oauthManagerUtil.getOauthToken(
+                "type", "client", "secret", "client_credentials", "http://oauth", true, null);
+
+        assertEquals("freshToken", result);
+        verify(ehCache).putOauthTokenWithExpiry("type", "freshToken", 1740);
+    }
+
+    @Test
+    public void getOauthToken_emptyProviderResponse_cachesNullWithDefaultExpiry() {
+        when(ehCache.getOauthTokenCache("type")).thenReturn(null);
+        when(authorizationProvider.getOauth2Token(anyString(), any(OauthTokenExtended.class)))
+                .thenReturn(Optional.empty()); // refreshToken nulls out accessToken/expiresIn
+
+        String result = oauthManagerUtil.getOauthToken(
+                "type", "client", "secret", "client_credentials", "http://oauth", false, null);
+
+        assertNull(result);
+        // expiresIn null -> default 3600; 3600 > 60 -> 3540; accessToken null.
+        verify(ehCache).putOauthTokenWithExpiry(eq("type"), isNull(), eq(3540));
+    }
+
+    @Test
+    public void getOauthToken_smallExpiry_notReducedBelowThreshold() {
+        when(ehCache.getOauthTokenCache("type")).thenReturn(null);
+        when(authorizationProvider.getOauth2Token(anyString(), any(OauthTokenExtended.class)))
+                .thenReturn(Optional.of(providerToken("shortToken", 30)));
+
+        String result = oauthManagerUtil.getOauthToken(
+                "type", "client", "secret", "client_credentials", "http://oauth", false, null);
+
+        assertEquals("shortToken", result);
+        // 30 > 60 is false -> expiresIn stays 30 (no reduction branch)
+        verify(ehCache).putOauthTokenWithExpiry("type", "shortToken", 30);
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+FilestoreServiceImpl
+
+
+
+    private static final byte[] PDF_BYTES = "%PDF-1.4 test".getBytes(StandardCharsets.US_ASCII);
+
+    private Path newPdf() throws Exception {
+        Path p = Files.createTempFile("doc360", ".pdf");
+        Files.write(p, PDF_BYTES);
+        p.toFile().deleteOnExit();
+        return p;
+    }
+
+    private void stubOauth() {
+        when(oauthManagerUtil.getOauthToken(anyString(), anyString(), anyString(),
+                anyString(), anyString(), anyBoolean(), any())).thenReturn("token");
+    }
+
+    @Test
+    public void postDocumentToFDSCloudWithAttachment_webClientSuccess_returnsResponse() throws Exception {
+        filestoreService.fileStoreUseWebClient = true;
+        stubOauth();
+        when(webClientSync.sendMultiPartData(any(URI.class), anyString(), any(), anyString(), anyString(), anyString()))
+                .thenReturn(new ResponseEntity<>(new FDSCloudDocument(), HttpStatus.CREATED));
+
+        ResponseEntity<FDSCloudDocument> response =
+                filestoreService.postDocumentToFDSCloudWithAttachment("doc", "terms", "path/to/file", "spaceId", "cid");
+
+        assertNotNull(response);
+        assertEquals(HttpStatus.CREATED, response.getStatusCode());
+    }
+
+    @Test
+    public void postDocumentToFDSCloudWithAttachment_chunkClientBranch_returnsResponse() throws Exception {
+        filestoreService.fileStoreUseWebClient = false;
+        filestoreService.fileStoreMinSizeToChunk = 0; // length(0) >= 0 -> chunk branch
+        stubOauth();
+        when(restTemplateChunkClient.putExchangeWithRetry(any(URI.class), any(HttpMethod.class), any(HttpEntity.class)))
+                .thenReturn(new ResponseEntity<>(new FDSCloudDocument(), HttpStatus.OK));
+
+        ResponseEntity<FDSCloudDocument> response =
+                filestoreService.postDocumentToFDSCloudWithAttachment("doc", "terms", "path/to/file", "spaceId", "cid");
+
+        assertNotNull(response);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+    }
+
+    @Test(expected = RuntimeException.class)
+    public void postDocumentToFDSCloudWithAttachment_downstreamThrows_rethrows() throws Exception {
+        filestoreService.fileStoreUseWebClient = true;
+        stubOauth();
+        when(webClientSync.sendMultiPartData(any(URI.class), anyString(), any(), anyString(), anyString(), anyString()))
+                .thenThrow(new RuntimeException("boom"));
+
+        filestoreService.postDocumentToFDSCloudWithAttachment("doc", "terms", "path/to/file", "spaceId", "cid");
+    }
+
+    @Test
+    public void postDocumentToFDSCloudWithAttachmentRetry_chunkStatsBranch_returnsResponse() {
+        filestoreService.fileStoreMinSizeToChunk = 0;
+        when(webClientSync.sendMultiPartDataWithRetry(anyString(), any(URI.class), any(), anyString(), anyString(), anyString()))
+                .thenReturn(new ResponseEntity<>(new FDSCloudDocument(), HttpStatus.OK));
+
+        ResponseEntity<FDSCloudDocument> response =
+                filestoreService.postDocumentToFDSCloudWithAttachmentRetry("doc", "terms", "path/to/file", "spaceId", "cid");
+
+        assertNotNull(response);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+    }
+
+    @Test
+    public void postDocumentToFDSCloudWithAttachmentRetry_exception_returnsNull() {
+        when(webClientSync.sendMultiPartDataWithRetry(anyString(), any(URI.class), any(), anyString(), anyString(), anyString()))
+                .thenThrow(new RuntimeException("boom"));
+
+        ResponseEntity<FDSCloudDocument> response =
+                filestoreService.postDocumentToFDSCloudWithAttachmentRetry("doc", "terms", "path/to/file", "spaceId", "cid");
+
+        assertNull(response);
+    }
+
+    @Test
+    public void shutdown_alreadyPerformed_returnsEarly() {
+        FilestoreServiceImpl.shutdown = true;
+        filestoreService.shutdown();
+        assertTrue(FilestoreServiceImpl.shutdown);
+    }
+
+    @Test
+    public void postDocumentToDoc360_whenShutdown_returns503() {
+        FilestoreServiceImpl.shutdown = true;
+        ResponseEntity<Doc360UploadResponse> response =
+                filestoreService.postDocumentToDoc360WithAttachmentRetry("{}", "file.pdf", "CAP", "cid");
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE, response.getStatusCode());
+    }
+
+    @Test
+    public void postDocumentToDoc360_nullFilePath_returns415() {
+        ResponseEntity<Doc360UploadResponse> response =
+                filestoreService.postDocumentToDoc360WithAttachmentRetry("{}", null, "CAP", "cid");
+        assertEquals(HttpStatus.UNSUPPORTED_MEDIA_TYPE, response.getStatusCode());
+    }
+
+    @Test
+    public void postDocumentToDoc360_unauthorizedThenSuccess_retriesWithNewToken() throws Exception {
+        Path pdf = newPdf();
+        stubOauth();
+        FilestoreServiceImpl spy = spy(filestoreService);
+        Doc360UploadResponse body = new Doc360UploadResponse();
+        body.setStatus(201);
+        doThrow((HttpClientErrorException) HttpClientErrorException.create(
+                        HttpStatus.UNAUTHORIZED, "Unauthorized", new HttpHeaders(), new byte[0], null))
+                .doReturn(new ResponseEntity<>(body, HttpStatus.CREATED))
+                .when(spy).postDocumentToDoc360(anyString(), any());
+
+        ResponseEntity<Doc360UploadResponse> response =
+                spy.postDocumentToDoc360WithAttachmentRetry("{}", pdf.toString(), "CAP", "cid");
+
+        assertEquals(HttpStatus.CREATED, response.getStatusCode());
+    }
+
+    @Test
+    public void postDocumentToDoc360_nonRetryableServerError_returnsStatus() throws Exception {
+        Path pdf = newPdf();
+        stubOauth();
+        FilestoreServiceImpl spy = spy(filestoreService);
+        doThrow((HttpServerErrorException) HttpServerErrorException.create(
+                        HttpStatus.INTERNAL_SERVER_ERROR, "err", new HttpHeaders(), new byte[0], null))
+                .when(spy).postDocumentToDoc360(anyString(), any());
+
+        ResponseEntity<Doc360UploadResponse> response =
+                spy.postDocumentToDoc360WithAttachmentRetry("{}", pdf.toString(), "CAP", "cid");
+
+        assertEquals(500, response.getStatusCode().value());
+    }
+
+    @Test
+    public void postDocumentToDoc360_nonRetryableClientError_returnsStatus() throws Exception {
+        Path pdf = newPdf();
+        stubOauth();
+        FilestoreServiceImpl spy = spy(filestoreService);
+        doThrow((HttpClientErrorException) HttpClientErrorException.create(
+                        HttpStatus.BAD_REQUEST, "bad", new HttpHeaders(), new byte[0], null))
+                .when(spy).postDocumentToDoc360(anyString(), any());
+
+        ResponseEntity<Doc360UploadResponse> response =
+                spy.postDocumentToDoc360WithAttachmentRetry("{}", pdf.toString(), "CAP", "cid");
+
+        assertEquals(400, response.getStatusCode().value());
+    }
+
+    @Test
+    public void postDocumentToDoc360_retryableServerErrorExhausted_returns500() throws Exception {
+        Path pdf = newPdf();
+        stubOauth();
+        FilestoreServiceImpl spy = spy(filestoreService);
+        doThrow((HttpServerErrorException) HttpServerErrorException.create(
+                        HttpStatus.SERVICE_UNAVAILABLE, "unavailable", new HttpHeaders(), new byte[0], null))
+                .when(spy).postDocumentToDoc360(anyString(), any());
+
+        ResponseEntity<Doc360UploadResponse> response =
+                spy.postDocumentToDoc360WithAttachmentRetry("{}", pdf.toString(), "CAP", "cid");
+
+        assertEquals(500, response.getStatusCode().value());
+    }
+
+    @Test
+    public void postDocumentToDoc360_restClientExceptionExhausted_returns500() throws Exception {
+        Path pdf = newPdf();
+        stubOauth();
+        FilestoreServiceImpl spy = spy(filestoreService);
+        doThrow(new RestClientException("connection reset"))
+                .when(spy).postDocumentToDoc360(anyString(), any());
+
+        ResponseEntity<Doc360UploadResponse> response =
+                spy.postDocumentToDoc360WithAttachmentRetry("{}", pdf.toString(), "CAP", "cid");
+
+        assertEquals(500, response.getStatusCode().value());
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+1. New file: src/test/java/real/time/service/RealTimeServiceApplicationContextListenerTest.java
+
+
+
+
+package real.time.service;
+
+import org.junit.Test;
+import org.mockito.MockedStatic;
+import org.springframework.context.event.ContextClosedEvent;
+
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 
 /**
- * Coverage tests for {@link SecurityHeadersFilter}. Production class is NOT modified.
+ * Safe coverage for {@link RealTimeServiceApplicationContextListener}. Production class
+ * is NOT modified.
  *
- * <p>{@code doFilterInternal} is protected, so this same-package test invokes it
- * directly with mocked servlet objects to exercise every branch: matching path
- * (non-OPTIONS and OPTIONS preflight), non-matching path, and a null path.</p>
+ * <p>"Safe" = the real {@code RealTimeServiceApplication.shutdown()} is mocked, so the
+ * actual shutdown path (which closes the NESS Kafka producer when KafkaConfig.enableNess
+ * is true) never runs and no global static state is mutated. The test verifies only this
+ * listener's contract: a ContextClosedEvent triggers exactly one shutdown() call.</p>
  */
-public class SecurityHeadersFilterTest {
-
-    private SecurityHeadersFilter filter;
-    private HttpServletRequest request;
-    private HttpServletResponse response;
-    private FilterChain chain;
-
-    @Before
-    public void setUp() {
-        filter = new SecurityHeadersFilter();
-        request = mock(HttpServletRequest.class);
-        response = mock(HttpServletResponse.class);
-        chain = mock(FilterChain.class);
-    }
+public class RealTimeServiceApplicationContextListenerTest {
 
     @Test
-    public void doFilterInternal_matchingPathNonOptions_setsHeadersAndContinues() throws Exception {
-        when(request.getRequestURI()).thenReturn("/api/services/process/file/123");
-        when(request.getMethod()).thenReturn("POST");
+    public void onApplicationEvent_triggersApplicationShutdownOnce() {
+        ContextClosedEvent event = mock(ContextClosedEvent.class);
+        when(event.getSource()).thenReturn("test-context"); // used only in the log line
 
-        filter.doFilterInternal(request, response, chain);
+        RealTimeServiceApplicationContextListener listener =
+                new RealTimeServiceApplicationContextListener();
 
-        verify(response).setHeader(eq("Content-Security-Policy"), anyString());
-        verify(response).setHeader("X-Content-Type-Options", "nosniff");
-        verify(response).setHeader("X-Frame-Options", "DENY");
-        verify(response).setHeader("Referrer-Policy", "no-referrer");
-        verify(response).setHeader("Access-Control-Allow-Origin", "*");
-        verify(response).setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,OPTIONS");
-        verify(response).setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
-        verify(response).setHeader("Access-Control-Allow-Credentials", "true");
-        verify(chain).doFilter(request, response);
-        verify(response, never()).setStatus(HttpServletResponse.SC_OK);
+        try (MockedStatic<RealTimeServiceApplication> app =
+                     mockStatic(RealTimeServiceApplication.class)) {
+
+            listener.onApplicationEvent(event);
+
+            app.verify(RealTimeServiceApplication::shutdown, times(1));
+        }
     }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+1. New file: src/test/java/real/time/service/FilterRegistrationBeanConfigTest.java
+
+
+package real.time.service;
+
+import org.junit.Test;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.mock;
+
+/**
+ * Safe coverage for {@link FilterRegistrationBeanConfig}. Production class is NOT modified.
+ *
+ * <p>"Safe" = pure in-memory bean wiring. No Spring context is started and the
+ * {@link StargateJWTFilter} is mocked, so no real filter/validator/certificate is
+ * constructed. The test asserts the registration bean is configured exactly as the
+ * production code specifies (filter instance, URL pattern, order).</p>
+ */
+public class FilterRegistrationBeanConfigTest {
 
     @Test
-    public void doFilterInternal_matchingPathOptionsPreflight_setsOkAndShortCircuits() throws Exception {
-        when(request.getRequestURI()).thenReturn("/api/services/process/document");
-        when(request.getMethod()).thenReturn("OPTIONS");
+    public void jwtFilterRegistration_wiresFilterUrlPatternAndOrder() {
+        StargateJWTFilter jwtFilter = mock(StargateJWTFilter.class);
+        FilterRegistrationBeanConfig config = new FilterRegistrationBeanConfig(jwtFilter);
 
-        filter.doFilterInternal(request, response, chain);
+        FilterRegistrationBean<StargateJWTFilter> registration = config.jwtFilterRegistration();
 
-        verify(response).setHeader(eq("Content-Security-Policy"), anyString());
-        verify(response).setStatus(HttpServletResponse.SC_OK);
-        verify(chain, never()).doFilter(any(), any());
-    }
-
-    @Test
-    public void doFilterInternal_nonMatchingPath_skipsHeadersAndContinues() throws Exception {
-        when(request.getRequestURI()).thenReturn("/api/health");
-
-        filter.doFilterInternal(request, response, chain);
-
-        verify(response, never()).setHeader(anyString(), anyString());
-        verify(chain).doFilter(request, response);
-    }
-
-    @Test
-    public void doFilterInternal_nullPath_continuesWithoutHeaders() throws Exception {
-        when(request.getRequestURI()).thenReturn(null);
-
-        filter.doFilterInternal(request, response, chain);
-
-        verify(response, never()).setHeader(anyString(), anyString());
-        verify(chain).doFilter(request, response);
+        assertNotNull(registration);
+        assertSame("the injected filter must be registered", jwtFilter, registration.getFilter());
+        assertEquals(1, registration.getOrder());
+        assertTrue("must register the /api/services/* URL pattern",
+                registration.getUrlPatterns().contains("/api/services/*"));
     }
 }
 
@@ -338,17 +748,110 @@ public class SecurityHeadersFilterTest {
 
 
 
+CorporateMpinUtilTest
 
 
+       private ResponseEntity<String> jsonResponse(String body) {
+        HttpHeaders h = new HttpHeaders();
+        h.setContentType(MediaType.APPLICATION_JSON);
+        return new ResponseEntity<>(body, h, HttpStatus.OK);
+    }
 
---DocumentResponseTest.java 
-
+    private ResponseEntity<String> xmlResponse(String body) {
+        HttpHeaders h = new HttpHeaders();
+        h.setContentType(MediaType.APPLICATION_XML);
+        return new ResponseEntity<>(body, h, HttpStatus.OK);
+    }
 
     @Test
-    public void fdsDocumentId_roundTrips() {
-        DocumentResponse documentResponse = new DocumentResponse();
-        assertNull(documentResponse.getFdsDocumentId());
+    public void searchProvider_jsonResponse_runsRealParseToProviderSearchResults() throws Exception {
+        try (MockedStatic<HttpUtils> http = mockStatic(HttpUtils.class)) {
+            http.when(() -> HttpUtils.postExchange(any(HttpHeaders.class), any(),
+                    nullable(String.class), eq(String.class), nullable(RestTemplate.class)))
+                .thenReturn(jsonResponse("{\"records\":[]}"));
+            // validateStatusCode(...) defaults to false under mockStatic -> no retry branch
 
-        documentResponse.setFdsDocumentId("FDS-123");
-        assertEquals("FDS-123", documentResponse.getFdsDocumentId());
+            Object result = corporateMpinUtil.searchProvider(mock(RequestBody.class), mock(RequestHeader.class), "cid");
+
+            assertNotNull(result);
+            assertTrue(result instanceof ProviderSearchResults);
+        }
+    }
+
+    @Test
+    public void searchProvider_xmlResponse_runsRealParseToPhysicianFacility() throws Exception {
+        try (MockedStatic<HttpUtils> http = mockStatic(HttpUtils.class)) {
+            http.when(() -> HttpUtils.postExchange(any(HttpHeaders.class), any(),
+                    nullable(String.class), eq(String.class), nullable(RestTemplate.class)))
+                .thenReturn(xmlResponse("<PhysicianFacility></PhysicianFacility>"));
+
+            Object result = corporateMpinUtil.searchProvider(mock(RequestBody.class), mock(RequestHeader.class), "cid");
+
+            assertNotNull(result);
+            assertTrue(result instanceof PhysicianFacility);
+        }
+    }
+
+    @Test
+    public void searchProvider_recoverableParseError_returnsNull() throws Exception {
+        // NPE from the boundary is caught by the IO/JsonSyntax/NPE branch -> returns null (no retry, no wait).
+        try (MockedStatic<HttpUtils> http = mockStatic(HttpUtils.class)) {
+            http.when(() -> HttpUtils.postExchange(any(HttpHeaders.class), any(),
+                    nullable(String.class), eq(String.class), nullable(RestTemplate.class)))
+                .thenThrow(new NullPointerException("boom"));
+
+            Object result = corporateMpinUtil.searchProvider(mock(RequestBody.class), mock(RequestHeader.class), "cid");
+
+            assertNull(result);
+        }
+    }
+
+    @Test
+    public void getMpinFromSvcs_runsEndToEnd_returnsNullForEmptyRecords() {
+        // Real chain: createRequest (oauth mocked) -> getProviderCorpMpin(body,header) -> searchProvider
+        //             -> parse -> dispatch to getProviderCorpMpin(ProviderSearchResults) -> null (empty records).
+        try (MockedStatic<HttpUtils> http = mockStatic(HttpUtils.class)) {
+            http.when(() -> HttpUtils.postExchange(any(HttpHeaders.class), any(),
+                    nullable(String.class), eq(String.class), nullable(RestTemplate.class)))
+                .thenReturn(jsonResponse("{\"records\":[]}"));
+
+            String result = corporateMpinUtil.getMpinFromSvcs("123456789", "cid");
+
+            assertNull(result);
+        }
+    }
+
+    @Test
+    public void getMpinFromSvcs_boundaryThrowsUnchecked_returnsNull() {
+        // Unchecked, non-recoverable exception propagates through searchProvider's catch(Exception){throw e}
+        // and is swallowed by getMpinFromSvcs -> null. No retry/wait.
+        try (MockedStatic<HttpUtils> http = mockStatic(HttpUtils.class)) {
+            http.when(() -> HttpUtils.postExchange(any(HttpHeaders.class), any(),
+                    nullable(String.class), eq(String.class), nullable(RestTemplate.class)))
+                .thenThrow(new IllegalStateException("downstream"));
+
+            String result = corporateMpinUtil.getMpinFromSvcs("123456789", "cid");
+
+            assertNull(result);
+        }
+    }
+
+    @Test
+    public void retrieveCorporateMpin_cacheMissNoMpin_flagsEDeliveryError() {
+        DocumentMetaData document = mock(DocumentMetaData.class);
+        org.bson.Document metadata = new org.bson.Document();
+        when(document.getMetadata()).thenReturn(metadata);
+        when(ehcache.getCorpMpinCache("123456789")).thenReturn(null); // formatTin no-op for 9-char tin
+
+        try (MockedStatic<HttpUtils> http = mockStatic(HttpUtils.class);
+             MockedStatic<WorkFlowUtil> wf = mockStatic(WorkFlowUtil.class)) {
+            http.when(() -> HttpUtils.postExchange(any(HttpHeaders.class), any(),
+                    nullable(String.class), eq(String.class), nullable(RestTemplate.class)))
+                .thenReturn(jsonResponse("{\"records\":[]}")); // -> no mpin
+
+            corporateMpinUtil.retrieveCorporateMpin("123456789", document, "cid");
+
+            wf.verify(() -> WorkFlowUtil.updateEDeliveryError(metadata, Workflow.PROV_CORP_MPIN));
+            assertNull(metadata.get(Workflow.PROV_CORP_MPIN));
+        }
     }
