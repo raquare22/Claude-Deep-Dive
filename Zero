@@ -1,200 +1,111 @@
- src/test/java/com/fds/paperless/MessageServiceConfigurationTest.java
+src/test/java/com/optum/fds/paperless/config/SecurityHeadersFilterTest.java:
 
-package com.fds.paperless;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+package com.optum.fds.paperless.config;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.io.PrintWriter;
+
+import org.junit.Before;
 import org.junit.Test;
-import org.springframework.http.HttpHeaders;
 
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNotSame;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
-/**
- * Unit tests for {@link MessageServiceConfiguration}.
- *
- * The @Bean methods are invoked DIRECTLY on a plain instance — no Spring context
- * is bootstrapped (no @SpringBootTest), so there is no I/O, no autoconfiguration,
- * and no global state. Pure factory-method verification.
- */
-public class MessageServiceConfigurationTest {
+public class SecurityHeadersFilterTest {
 
-    private final MessageServiceConfiguration configuration = new MessageServiceConfiguration();
+    private SecurityHeadersFilter filter;
+    private HttpServletRequest request;
+    private HttpServletResponse response;
+    private FilterChain chain;
 
-    @Test
-    public void objectMapper_returnsNonNullInstance() {
-        assertNotNull(configuration.objectMapper());
+    @Before
+    public void setUp() {
+        filter = new SecurityHeadersFilter();
+        request = mock(HttpServletRequest.class);
+        response = mock(HttpServletResponse.class);
+        chain = mock(FilterChain.class);
     }
 
     @Test
-    public void objectMapper_returnsDistinctInstancePerCall() {
-        ObjectMapper first = configuration.objectMapper();
-        ObjectMapper second = configuration.objectMapper();
+    public void doFilterInternal_matchingPathNonOptions_setsHeadersAndContinues() throws Exception {
+        when(request.getRequestURI()).thenReturn("/api/services/v1/filestore/sendFile/123");
+        when(request.getMethod()).thenReturn("POST");
 
-        assertNotNull(first);
-        assertNotSame(first, second);   // factory method returns a fresh instance each call
+        filter.doFilterInternal(request, response, chain);
+
+        verify(response).setHeader(eq("Content-Security-Policy"), anyString());
+        verify(response).setHeader("X-Content-Type-Options", "nosniff");
+        verify(response).setHeader("X-Frame-Options", "DENY");
+        verify(chain).doFilter(request, response);
     }
 
     @Test
-    public void httpHeaders_returnsNonNullInstance() {
-        assertNotNull(configuration.httpHeaders());
+    public void doFilterInternal_optionsPreflight_returns200AndStopsChain() throws Exception {
+        when(request.getRequestURI()).thenReturn("/api/services/v1/fds/documents/1");
+        when(request.getMethod()).thenReturn("OPTIONS");
+
+        filter.doFilterInternal(request, response, chain);
+
+        verify(response).setStatus(HttpServletResponse.SC_OK);
+        verify(chain, never()).doFilter(any(), any());
     }
 
     @Test
-    public void httpHeaders_returnsDistinctInstancePerCall() {
-        HttpHeaders first = configuration.httpHeaders();
-        HttpHeaders second = configuration.httpHeaders();
+    public void doFilterInternal_nonMatchingPath_skipsHeadersButContinues() throws Exception {
+        when(request.getRequestURI()).thenReturn("/api/services/v1/doc360/documents/1");
 
-        assertNotNull(first);
-        assertNotSame(first, second);
+        filter.doFilterInternal(request, response, chain);
+
+        verify(response, never()).setHeader(anyString(), anyString());
+        verify(chain).doFilter(request, response);
+    }
+
+    @Test
+    public void doFilterInternal_nullPath_skipsHeadersButContinues() throws Exception {
+        when(request.getRequestURI()).thenReturn(null);
+
+        filter.doFilterInternal(request, response, chain);
+
+        verify(response, never()).setHeader(anyString(), anyString());
+        verify(chain).doFilter(request, response);
+    }
+
+    @Test
+    public void doFilterInternal_chainThrowsNotCommitted_writes500Json() throws Exception {
+        when(request.getRequestURI()).thenReturn("/some/other/path");
+        doThrow(new ServletException("boom")).when(chain).doFilter(request, response);
+        when(response.isCommitted()).thenReturn(false);
+        PrintWriter writer = mock(PrintWriter.class);
+        when(response.getWriter()).thenReturn(writer);
+
+        filter.doFilterInternal(request, response, chain);
+
+        verify(response).setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+        verify(response).setContentType("application/json");
+        verify(writer).write(anyString());
+    }
+
+    @Test
+    public void doFilterInternal_chainThrowsCommitted_doesNotRewriteResponse() throws Exception {
+        when(request.getRequestURI()).thenReturn("/some/other/path");
+        doThrow(new ServletException("boom")).when(chain).doFilter(request, response);
+        when(response.isCommitted()).thenReturn(true);
+
+        filter.doFilterInternal(request, response, chain);
+
+        verify(response, never()).setStatus(anyInt());
+        verify(response, never()).getWriter();
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- src/test/java/com/fds/paperless/MessageServiceApplicationListenerTest.java
-
-
-package com.fds.paperless;
-
-import org.junit.Test;
-import org.mockito.MockedStatic;
-import org.mockito.Mockito;
-import org.springframework.context.ApplicationContext;
-import org.springframework.context.event.ContextClosedEvent;
-
-import com.fds.paperless.msgsvc.BigQueueService;
-import com.fds.paperless.msgsvc.MessageServiceMgr;
-
-/**
- * Unit test for {@link MessageServiceApplicationListener}.
- *
- * BigQueueService.shutdown() and MessageServiceMgr.shutdown() are mockStatic-scoped,
- * so the REAL shutdown is never executed — the shared services stay intact for the
- * rest of the suite. Verified: neither class does I/O in its static initializer, so
- * the class-load that mockStatic triggers is side-effect-free. No Spring context is
- * booted; the event is constructed with a mock ApplicationContext. No production code
- * is modified.
- */
-public class MessageServiceApplicationListenerTest {
-
-    @Test
-    public void onApplicationEvent_invokesShutdownHooks() {
-        ApplicationContext context = Mockito.mock(ApplicationContext.class);
-        ContextClosedEvent event = new ContextClosedEvent(context);
-
-        try (MockedStatic<BigQueueService> bigQueue = Mockito.mockStatic(BigQueueService.class);
-             MockedStatic<MessageServiceMgr> mgr = Mockito.mockStatic(MessageServiceMgr.class)) {
-
-            new MessageServiceApplicationListener().onApplicationEvent(event);
-
-            bigQueue.verify(BigQueueService::shutdown);
-            mgr.verify(MessageServiceMgr::shutdown);
-        }
-    }
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-MessageServiceControllerTest
-
-import org.mockito.MockedStatic;
-
-
-
-    // Covers the invalid-queue 400 branch inside peekOrFlush. Pure in-memory:
-    // sanitizeQueueName falls through to a valid enum (no throw), then
-    // isValidPriorityQueue("badQueue") returns false -> BAD_REQUEST.
-    @Test
-    public void peek_withInvalidQueue_returnsBadRequest() {
-        ResponseEntity<GenericResponse> response = messageServiceController.peek("badQueue", false, true);
-
-        assertNotNull(response);
-        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-    }
-
-    // Covers the catch block in logStatistics(). mockStatic is scoped & reverted, so the
-    // REAL MessageServiceMgr.logStatistics() is never executed (class-load is I/O-free,
-    // verified). The exception is swallowed and the endpoint still returns 200 OK.
-    @Test
-    public void logStatistics_whenStatsThrow_isCaughtAndReturnsOk() {
-        try (MockedStatic<MessageServiceMgr> mgr = Mockito.mockStatic(MessageServiceMgr.class)) {
-            mgr.when(MessageServiceMgr::logStatistics).thenThrow(new RuntimeException("boom"));
-
-            ResponseEntity<GenericResponse> response = messageServiceController.logStatistics();
-
-            assertNotNull(response);
-            assertEquals(HttpStatus.OK, response.getStatusCode());
-        }
-    }
