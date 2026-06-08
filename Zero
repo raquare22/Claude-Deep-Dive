@@ -1,111 +1,173 @@
-src/test/java/com/optum/fds/paperless/config/SecurityHeadersFilterTest.java:
+New file: src/test/java/real/time/service/StargateJWTValidatorTest.java
 
 
-package com.optum.fds.paperless.config;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+package real.time.service;
 
-import java.io.PrintWriter;
-
-import org.junit.Before;
+import com.auth0.jwt.JWT;
+import com.auth0.jwt.algorithms.Algorithm;
+import com.auth0.jwt.exceptions.JWTVerificationException;
 import org.junit.Test;
 
-import jakarta.servlet.FilterChain;
-import jakarta.servlet.ServletException;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
-public class SecurityHeadersFilterTest {
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
-    private SecurityHeadersFilter filter;
-    private HttpServletRequest request;
-    private HttpServletResponse response;
-    private FilterChain chain;
+/**
+ * Strictly-safe coverage for {@link StargateJWTValidator}: validateJWT input-validation
+ * branches only. Production class is NOT modified.
+ *
+ * <p>No I/O, no certificate loading, no Spring context, no static/global mutation.
+ * Tokens are built purely in-memory with java-jwt; cachedCertificate is left null and is
+ * never reached (every assertion fails before signature verification). init() and the
+ * signature-verification path are intentionally NOT covered here because they require
+ * file/cert I/O or key generation.</p>
+ */
+public class StargateJWTValidatorTest {
 
-    @Before
-    public void setUp() {
-        filter = new SecurityHeadersFilter();
-        request = mock(HttpServletRequest.class);
-        response = mock(HttpServletResponse.class);
-        chain = mock(FilterChain.class);
+    private final StargateJWTValidator validator = new StargateJWTValidator();
+
+    private String unsignedTokenWithHeader(Map<String, Object> header) {
+        return JWT.create().withHeader(header).withSubject("t").sign(Algorithm.none());
+    }
+
+    private Map<String, Object> x5cHeader(List<String> x5c) {
+        Map<String, Object> h = new HashMap<>();
+        h.put("x5c", x5c);
+        return h;
+    }
+
+    private void expectValidateThrows(String token, Class<? extends Throwable> type, String msgContains) {
+        try {
+            validator.validateJWT(token);
+            fail("expected " + type.getSimpleName());
+        } catch (Throwable t) {
+            assertTrue("unexpected type: " + t, type.isInstance(t));
+            if (msgContains != null) {
+                assertTrue("unexpected message: " + t.getMessage(),
+                        t.getMessage() != null && t.getMessage().contains(msgContains));
+            }
+        }
     }
 
     @Test
-    public void doFilterInternal_matchingPathNonOptions_setsHeadersAndContinues() throws Exception {
-        when(request.getRequestURI()).thenReturn("/api/services/v1/filestore/sendFile/123");
-        when(request.getMethod()).thenReturn("POST");
-
-        filter.doFilterInternal(request, response, chain);
-
-        verify(response).setHeader(eq("Content-Security-Policy"), anyString());
-        verify(response).setHeader("X-Content-Type-Options", "nosniff");
-        verify(response).setHeader("X-Frame-Options", "DENY");
-        verify(chain).doFilter(request, response);
+    public void validateJWT_nullToken_throwsIllegalArgument() {
+        expectValidateThrows(null, IllegalArgumentException.class, "cannot be null or empty");
     }
 
     @Test
-    public void doFilterInternal_optionsPreflight_returns200AndStopsChain() throws Exception {
-        when(request.getRequestURI()).thenReturn("/api/services/v1/fds/documents/1");
-        when(request.getMethod()).thenReturn("OPTIONS");
-
-        filter.doFilterInternal(request, response, chain);
-
-        verify(response).setStatus(HttpServletResponse.SC_OK);
-        verify(chain, never()).doFilter(any(), any());
+    public void validateJWT_emptyToken_throwsIllegalArgument() {
+        expectValidateThrows("", IllegalArgumentException.class, "cannot be null or empty");
     }
 
     @Test
-    public void doFilterInternal_nonMatchingPath_skipsHeadersButContinues() throws Exception {
-        when(request.getRequestURI()).thenReturn("/api/services/v1/doc360/documents/1");
-
-        filter.doFilterInternal(request, response, chain);
-
-        verify(response, never()).setHeader(anyString(), anyString());
-        verify(chain).doFilter(request, response);
+    public void validateJWT_malformedToken_throwsJwtVerification() {
+        expectValidateThrows("not-a-valid-jwt", JWTVerificationException.class, null);
     }
 
     @Test
-    public void doFilterInternal_nullPath_skipsHeadersButContinues() throws Exception {
-        when(request.getRequestURI()).thenReturn(null);
-
-        filter.doFilterInternal(request, response, chain);
-
-        verify(response, never()).setHeader(anyString(), anyString());
-        verify(chain).doFilter(request, response);
+    public void validateJWT_missingX5c_throwsIllegalArgument() {
+        expectValidateThrows(unsignedTokenWithHeader(new HashMap<>()),
+                IllegalArgumentException.class, "x5c claim is missing");
     }
 
     @Test
-    public void doFilterInternal_chainThrowsNotCommitted_writes500Json() throws Exception {
-        when(request.getRequestURI()).thenReturn("/some/other/path");
-        doThrow(new ServletException("boom")).when(chain).doFilter(request, response);
-        when(response.isCommitted()).thenReturn(false);
-        PrintWriter writer = mock(PrintWriter.class);
-        when(response.getWriter()).thenReturn(writer);
-
-        filter.doFilterInternal(request, response, chain);
-
-        verify(response).setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-        verify(response).setContentType("application/json");
-        verify(writer).write(anyString());
+    public void validateJWT_emptyX5cList_throwsIllegalArgument() {
+        expectValidateThrows(unsignedTokenWithHeader(x5cHeader(List.of())),
+                IllegalArgumentException.class, "x5c claim is missing");
     }
 
     @Test
-    public void doFilterInternal_chainThrowsCommitted_doesNotRewriteResponse() throws Exception {
-        when(request.getRequestURI()).thenReturn("/some/other/path");
-        doThrow(new ServletException("boom")).when(chain).doFilter(request, response);
-        when(response.isCommitted()).thenReturn(true);
+    public void validateJWT_emptyCertInX5c_throwsIllegalArgument() {
+        expectValidateThrows(unsignedTokenWithHeader(x5cHeader(List.of(""))),
+                IllegalArgumentException.class, "Certificate in x5c claim is missing or empty");
+    }
 
-        filter.doFilterInternal(request, response, chain);
-
-        verify(response, never()).setStatus(anyInt());
-        verify(response, never()).getWriter();
+    @Test
+    public void validateJWT_invalidBase64Cert_throwsIllegalArgument() {
+        expectValidateThrows(unsignedTokenWithHeader(x5cHeader(List.of("!!!not-base64!!!"))),
+                IllegalArgumentException.class, "Certificate is not a valid Base64 string");
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ProcessDocumentUtil
+
+
+
+
+
+
+    // ===================================================================
+    // Strictly-safe additions: pure-logic methods only (no I/O, no cert,
+    // no Spring, no static/global mutation, no injected collaborators).
+    // ===================================================================
+
+    @Test
+    public void getClassFromClientName_invalidName_returnsNull() {
+        // Class.forName fails for an unknown client -> ClassNotFoundException -> null.
+        // (Not-found path loads no class; purely deterministic, no external I/O.)
+        assertNull(processDocumentUtil.getClassFromClientName("NoSuchClientXYZ"));
+    }
+
+    @Test
+    public void getErrEnumFromClientName_invalidName_returnsNull() {
+        assertNull(processDocumentUtil.getErrEnumFromClientName("NoSuchClientXYZ"));
+    }
+
+    @Test
+    public void getErrors_requiredKeyBracket_parsesKeyAndSwallowsUnknownEnum() {
+        java.util.Set<String> errors = new java.util.HashSet<>();
+        // Bracket + "required key" branch -> key="SubCategory"; unknown enum -> caught, no add.
+        processDocumentUtil.getErrors("#: required key [SubCategory] not found", errors, java.time.DayOfWeek.class);
+        assertTrue(errors.isEmpty());
+    }
+
+    @Test
+    public void getErrors_enumOrMinLengthMessage_parsesKeyAndSwallowsUnknownEnum() {
+        java.util.Set<String> errors = new java.util.HashSet<>();
+        // "enum"/"minLength" branch -> key="DATEOFSERVICE"; unknown enum -> caught, no add.
+        processDocumentUtil.getErrors("#/DATEOFSERVICE: must not be valid against schema enum", errors, java.time.DayOfWeek.class);
+        assertTrue(errors.isEmpty());
+    }
+
+    @Test
+    public void getErrors_noMarkers_emptyKeySwallowed() {
+        java.util.Set<String> errors = new java.util.HashSet<>();
+        // Neither branch matches -> key="" -> Enum.valueOf("") throws -> caught.
+        processDocumentUtil.getErrors("some unrelated message", errors, java.time.DayOfWeek.class);
+        assertTrue(errors.isEmpty());
+    }
