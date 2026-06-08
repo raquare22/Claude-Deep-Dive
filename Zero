@@ -1,80 +1,51 @@
+ src/test/java/com/fds/paperless/MessageServiceConfigurationTest.java
 
+package com.fds.paperless;
 
-package real.time.service.ness;
-
-import com.optum.eis.kraken.kafka.producers.NessKafkaAsyncProducer;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.Test;
+import org.springframework.http.HttpHeaders;
 
-import java.lang.reflect.Field;
-
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.verify;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNotSame;
 
 /**
- * Very safe coverage for {@link KafkaProducer}. Production class is NOT modified.
+ * Unit tests for {@link MessageServiceConfiguration}.
  *
- * <p>The real {@code getKafkaProducer()} (which calls
- * {@code NessKafkaAsyncProducerBuilder.buildNessAsyncProducer()} against live brokers +
- * SSL keystore) is NEVER invoked. The static {@code setUp} flag is process-global state
- * read by other components (e.g. RealTimeServiceController.logNess, RealTimeNessConfig),
- * so it is saved and restored around every mutating test.</p>
+ * The @Bean methods are invoked DIRECTLY on a plain instance — no Spring context
+ * is bootstrapped (no @SpringBootTest), so there is no I/O, no autoconfiguration,
+ * and no global state. Pure factory-method verification.
  */
-public class KafkaProducerTest {
+public class MessageServiceConfigurationTest {
 
-    private static boolean readSetUp() throws Exception {
-        Field f = KafkaProducer.class.getDeclaredField("setUp");
-        f.setAccessible(true);
-        return (boolean) f.get(null);
-    }
+    private final MessageServiceConfiguration configuration = new MessageServiceConfiguration();
 
-    private static void writeSetUp(boolean value) throws Exception {
-        Field f = KafkaProducer.class.getDeclaredField("setUp");
-        f.setAccessible(true);
-        f.set(null, value);
+    @Test
+    public void objectMapper_returnsNonNullInstance() {
+        assertNotNull(configuration.objectMapper());
     }
 
     @Test
-    public void setUpOff_setsSetUpToFalse() throws Exception {
-        boolean original = readSetUp();
-        try {
-            writeSetUp(true); // known starting state
-            KafkaProducer.setUpOff();
-            assertFalse(KafkaProducer.getSetUp());
-        } finally {
-            writeSetUp(original);
-        }
+    public void objectMapper_returnsDistinctInstancePerCall() {
+        ObjectMapper first = configuration.objectMapper();
+        ObjectMapper second = configuration.objectMapper();
+
+        assertNotNull(first);
+        assertNotSame(first, second);   // factory method returns a fresh instance each call
     }
 
     @Test
-    public void getSetUp_reflectsBackingField() throws Exception {
-        boolean original = readSetUp();
-        try {
-            writeSetUp(true);
-            assertTrue(KafkaProducer.getSetUp());
-            writeSetUp(false);
-            assertFalse(KafkaProducer.getSetUp());
-        } finally {
-            writeSetUp(original);
-        }
+    public void httpHeaders_returnsNonNullInstance() {
+        assertNotNull(configuration.httpHeaders());
     }
 
     @Test
-    public void getNewNessKafkaAsyncProducer_delegatesToBuilderAndCachesResult() {
-        // Spy + stub the unsafe builder so NO real Kafka producer is ever constructed.
-        KafkaProducer producer = spy(new KafkaProducer());
-        NessKafkaAsyncProducer mockProducer = mock(NessKafkaAsyncProducer.class);
-        doReturn(mockProducer).when(producer).getKafkaProducer();
+    public void httpHeaders_returnsDistinctInstancePerCall() {
+        HttpHeaders first = configuration.httpHeaders();
+        HttpHeaders second = configuration.httpHeaders();
 
-        NessKafkaAsyncProducer result = producer.getNewNessKafkaAsyncProducer();
-
-        assertSame(mockProducer, result);
-        assertSame("result must be cached in the protected field", mockProducer, producer.nessKafkaAsyncProducer);
-        verify(producer).getKafkaProducer();
+        assertNotNull(first);
+        assertNotSame(first, second);
     }
 }
 
@@ -108,6 +79,122 @@ public class KafkaProducerTest {
 
 
 
-New file: src/test/java/real/time/service/ness/RealTimeNessConfigTest.java
 
 
+
+
+
+ src/test/java/com/fds/paperless/MessageServiceApplicationListenerTest.java
+
+
+package com.fds.paperless;
+
+import org.junit.Test;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.event.ContextClosedEvent;
+
+import com.fds.paperless.msgsvc.BigQueueService;
+import com.fds.paperless.msgsvc.MessageServiceMgr;
+
+/**
+ * Unit test for {@link MessageServiceApplicationListener}.
+ *
+ * BigQueueService.shutdown() and MessageServiceMgr.shutdown() are mockStatic-scoped,
+ * so the REAL shutdown is never executed — the shared services stay intact for the
+ * rest of the suite. Verified: neither class does I/O in its static initializer, so
+ * the class-load that mockStatic triggers is side-effect-free. No Spring context is
+ * booted; the event is constructed with a mock ApplicationContext. No production code
+ * is modified.
+ */
+public class MessageServiceApplicationListenerTest {
+
+    @Test
+    public void onApplicationEvent_invokesShutdownHooks() {
+        ApplicationContext context = Mockito.mock(ApplicationContext.class);
+        ContextClosedEvent event = new ContextClosedEvent(context);
+
+        try (MockedStatic<BigQueueService> bigQueue = Mockito.mockStatic(BigQueueService.class);
+             MockedStatic<MessageServiceMgr> mgr = Mockito.mockStatic(MessageServiceMgr.class)) {
+
+            new MessageServiceApplicationListener().onApplicationEvent(event);
+
+            bigQueue.verify(BigQueueService::shutdown);
+            mgr.verify(MessageServiceMgr::shutdown);
+        }
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+MessageServiceControllerTest
+
+import org.mockito.MockedStatic;
+
+
+
+    // Covers the invalid-queue 400 branch inside peekOrFlush. Pure in-memory:
+    // sanitizeQueueName falls through to a valid enum (no throw), then
+    // isValidPriorityQueue("badQueue") returns false -> BAD_REQUEST.
+    @Test
+    public void peek_withInvalidQueue_returnsBadRequest() {
+        ResponseEntity<GenericResponse> response = messageServiceController.peek("badQueue", false, true);
+
+        assertNotNull(response);
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+    }
+
+    // Covers the catch block in logStatistics(). mockStatic is scoped & reverted, so the
+    // REAL MessageServiceMgr.logStatistics() is never executed (class-load is I/O-free,
+    // verified). The exception is swallowed and the endpoint still returns 200 OK.
+    @Test
+    public void logStatistics_whenStatsThrow_isCaughtAndReturnsOk() {
+        try (MockedStatic<MessageServiceMgr> mgr = Mockito.mockStatic(MessageServiceMgr.class)) {
+            mgr.when(MessageServiceMgr::logStatistics).thenThrow(new RuntimeException("boom"));
+
+            ResponseEntity<GenericResponse> response = messageServiceController.logStatistics();
+
+            assertNotNull(response);
+            assertEquals(HttpStatus.OK, response.getStatusCode());
+        }
+    }
