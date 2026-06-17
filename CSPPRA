@@ -1,0 +1,358 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "u_chk_nbr":            { "type": "string" },
+    "u_clm_nbr":            { "type": "string", "minLength": 1 },
+    "u_data_hst":           { "type": "string" },
+    "u_div":                { "type": "string" },
+    "u_eps_ind":            { "type": "string" },
+    "u_gbl_doc_id":         { "type": "string" },
+    "u_line_of_buss":       { "type": "string" },
+    "u_orig_creation_date": { "type": "string", "minLength": 1 },
+    "u_payee_nm":           { "type": "string" },
+    "u_payer_id":           { "type": "string" },
+    "u_pay_type":           { "type": "string" },
+    "u_pol_nbr":            { "type": "string" },
+    "u_primary_dt":         { "type": "string" },
+    "u_primary_nbr":        { "type": "string" },
+    "u_prov_npi":           { "type": "string" },
+    "u_ra_no":              { "type": "string" },
+    "u_sa_oi":              { "type": "string" },
+    "u_st":                 { "type": "string" },
+    "u_tin":                { "type": "string" },
+    "u_trl_id":             { "type": "string" },
+    "u_trl_nm":             { "type": "string" },
+    "u_vendor_pay_id":      { "type": "string" }
+  },
+  "required": [
+    "u_clm_nbr",
+    "u_orig_creation_date"
+  ]
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+package com.optum.fds.paperless.client.pojo;
+
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.everit.json.schema.Schema;
+import org.everit.json.schema.ValidationException;
+import org.everit.json.schema.loader.SchemaLoader;
+import org.json.JSONObject;
+import org.json.JSONTokener;
+import org.junit.Before;
+import org.junit.Test;
+
+import java.io.InputStream;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+/**
+ * Locks the CSP-PRA Doc360 contract so it can never silently regress:
+ *  - the 8 confirmed Doc360 u_* -> canonical PRUN mappings
+ *  - unmapped fields fall back to their defaults / stay null
+ *  - unknown Doc360 fields are ignored (do not break deserialization)
+ *  - the schema requires exactly the fields Doc360 guarantees
+ *  - every schema-required field has a matching ErrorMsg enum entry
+ *
+ * Tests only (per project standard): never touch main classes for coverage.
+ */
+public class CSPPRADoc360Test {
+
+    private static final String SCHEMA_PATH = "/schemas/CSPPRADoc360_client_schema.json";
+
+    private ObjectMapper mapper;
+
+    @Before
+    public void setUp() {
+        mapper = new ObjectMapper();
+        // Mirror lenient production behavior: ignore unknown props at the mapper level too.
+        mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+    }
+
+    // ---------------------------------------------------------------------
+    // 1) The 8 confirmed mappings: Doc360 u_* key -> canonical PRUN getter
+    // ---------------------------------------------------------------------
+    @Test
+    public void deserialize_doc360Payload_mapsAllConfirmedFields_returnsCanonicalValues() throws Exception {
+        String json = "{"
+                + "\"u_tin\":\"TIN-1\","
+                + "\"u_prov_npi\":\"NPI-2\","
+                + "\"u_payee_nm\":\"DR SMITH\","
+                + "\"u_chk_nbr\":\"CHK-3\","
+                + "\"u_clm_nbr\":\"CLM-4\","
+                + "\"u_trl_id\":\"TRL-5\","
+                + "\"u_vendor_pay_id\":\"PAY-6\""
+                + "}";
+
+        CSPPRADoc360 pojo = mapper.readValue(json, CSPPRADoc360.class);
+
+        assertEquals("TIN-1", pojo.getTin());                 // u_tin
+        assertEquals("NPI-2", pojo.getMpin());                // u_prov_npi
+        assertEquals("DR SMITH", pojo.getPhysicianName());    // u_payee_nm
+        assertEquals("CHK-3", pojo.getCheckTraceNumber());    // u_chk_nbr
+        assertEquals("CLM-4", pojo.getMultClaimNumber());     // u_clm_nbr
+        assertEquals("TRL-5", pojo.getOriginalPrintTrail());  // u_trl_id
+        assertEquals("PAY-6", pojo.getPaymentNumber());       // u_vendor_pay_id
+    }
+
+    // ---------------------------------------------------------------------
+    // 2) createdDate is mapped by the BASE class alias (u_orig_creation_date)
+    // ---------------------------------------------------------------------
+    @Test
+    public void deserialize_origCreationDate_populatesInheritedCreatedDate() throws Exception {
+        // ISO-8601 with offset so the default ObjectMapper can bind it to java.util.Date.
+        String json = "{\"u_clm_nbr\":\"CLM-1\",\"u_orig_creation_date\":\"2026-06-17T00:00:00.000+0000\"}";
+
+        CSPPRADoc360 pojo = mapper.readValue(json, CSPPRADoc360.class);
+
+        assertNotNull("createdDate must be populated from u_orig_creation_date", pojo.getCreatedDate());
+    }
+
+    // ---------------------------------------------------------------------
+    // 3) Unmapped fields keep their defaults; truly-absent ones stay null
+    // ---------------------------------------------------------------------
+    @Test
+    public void deserialize_fieldsNotSentByDoc360_useDefaultsOrNull() throws Exception {
+        // Minimal payload: none of the defaulted/unmapped fields are present.
+        CSPPRADoc360 pojo = mapper.readValue("{\"u_clm_nbr\":\"CLM-1\"}", CSPPRADoc360.class);
+
+        assertEquals("Y", pojo.getEmailAlertReq());   // constructor default
+        assertEquals("PR", pojo.getSubCategory());    // constructor default
+        assertEquals("", pojo.getMpin());             // constructor default ("")
+        assertNull(pojo.getMultMemberId());           // no Doc360 source -> null
+        assertNull(pojo.getCheckAmt());               // no Doc360 source -> null
+        assertNull(pojo.getMailToAddress1());         // enriched downstream -> null here
+    }
+
+    // ---------------------------------------------------------------------
+    // 4) Unknown Doc360 fields must NOT break deserialization (ignoreUnknown)
+    // ---------------------------------------------------------------------
+    @Test
+    public void deserialize_unknownDoc360Fields_areIgnored() throws Exception {
+        String json = "{"
+                + "\"u_clm_nbr\":\"CLM-1\","
+                + "\"u_sa_oi\":\"X\","            // present in Doc360 pool, intentionally unmapped
+                + "\"u_some_future_field\":\"Z\"" // a field nobody declared
+                + "}";
+
+        CSPPRADoc360 pojo = mapper.readValue(json, CSPPRADoc360.class);
+
+        assertEquals("CLM-1", pojo.getMultClaimNumber()); // still maps; unknowns ignored
+    }
+
+    // ---------------------------------------------------------------------
+    // 5) Constructor identity constants (must match CSPPRA)
+    // ---------------------------------------------------------------------
+    @Test
+    public void newInstance_setsPaymentDocumentIdentity() {
+        CSPPRADoc360 pojo = new CSPPRADoc360();
+
+        assertEquals("Payment Document", pojo.getCategory());
+        assertEquals("Advice", pojo.getFileType());
+        assertEquals("CSP-PRA", pojo.getCreateApplication());
+        assertEquals("PR", pojo.getSubCategory());
+    }
+
+    // ---------------------------------------------------------------------
+    // 6) Schema requires the two guaranteed fields
+    // ---------------------------------------------------------------------
+    @Test
+    public void schema_missingRequiredFields_failsValidation() {
+        Schema schema = loadSchema();
+        // Missing both u_clm_nbr and u_orig_creation_date.
+        JSONObject bad = new JSONObject("{\"u_tin\":\"TIN-1\"}");
+
+        try {
+            schema.validate(bad);
+            fail("Expected ValidationException for missing required fields");
+        } catch (ValidationException e) {
+            String all = String.join("|", e.getAllMessages());
+            assertTrue("should flag u_clm_nbr", all.contains("u_clm_nbr"));
+            assertTrue("should flag u_orig_creation_date", all.contains("u_orig_creation_date"));
+        }
+    }
+
+    @Test
+    public void schema_validPayload_passesValidation() {
+        Schema schema = loadSchema();
+        JSONObject ok = new JSONObject(
+                "{\"u_clm_nbr\":\"CLM-1\",\"u_orig_creation_date\":\"2026-06-17T00:00:00.000+0000\"}");
+
+        schema.validate(ok); // no exception == pass
+    }
+
+    @Test
+    public void schema_unknownExtraField_isAllowed() {
+        Schema schema = loadSchema();
+        // additionalProperties:true -> an unexpected Doc360 field must not fail the whole message.
+        JSONObject withExtra = new JSONObject(
+                "{\"u_clm_nbr\":\"CLM-1\",\"u_orig_creation_date\":\"2026-06-17T00:00:00.000+0000\","
+                        + "\"u_brand_new_field\":\"Z\"}");
+
+        schema.validate(withExtra); // no exception == pass
+    }
+
+    // ---------------------------------------------------------------------
+    // 7) Guard: every schema-required field has a matching ErrorMsg enum key
+    //    (otherwise getErrors() would silently drop the error)
+    // ---------------------------------------------------------------------
+    @Test
+    public void everyRequiredField_hasMatchingErrorMsgEnum() {
+        Set<String> enumKeys = new HashSet<>();
+        for (CSPPRADoc360.ErrorMsg e : CSPPRADoc360.ErrorMsg.values()) {
+            enumKeys.add(e.name());
+        }
+        for (String required : Arrays.asList("u_clm_nbr", "u_orig_creation_date")) {
+            assertTrue("Missing ErrorMsg enum for required field: " + required,
+                    enumKeys.contains(required));
+        }
+        assertFalse(enumKeys.isEmpty());
+    }
+
+    // ---------------------------------------------------------------------
+    // helper: load the schema the same way ProcessConvertMetadata does
+    // ---------------------------------------------------------------------
+    private Schema loadSchema() {
+        InputStream in = getClass().getResourceAsStream(SCHEMA_PATH);
+        assertNotNull("schema file not found on classpath: " + SCHEMA_PATH, in);
+        JSONObject json = new JSONObject(new JSONTokener(in));
+        return SchemaLoader.builder().schemaJson(json).build().load().build();
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+0. Go to the project directory (every command runs from here)
+cd /Users/rahulmaheshvari/Desktop/AI/Optum/CSP-PRA/ppl-paperless-activiti
+1. Compile first (fast sanity — catches typos before running tests)
+mvn -q clean test-compile
+If this passes, your POJO + test compile and the schema is on the classpath. If the POJO has a wrong getter name etc., it fails here with the exact line.
+
+2. Run ONLY your new test class (the main one you want)
+mvn -Dtest=CSPPRADoc360Test test
+Surefire runs the 9 tests in CSPPRADoc360Test. Look for Tests run: 9, Failures: 0, Errors: 0.
+
+3. Run a SINGLE method (handy when one fails and you're iterating)
+mvn -Dtest='CSPPRADoc360Test#deserialize_doc360Payload_mapsAllConfirmedFields_returnsCanonicalValues' test
+4. Prove the OLD path still works (regression guard)
+mvn -Dtest='CSPPRADoc360Test,CSPPRA*Test' test
+This runs your new test plus any existing CSPPRA tests together, confirming you didn't break the old zip path.
+
+5. Full test suite (run before you commit)
+mvn clean test
+Useful flags (add to any command above)
+# Don't stop at the first failing module/test — see everything that fails:
+mvn -Dtest=CSPPRADoc360Test test -fae
+
+# Show full stack traces when something errors:
+mvn -Dtest=CSPPRADoc360Test test -e
+
+# Work offline if the network/proxy is flaky (uses your local ~/.m2 cache):
+mvn -o -Dtest=CSPPRADoc360Test test
+
+# Skip the (slow) full build and just compile+test:
+mvn -q test-compile && mvn -Dtest=CSPPRADoc360Test test
+How to read the result
+Pass: BUILD SUCCESS and Tests run: 9, Failures: 0, Errors: 0, Skipped: 0.
+Fail/Error: the console prints the test method name + assertion + line number. Full reports are written to:
+target/surefire-reports/
+Open target/surefire-reports/com.optum.fds.paperless.client.pojo.CSPPRADoc360Test.txt for the detailed output.
+Recommended order the first time
+cd /Users/rahulmaheshvari/Desktop/AI/Optum/CSP-PRA/ppl-paperless-activiti
+mvn -q clean test-compile          # 1. does it compile?
+mvn -Dtest=CSPPRADoc360Test test   # 2. do the 9 tests pass?
+mvn -Dtest='CSPPRADoc360Test,CSPPRA*Test' test   # 3. old path still green?
+
+
+
+
+
+
+
+
+
+
